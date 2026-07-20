@@ -61,6 +61,25 @@ std::string LowerASCII(std::string value)
 	return value;
 }
 
+std::string UpperASCII(std::string value)
+{
+	std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+	{
+		return static_cast<char>(std::toupper(ch));
+	});
+	return value;
+}
+
+int FilenameCasePriority(const fs::path &path)
+{
+	const std::string filename = PathText(path.filename());
+	if(filename == LowerASCII(filename))
+		return 0;
+	if(filename == UpperASCII(filename))
+		return 1;
+	return 2;
+}
+
 std::string PathKey(const fs::path &path)
 {
 	std::error_code error;
@@ -201,8 +220,10 @@ void ScanFlatDirectory(const fs::path &directory, const ExpectedIWADs &expected,
 
 	gLog.debugPrintf("Scanning IWAD directory: %s\n", PathText(directory).c_str());
 
-	// Exact lowercase and uppercase probes avoid enumerating the common case and
-	// retain deterministic priority if both spellings exist.
+	// Exact probes avoid enumeration on case-sensitive Unix filesystems.  On
+	// Windows and macOS they could open a differently-cased file and return the
+	// spelling of the probe instead of the real directory entry.
+#if !defined(WIN32) && !defined(__APPLE__)
 	for(const auto &[filename, game] : expected)
 	{
 		if(found.find(game) != found.end())
@@ -217,9 +238,11 @@ void ScanFlatDirectory(const fs::path &directory, const ExpectedIWADs &expected,
 
 	if(AllIWADsFound(expected, found))
 		return;
+#endif
 
 	fs::directory_iterator iterator(directory, fs::directory_options::skip_permission_denied, error);
 	const fs::directory_iterator end;
+	std::vector<fs::path> candidates;
 	while(!error && iterator != end)
 	{
 		const fs::directory_entry entry = *iterator;
@@ -227,7 +250,30 @@ void ScanFlatDirectory(const fs::path &directory, const ExpectedIWADs &expected,
 
 		std::error_code typeError;
 		if(entry.is_regular_file(typeError))
-			RecordIWAD(entry.path(), expected, found);
+			candidates.push_back(entry.path());
+	}
+
+	std::sort(candidates.begin(), candidates.end(), [](const fs::path &left, const fs::path &right)
+	{
+		const std::string leftName = PathText(left.filename());
+		const std::string rightName = PathText(right.filename());
+		const std::string leftLower = LowerASCII(leftName);
+		const std::string rightLower = LowerASCII(rightName);
+		if(leftLower != rightLower)
+			return leftLower < rightLower;
+
+		const int leftPriority = FilenameCasePriority(left);
+		const int rightPriority = FilenameCasePriority(right);
+		if(leftPriority != rightPriority)
+			return leftPriority < rightPriority;
+		return leftName < rightName;
+	});
+
+	for(const fs::path &candidate : candidates)
+	{
+		if(AllIWADsFound(expected, found))
+			break;
+		RecordIWAD(candidate, expected, found);
 	}
 }
 
