@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Eureka DOOM Editor
+Name=Heresy Editor
 GenericName=DOOM Editor
-Comment=Edit maps for the game DOOM
-Exec=eureka %f
-Icon=eureka
+Comment=Edit DOOM maps for BiasedDoom and compatible engines
+Exec=heresy %f
+Icon=heresy
 Terminal=false
 Type=Application
 Categories=Game;ActionGame;

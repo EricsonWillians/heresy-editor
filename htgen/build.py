@@ -9,7 +9,8 @@ cur_path = os.path.dirname(os.path.realpath(__file__))
 out_path = os.path.join(cur_path, '..', 'htdocs-OUTPUT')
 os.makedirs(out_path, exist_ok=True)
 
-legacy_content = (
+site_content = (
+    'BiasedDoom.html',
     'Docs_Index.html',
     'index.html',
     'Main_About.html',
@@ -37,7 +38,7 @@ legacy_content = (
 )
 
 static_extra = (
-    'shots', 'custom_logo.png', 'eureka.css', 'grid.png'
+    'shots', 'eureka.css', 'grid.png'
 )
 
 template = 'template.html'
@@ -47,7 +48,7 @@ with open(os.path.join(cur_path, template)) as f:
 
 template_soup = BeautifulSoup(template_data, 'html.parser')
 
-for item in legacy_content:
+for item in site_content:
     path = os.path.join(cur_path, item)
     with open(os.path.join(cur_path, path)) as f:
         item_data = f.read().replace('&nbsp;', ' ')
@@ -65,12 +66,15 @@ for item in legacy_content:
             changes_content = f.read()
         item_soup.div.append(BeautifulSoup(markdown.markdown(changes_content, extensions=['fenced_code']), 'html.parser'))
 
-    template_soup.find(id='wikitext').replaceWith(item_soup)
+    template_soup.find(id='wikitext').replace_with(item_soup)
 
-    try:
-        title = os.path.splitext(item)[0].split('_')[1]
-    except:
-        title = 'MainPage'  # index.html only one
+    stem = os.path.splitext(item)[0]
+    if item == 'index.html':
+        title = 'MainPage'
+    elif '_' in stem:
+        title = stem.split('_', 1)[1]
+    else:
+        title = stem
 
     with open(os.path.join(out_path, item), 'w') as f:
         f.write(str(template_soup).replace('$(TITLE)', title))
@@ -88,4 +92,3 @@ def copyanything(src, dst):
 
 for extra in static_extra:
     copyanything(os.path.join(cur_path, extra), os.path.join(out_path, extra))
-

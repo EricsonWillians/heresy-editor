@@ -1,13 +1,15 @@
 .\" -*-nroff-*-
-.TH EUREKA "6" "August 2018"
+.TH HERESY-EDITOR "6" "July 2026"
 .SH NAME
-Eureka \- a DOOM map editor
+Heresy Editor \- a DOOM map editor focused on BiasedDoom
 .SH SYNOPSIS
-.B eureka
+.B heresy
 .RI "[" FILE "...]"
 .RI "[" OPTION "...]"
 .SH DESCRIPTION
-Eureka is a cross-platform map editor for the classic DOOM games.
+Heresy Editor is a cross-platform map editor for the classic DOOM games.
+This fork uses BiasedDoom as its primary target engine while retaining the
+established Eureka Editor workflow.
 
 It features multiple-level undo and redo,
 a 3D preview,
@@ -29,7 +31,7 @@ This is mainly for compatibility with DOOM command-line syntax,
 since filenames are more easily provided without this option
 (i.e. directly after the program name).
 
-When no file is specified, Eureka will open the first map in the
+When no file is specified, Heresy Editor will open the first map in the
 IWAD (game wad).
 .TP
 .BI "\-w, \-\-warp" " <map>"
@@ -46,16 +48,22 @@ The name of the IWAD (game data).
 This also determines which game the map is for, e.g. "doom.wad" will
 mean the map is for DOOM 1, whereas "heretic.wad" will mean we are
 editing for the game Heretic.
+When no IWAD is specified, Heresy Editor checks its configured IWAD directory,
+DOOMWADPATH, DOOMWADDIR, Steam and additional Steam libraries, common GOG and
+user game directories, system game-data directories, and the current directory.
+Steam layouts such as
+.I steamapps/common/Ultimate Doom/base/DOOM.WAD
+are detected automatically.
 .TP
 .BI "\-m, \-\-merge" " <file>..."
 Resource file(s) to load.
 These can be wad files containing textures, flats, sprites (etc)
-but can also be Eureka definitions files (with ".ugh" extension).
+but can also be Heresy Editor definitions files (with the legacy ".ugh" extension).
 .TP
 .BI "\-p, \-\-port" " <name>"
 Port (engine) name.  The default port is "boom", but some other
 supported ports are "vanilla" (the original EXE), "odamex", "edge"
-and "legacy".
+and "legacy".  Select "zdoom" for BiasedDoom projects.
 .TP
 .B \-h, \-\-help
 Show usage summary
@@ -69,7 +77,7 @@ Enable debugging messages
 .B \-q, \-\-quiet
 Quiet mode (no messages on stdout)
 .SH CONFIGURATION OPTIONS
-The following options control how Eureka finds some important files
+The following options control how Heresy Editor finds some important files
 and directories.  They are not particular useful per se, but may be
 needed for special circumstances.
 .TP
@@ -77,12 +85,12 @@ needed for special circumstances.
 The installation directory where game definition files, default key
 bindings, etc are stored.
 This defaults to
-.I $PREFIX/share/eureka
+.I $PREFIX/share/heresy
 (see FILES section below...)
 
 Specifying "." for the current directory is useful when testing a
 locally compiled version without doing "make install".
-In fact Eureka will try it automatically when it cannot find its
+In fact Heresy Editor will try it automatically when it cannot find its
 normal installation directory.
 .TP
 .BI "\-\-home" " <dir>"
@@ -101,10 +109,10 @@ This file will loaded during startup, and also saved to when the user
 uses the Preferences dialog.
 .SH FILES
 .TP
-.I "$PREFIX/share/eureka/
-The installation directory for Eureka.
+.I "$PREFIX/share/heresy/"
+The installation directory for Heresy Editor.
 PREFIX is typically /usr or /usr/local,
-depending on how Eureka was installed.
+depending on how Heresy Editor was installed.
 This directory contains the standard key bindings,
 plus all the definition files (with .ugh extension)
 for the supported games, ports and mods.
@@ -116,11 +124,11 @@ Contains user settings
 Contains user key bindings
 .TP
 .I "~/.config/eureka/logs.txt"
-The logs from the previous session of Eureka,
-or the current one if Eureka is currently running.
+The logs from the previous session of Heresy Editor,
+or the current one if Heresy Editor is currently running.
 .TP
 .I "~/.cache/eureka/backups"
-Whenever a file is saved, Eureka makes a backup of the existing file
+Whenever a file is saved, Heresy Editor makes a backup of the existing file
 and stores it here, in a directory based on the filename.
 Multiple backups are made, up to a configurable limit on number and
 total size of the files.
@@ -128,14 +136,14 @@ total size of the files.
 If something goes awry with your wad, look here!
 .TP
 .I "~/.config/eureka/iwads"
-IWAD files can be placed here and Eureka will find them automatically
+IWAD files can be placed here and Heresy Editor will find them automatically
 .SH "ENVIRONMENT"
 .TP
 .BI DOOMWADDIR
-If set, contains a single directory name where Eureka will look for IWADs.
+If set, contains a single directory name where Heresy Editor will look for IWADs.
 .TP
 .BI DOOMWADPATH
-If set, contains a colon-separated list of directories where Eureka will
+If set, contains a colon-separated list of directories where Heresy Editor will
 look for IWADs.
 .SH "SEE ALSO"
 .BR glbsp (6),
@@ -143,6 +151,8 @@ look for IWADs.
 .BR deutex (6),
 .BR xwadtools (6)
 .PP
-Eureka site:
-http://eureka-editor.sourceforge.net/
-
+Heresy Editor site:
+https://github.com/EricsonWillians/heresy-editor
+.PP
+BiasedDoom site:
+https://github.com/ericsonwillians/BiasedDoom

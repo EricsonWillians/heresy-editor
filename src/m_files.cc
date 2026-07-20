@@ -24,6 +24,7 @@
 #include "m_config.h"
 #include "m_files.h"
 #include "m_game.h"
+#include "m_iwad.h"
 #include "m_loadsave.h"
 #include "m_parse.h"
 #include "m_streams.h"
@@ -412,135 +413,8 @@ bool Instance::M_TryOpenMostRecent()
 
 
 //------------------------------------------------------------------------
-//  EUREKA LUMP HANDLING
+//  IWAD DISCOVERY
 //------------------------------------------------------------------------
-
-#ifdef WIN32
-#define PATH_SEPARATOR  ';'
-#else
-#define PATH_SEPARATOR  ':'
-#endif
-
-//
-// Parses the DOOMWADPATH environment variable content. In it, the ; or : path separator (depending
-// on system) acts as a strict separator. Everything between two successive ; or : signs is a path.
-// Beware that this means you can't have a path containing those special characters.
-//
-static std::vector<fs::path> parseDoomWadPathEnvVar(const SString &doomwadpath)
-{
-	std::vector<fs::path> result;
-	size_t pos = 0, curpos = 0;
-	do
-	{
-		pos = doomwadpath.find(PATH_SEPARATOR, curpos);
-		SString entry;
-		if(pos != std::string::npos)
-		{
-			entry = doomwadpath.substr(curpos, pos - curpos);
-			curpos = pos + 1;
-		}
-		else
-			entry = doomwadpath.substr(curpos);
-		result.push_back(fs::path(reinterpret_cast<const char8_t *>(entry.c_str())));
-
-	} while(pos != std::string::npos);
-	return result;
-}
-
-static fs::path SearchDirForIWAD(const fs::path &dir_name, const SString &game)
-{
-	fs::path name = dir_name / fs::path(reinterpret_cast<const char8_t *>((game + ".wad").c_str()));
-
-	gLog.debugPrintf("  trying: %s\n", reinterpret_cast<const char *>(name.u8string().c_str()));
-
-	if (Wad_file::Validate(name))
-		return name;
-
-	// try uppercasing the name, to find e.g. DOOM2.WAD
-	name = dir_name / fs::path(reinterpret_cast<const char8_t *>((game.asUpper() + ".WAD").c_str()));
-
-	gLog.debugPrintf("  trying: %s\n", reinterpret_cast<const char *>(name.u8string().c_str()));
-
-	if (Wad_file::Validate(name))
-		return name;
-
-	return "";
-}
-
-
-static fs::path SearchForIWAD(const fs::path &home_dir, const SString &game)
-{
-	gLog.debugPrintf("Searching for '%s' IWAD\n", game.c_str());
-
-	fs::path dir_name;
-
-	// 1. look in ~/.eureka/iwads first
-
-	dir_name = home_dir / "iwads";
-
-	fs::path path = SearchDirForIWAD(dir_name, game);
-	if (!path.empty())
-		return path;
-
-	// 2. look in $DOOMWADPATH
-
-	const char *doomwadpath = UTF8_getenv("DOOMWADPATH");
-	if (doomwadpath)
-	{
-		std::vector<fs::path> paths = parseDoomWadPathEnvVar(doomwadpath);
-		for(const fs::path &wadpath : paths)
-		{
-			path = SearchDirForIWAD(wadpath, game);
-			if(!path.empty())
-				return path;
-		}
-	}
-
-	// 3. look in $DOOMWADDIR
-
-	const char *doomwaddir = UTF8_getenv("DOOMWADDIR");
-	if (doomwaddir)
-	{
-		path = SearchDirForIWAD(fs::path(reinterpret_cast<const char8_t *>(doomwaddir)), game);
-		if (!path.empty())
-			return path;
-	}
-
-	// 4. look in various standard places
-
-	/* WISH: check the Steam folder(s) for WIN32 */
-
-	static const char *standard_iwad_places[] =
-	{
-#ifdef WIN32
-		"c:/doom",
-		"c:/doom2",
-		"c:/doom95",
-#else
-		"/usr/share/games/doom",
-		"/usr/share/doom",
-		"/usr/local/share/games/doom",
-		"/usr/local/games/doom",
-#endif
-		NULL
-	};
-
-	for (int i = 0 ; standard_iwad_places[i] ; i++)
-	{
-		path = SearchDirForIWAD(standard_iwad_places[i], game);
-		if (!path.empty())
-			return path;
-	}
-
-	// 5. last resort : the current directory
-
-	path = SearchDirForIWAD(".", game);
-	if (!path.empty())
-		return path;
-
-	return "";  // not found
-}
-
 
 //
 // search for iwads in various places
@@ -553,26 +427,20 @@ void RecentKnowledge::lookForIWADs(const fs::path &install_dir, const fs::path &
 	std::vector<SString> game_list = M_CollectKnownDefs({install_dir, old_home_dir, home_dir},
 			"games");
 
+	std::vector<SString> missing_games;
 	for (const SString &game : game_list)
 	{
-		// already have it?
-		if (queryIWAD(game))
-			continue;
+		if (!queryIWAD(game))
+			missing_games.push_back(game);
+	}
 
-		fs::path path = SearchForIWAD(home_dir, game);
-		if (path.empty() && !old_home_dir.empty())
-		{
-			gLog.printf("Couldn't find %s IWAD in %s/iwads, trying %s/iwads\n", game.c_str(), reinterpret_cast<const char *>(home_dir.u8string().c_str()),
-						reinterpret_cast<const char *>(old_home_dir.u8string().c_str()));
-			path = SearchForIWAD(old_home_dir, game);
-		}
-
-		if (!path.empty())
-		{
-			gLog.printf("Found '%s' IWAD file: %s\n", game.c_str(), reinterpret_cast<const char *>(path.u8string().c_str()));
-
-			addIWAD(path);
-		}
+	const IWADSearchLocations locations = M_SystemIWADSearchLocations(home_dir, old_home_dir);
+	const std::map<SString, fs::path> discovered = M_DiscoverIWADs(missing_games, locations);
+	for(const auto &[game, path] : discovered)
+	{
+		gLog.printf("Found '%s' IWAD file: %s\n", game.c_str(),
+				reinterpret_cast<const char *>(path.u8string().c_str()));
+		addIWAD(path);
 	}
 
 	save(home_dir);

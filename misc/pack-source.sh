@@ -6,16 +6,16 @@ if [ ! -d ports ]; then
   exit 1
 fi
 
-echo "Creating source package for Eureka..."
+echo "Creating source package for Heresy Editor..."
 
-dest="eureka-X.XX-source"
+dest="heresy-X.XX-source"
 
 mkdir $dest
 
 #
 #  Source code
 #
-cp -av Makefile* $dest/
+cp -av CMakeLists.txt cmake_uninstall.cmake.in build.sh $dest/
 
 cp -av src $dest/src
 cp -av osx $dest/osx
@@ -48,4 +48,3 @@ cp -av changelogs $dest/changelogs
 #
 echo "------------------------------------"
 echo "All done."
-

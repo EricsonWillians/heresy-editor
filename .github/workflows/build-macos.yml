@@ -37,24 +37,24 @@ jobs:
           password: ${{ secrets.MACOS_NOTARY_PASSWORD }}
           entitlements-path: osx/EurekaApp/eureka.entitlements
           apple-team-id: ${{ secrets.MACOS_TEAM_ID }}
-          app-path: build/Eureka Doom Editor.app
+          app-path: build/heresy.app
       # TODO: test
       # TODO: archive
       - name: Stage files for DMG
         run: |
           DMG_ROOT="dmg_temp"
-          VOL_NAME="Eureka Doom Editor"
-          OUTPUT="Eureka-Doom-Editor-${{ matrix.arch }}.dmg"
+          VOL_NAME="Heresy Editor"
+          OUTPUT="Heresy-Editor-${{ matrix.arch }}.dmg"
           mkdir "$DMG_ROOT"
-          cp -R build/Eureka\ Doom\ Editor.app "$DMG_ROOT/"
+          cp -R build/heresy.app "$DMG_ROOT/"
           cp AUTHORS.md GPL.txt README.txt "$DMG_ROOT/"
           ln -s /Applications "$DMG_ROOT/"
           echo "Contents staged in $DMG_ROOT, will build $OUTPUT"
       - name: Create compressed DMG
         run: |
-          hdiutil create -volname "Eureka Doom Editor" -srcfolder dmg_temp -ov -format UDZO "Eureka-Doom-Editor-${{ matrix.arch }}.dmg"
+          hdiutil create -volname "Heresy Editor" -srcfolder dmg_temp -ov -format UDZO "Heresy-Editor-${{ matrix.arch }}.dmg"
       - name: Publish
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: EurekaEditor-macOS-${{ matrix.arch }}
-          path: Eureka-Doom-Editor-${{ matrix.arch }}.dmg
+          name: HeresyEditor-macOS-${{ matrix.arch }}
+          path: Heresy-Editor-${{ matrix.arch }}.dmg

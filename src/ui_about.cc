@@ -71,7 +71,7 @@ public:
 		if (Text2.empty())
 			InitText2();
 
-		_instance = new UI_About(ABOUT_W, ABOUT_H, "About Eureka v" EUREKA_VERSION);
+		_instance = new UI_About(ABOUT_W, ABOUT_H, "About Heresy Editor v" EUREKA_VERSION);
 
 		_instance->show();
 	}
@@ -113,14 +113,14 @@ Fl_RGB_Image * UI_About::about_img;
 
 
 const char *UI_About::Text1 =
-	"EUREKA is a map editor for classic DOOM\n"
+	"Heresy Editor is a map editor for classic DOOM\n"
 	"It uses code from the Yadex editor";
 
 
 std::string UI_About::Text2;
 
 
-const char *UI_About::URL = "http://awwports.sf.net/eureka";
+const char *UI_About::URL = "https://github.com/EricsonWillians/heresy-editor";
 
 
 //

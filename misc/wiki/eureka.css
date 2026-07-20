@@ -52,7 +52,7 @@ h6 { font-size:1.0em; }
   max-width: 250px;
   margin: 0px;
   overflow: hidden;
-  background-image: url("http://eureka-editor.sourceforge.net/grid.png");
+  background-image: url("grid.png");
   background-position: top;
   background-color: #002;
 }
@@ -180,4 +180,3 @@ h6 { font-size:1.0em; }
   #wikihead, #wikilogo, #wikileft2, #wikicmds, .footnav { display:none; }
   #wikifoot { padding:2px; }
 }
-

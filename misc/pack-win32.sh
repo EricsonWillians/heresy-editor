@@ -6,16 +6,16 @@ if [ ! -d ports ]; then
   exit 1
 fi
 
-echo "Creating WIN32 package for Eureka..."
+echo "Creating WIN32 package for Heresy Editor..."
 
-dest="Eureka-X.XX"
+dest="Heresy-X.XX"
 
 mkdir $dest
 
 #
 #  Executable(s)
 #
-cp -av Eureka.exe $dest
+cp -av heresy.exe $dest
 
 #
 #  Data files
@@ -40,5 +40,5 @@ rm $dest/INSTALL.txt
 # all done
 #
 echo "----------------------------------------"
-echo "zip -l -r eureka-XXX-win.zip Eureka-X.XX"
+echo "zip -l -r heresy-XXX-win.zip Heresy-X.XX"
 echo ""

@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.28)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum OS X deployment version")
 
-project(eureka-editor VERSION 2.1.1)
+project(heresy-editor VERSION 2.1.1)
+
+include(GNUInstallDirs)
 
 # Why not use the latest C++
 set(CMAKE_CXX_STANDARD 20)
@@ -35,52 +37,50 @@ source_group("eureka-res" FILES ${resource_common})
 
 set_source_files_properties(${resource_common} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 # This is the main program. MACOSX_BUNDLE is needed for Mac, dummywin for Windows
-add_executable(eureka MACOSX_BUNDLE ${resource_common} win/dummywin.cpp)
+add_executable(heresy MACOSX_BUNDLE ${resource_common} win/dummywin.cpp)
 foreach(dir ${resource_common_dirs})
-    add_path_resource(eureka common)
-    add_path_resource(eureka games)
-    add_path_resource(eureka ports)
+    add_path_resource(heresy ${dir})
 endforeach()
 
 if(WIN32)
     configure_file(src/main.rc.in src/main.rc)
-    target_sources(eureka PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src/main.rc)
-    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT eureka)
+    target_sources(heresy PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src/main.rc)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT heresy)
     list(TRANSFORM resource_common_cfgs PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 
     add_custom_command(
-        TARGET eureka
+        TARGET heresy
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${resource_common_cfgs} $<TARGET_FILE_DIR:eureka>
+        COMMAND ${CMAKE_COMMAND} -E copy ${resource_common_cfgs} $<TARGET_FILE_DIR:heresy>
     )
     foreach(dir ${resource_common_dirs})
         add_custom_command(
-            TARGET eureka
+            TARGET heresy
             POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/${dir}"
-                "$<TARGET_FILE_DIR:eureka>/${dir}"
+                "$<TARGET_FILE_DIR:heresy>/${dir}"
         )
     endforeach()
     add_custom_command(
-        TARGET eureka
+        TARGET heresy
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/misc/about_logo.png"
-            "$<TARGET_FILE_DIR:eureka>/common"
+            "$<TARGET_FILE_DIR:heresy>/common"
     )
 endif()
 
 if(NOT APPLE)
-    target_sources(eureka PRIVATE mainroot.cc)
+    target_sources(heresy PRIVATE mainroot.cc)
 endif()
 
 if(APPLE)
-    set(exe_display_name "Eureka Doom Editor")
-    set_target_properties(eureka PROPERTIES OUTPUT_NAME "${exe_display_name}")
+    set(exe_display_name "heresy")
+    set_target_properties(heresy PROPERTIES OUTPUT_NAME "${exe_display_name}")
 
     add_subdirectory(osx)
-    target_link_libraries(eureka eurekamac)
+    target_link_libraries(heresy eurekamac)
     set_source_files_properties(${resource_mac} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-    target_sources(eureka PRIVATE ${resource_mac})
+    target_sources(heresy PRIVATE ${resource_mac})
 
     # Use the same warnings as in the old manual project
     set(CMAKE_XCODE_ATTRIBUTE_CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING YES)
@@ -107,19 +107,19 @@ if(APPLE)
     set(CMAKE_XCODE_ATTRIBUTE_CLANG_WARN_RANGE_LOOP_ANALYSIS YES)
     set(CMAKE_XCODE_ATTRIBUTE_CLANG_WARN_SUSPICIOUS_MOVE YES)
 
-    set_target_properties(eureka PROPERTIES
+    set_target_properties(heresy PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/osx/EurekaApp/Eureka Doom Editor-Info.plist.in"
 
-        MACOSX_BUNDLE_BUNDLE_NAME "${exe_display_name}"
+        MACOSX_BUNDLE_BUNDLE_NAME "Heresy Editor"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright © The Eureka Team"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright © Heresy Editor contributors"
         MACOSX_BUNDLE_EXECUTABLE_NAME "${exe_display_name}"
         MACOSX_BUNDLE_GUI_IDENTIFIER "$(PRODUCT_BUNDLE_IDENTIFIER)"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "Eureka Doom EditorIcon"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
 
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.eureka.Eureka-Doom-Editor"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.heresy-editor.Heresy-Editor"
 
         XCODE_ATTRIBUTE_INSTALL_PATH "/Applications"
         XCODE_ATTRIBUTE_SKIP_INSTALL "No"
@@ -132,7 +132,7 @@ if(APPLE)
     )
 
 else()
-    set(exe_display_name "eureka")
+    set(exe_display_name "heresy")
     if(WIN32)
         add_subdirectory(win)
     endif()
@@ -149,7 +149,7 @@ endif()
 if(WIN32)
     target_link_libraries(eurekasrc PRIVATE eurekawin)
 endif()
-target_link_libraries(eureka eurekasrc)
+target_link_libraries(heresy eurekasrc)
 
 option(ENABLE_UNIT_TESTS "Enable unit tests" ON)
 if(ENABLE_UNIT_TESTS)
@@ -159,24 +159,26 @@ endif()
 
 # Currently, installing via CMake is only supported on GNU/Linux and similar systems
 if(UNIX AND NOT APPLE)  # Linux
-    set(eureka_install_dir "${CMAKE_INSTALL_PREFIX}/share/eureka")
-    install(TARGETS eureka
-            RUNTIME DESTINATION "${BIN_DIR}"
+    set(heresy_install_dir "${CMAKE_INSTALL_DATADIR}/heresy")
+    install(TARGETS heresy
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
-    install(DIRECTORY games DESTINATION "${eureka_install_dir}"
+    install(DIRECTORY games DESTINATION "${heresy_install_dir}"
             PATTERN "freedoom.ugh" EXCLUDE)
-    install(DIRECTORY common ports DESTINATION "${eureka_install_dir}")
+    install(DIRECTORY common ports DESTINATION "${heresy_install_dir}")
     install(FILES bindings.cfg
                   defaults.cfg
                   misc/about_logo.png
                   operations.cfg
-            DESTINATION "${eureka_install_dir}"
+            DESTINATION "${heresy_install_dir}"
     )
-    # The full-install sequence is here
-    install(CODE "execute_process(
-        COMMAND xdg-desktop-menu install --novendor ${CMAKE_CURRENT_SOURCE_DIR}/misc/eureka.desktop
-        COMMAND xdg-icon-resource install --novendor --size 32 ${CMAKE_CURRENT_SOURCE_DIR}/misc/eureka.xpm
-    )")
+    install(FILES misc/heresy.desktop
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+    install(FILES misc/eureka.xpm
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/pixmaps"
+            RENAME heresy.xpm)
+    install(FILES misc/heresy.6
+            DESTINATION "${CMAKE_INSTALL_MANDIR}/man6")
 
     # uninstall target
     if(NOT TARGET uninstall)

@@ -1,0 +1,64 @@
+HERESY EDITOR AND BIASEDDOOM
+============================
+
+Purpose
+-------
+
+Heresy Editor is being developed as a Doom-family map editor with BiasedDoom as
+its primary target engine.  BiasedDoom is derived from GZDoom and retains the
+standard IWAD, WAD, ZDoom map-format and command-line interfaces used by the
+editor's existing test-map workflow.  BiasedDoom also supports PK3 mods, while
+Heresy Editor currently edits WAD maps and resources.
+
+
+Current support
+---------------
+
+Use the `zdoom` source-port profile for BiasedDoom projects.  It provides Doom,
+Hexen and UDMF map formats, the ZDoom namespace, common ZDoom things and action
+specials, and dynamic-light definitions.
+
+Heresy Editor's Tools / Test in Game command invokes the selected engine with:
+
+- the project IWAD via `-iwad`;
+- resource files and the edited WAD via `-file`; and
+- the current map via `-warp`.
+
+Those arguments are supported by BiasedDoom.  On the first test, select the
+BiasedDoom executable when Heresy Editor asks for the engine path.  A typical
+local development build in this workspace is:
+
+    ~/workspace/BiasedDoom/build/biaseddoom
+
+The exact output directory can vary with the BiasedDoom CMake generator and
+build configuration.  Windows builds use `biaseddoom.exe`; packaged macOS
+builds may be selected as an application bundle.
+
+
+Known boundary
+--------------
+
+The current compatibility layer describes features inherited from ZDoom.  It
+does not yet promise editor metadata for every BiasedDoom-only actor, procedural
+mission feature, renderer setting, Python integration, or glTF extension.  Maps
+and resources can still be passed to BiasedDoom for testing, but specialized
+features may need to be authored as external resources until dedicated editor
+definitions are added.
+
+
+Compatibility roadmap
+---------------------
+
+1. Add a named BiasedDoom port profile derived from the ZDoom definitions.
+2. Inventory BiasedDoom-only editor numbers, specials and namespaces.
+3. Add definitions without weakening classic Doom and GZDoom compatibility.
+4. Exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
+5. Keep the profile synchronized with BiasedDoom releases.
+
+
+Legacy identifiers
+------------------
+
+The executable is `heresy`.  The fork retains inherited `eureka` configuration
+paths and the `EUREKA` WAD lump so existing projects and settings continue to
+work; those compatibility identifiers do not change the product name.

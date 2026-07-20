@@ -1,5 +1,5 @@
 //
-// --- Eureka Editor ---
+// --- Heresy Editor ---
 //
 // Windows Resources
 //
@@ -33,13 +33,13 @@ BEGIN
     // 0409 means "US English"; 04B0 means "Unicode encoding"
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName",      "Eureka Team\0"
-      VALUE "FileDescription",  "Eureka DOOM Editor\0"
+      VALUE "CompanyName",      "Heresy Editor contributors\0"
+      VALUE "FileDescription",  "Heresy Editor\0"
       VALUE "FileVersion",      "@PROJECT_VERSION@\0"
-      VALUE "InternalName",     "Eureka\0"
-      VALUE "LegalCopyright",   "\251 Eureka Team, GNU General Public License\0"
-      VALUE "OriginalFilename", "Eureka.EXE\0"
-      VALUE "ProductName",      "Eureka\0"
+      VALUE "InternalName",     "heresy\0"
+      VALUE "LegalCopyright",   "Heresy Editor contributors, GNU General Public License\0"
+      VALUE "OriginalFilename", "heresy.exe\0"
+      VALUE "ProductName",      "Heresy Editor\0"
       VALUE "ProductVersion",   "@PROJECT_VERSION@\0"
     END
   END

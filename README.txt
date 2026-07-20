@@ -1,17 +1,19 @@
-Eureka README
-=============
+Heresy Editor README
+====================
 
 
 INTRODUCTION
 
-Eureka is a map editor for the classic DOOM games, and a few related
-games such as Heretic, Hexen and Strife.  The supported operating systems are
-Linux (and other Unix-likes), Windows and macOS.
+Heresy Editor is a map editor for the classic DOOM games and related games
+such as Heretic, Hexen and Strife.  This fork is being developed as a mapping
+companion for BiasedDoom while retaining the established Eureka Editor editing
+workflow.  The supported operating systems are Linux (and other Unix-likes),
+Windows and macOS.
 
 
-WEB SITE
+PROJECT SITE
 
-http://eureka-editor.sourceforge.net/
+https://github.com/EricsonWillians/heresy-editor
 
 
 FEATURES
@@ -22,6 +24,7 @@ FEATURES
 -  Browser for textures, flats, things (etc)
 -  Key binding system
 -  Built-in nodes builder
+-  Test-map workflow compatible with BiasedDoom
 
 
 SUPPORTED GAMES
@@ -33,6 +36,27 @@ SUPPORTED GAMES
 -  HacX
 -  Heretic
 -  Hexen
+-  Strife
+
+
+BIASEDDOOM SUPPORT
+
+BiasedDoom is the primary target engine for this fork.  It is derived from
+GZDoom and keeps the standard IWAD, WAD, ZDoom map-format and command-line
+workflows that Heresy Editor relies on.  BiasedDoom can also load PK3 mods;
+Heresy Editor currently edits WAD maps and resources.
+
+For current projects, select "zdoom" as the source port.  That profile supports
+Doom, Hexen and UDMF map formats and supplies the closest available definitions
+for BiasedDoom.  When using Tools / Test in Game for the first time, choose the
+BiasedDoom executable.  In this workspace it is typically found at:
+
+   ~/workspace/BiasedDoom/build/biaseddoom
+
+Heresy Editor will pass the selected IWAD, resource WADs, edited WAD and map name
+to BiasedDoom.  BiasedDoom-specific actors and features which are not inherited
+from ZDoom may still require dedicated editor definitions; expanding those
+definitions is part of the fork's ongoing support work.
 
 
 REQUIREMENTS
@@ -54,11 +78,15 @@ RUNNING
 
 Command line:
 
-You can run Eureka from the command line, or it can be run from
+You can run Heresy Editor from the command line, or it can be run from
 the desktop menu (on Linux: if your OS handles .desktop files as per the
-XDG specs).  Eureka will need to be able to find an IWAD to run,
+XDG specs).  Heresy Editor will need to be able to find an IWAD to run,
 if it cannot find any then the "Manage Wads" dialog will open up,
 allowing you to "Find" one (which is remembered for next time).
+
+The executable is named `heresy`.  The inherited `eureka` configuration-
+directory names remain compatibility identifiers so existing settings continue
+to work.
 
 You can open a PWAD file using the File/Open menu command, or start
 a new map with File/New command.
@@ -66,16 +94,16 @@ a new map with File/New command.
 You can also specify the PWAD to edit on the command line, either
 on its own or with the -file option:
 
-   eureka -file masterpiece.wad
+   heresy -file masterpiece.wad
 
 If that PWAD contains multiple maps, you may need to specify which
 one to edit using the -warp option:
 
-   eureka -file masterpiece.wad -warp 14
+   heresy -file masterpiece.wad -warp 14
 
 For a summary of useful command line options, type:
 
-   eureka --help
+   heresy --help
 
 
 
@@ -274,18 +302,18 @@ Z : align both X + Y offsets
 
 COPYRIGHT and LICENSE
 
-  Eureka DOOM Editor
+  Heresy Editor
 
   Copyright © 2014-2026 Ioan Chera
   Copyright © 2001-2020 Andrew Apted, et al
   Copyright © 1997-2003 Andre Majorel et al
 
-  Eureka is free software; you can redistribute it and/or modify
+  Heresy Editor is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published
   by the Free Software Foundation; either version 2 of the License,
   or (at your option) any later version.
 
-  Eureka is distributed in the hope that it will be useful, but
+  Heresy Editor is distributed in the hope that it will be useful, but
   WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.

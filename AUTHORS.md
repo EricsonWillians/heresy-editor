@@ -1,5 +1,12 @@
 # CREDITS
 
+## Heresy Editor
+
+Heresy Editor is a fork of Eureka Editor focused on authoring and testing maps
+for [BiasedDoom](https://github.com/ericsonwillians/BiasedDoom).  The original
+Eureka Editor authors and contributors are credited below, and the inherited
+copyright notices remain in effect.
+
 ## Creator
 
 Andrew Apted  <ajapted@users.sf.net>
@@ -25,7 +32,7 @@ Wesley Werner
 
 Jason R. Johnston ([fiftyoars.com](fiftyoars.com))
 
-  * Eureka Logo
+  * Original Eureka Editor logo
 
 Wesley Johnson
 
@@ -59,7 +66,7 @@ natsuonde
 
 sink666
 
-  * Eureka lump relative path fix
+  * `EUREKA` lump relative path fix
 
 Sean Baggaley
 
@@ -71,7 +78,9 @@ Cristian Rodríguez
 
 ## Earlier Work
 
-André Majorel created the [Yadex](http://www.teaser.fr/~amajorel/yadex/) editor. Eureka began as a fork of this editor, version 1.7.0 to be precise.
+André Majorel created the [Yadex](http://www.teaser.fr/~amajorel/yadex/)
+editor. Eureka Editor began as a fork of this editor, version 1.7.0 to be
+precise. Heresy Editor is derived from Eureka Editor.
 
 Raphael Quinet and Brendon Wyber created DEU 5.21, which Yadex was derived from.
 
@@ -79,23 +88,23 @@ Both Yadex and DEU had many contributors, a comprehensive list of them can be fo
 
 ## Acknowledgements
 
-Eureka uses the [FLTK widget library](http://www.fltk.org).
+Heresy Editor uses the [FLTK widget library](http://www.fltk.org).
 
 ## COPYRIGHT and LICENSE
 
 ```
-  Eureka DOOM Editor
+  Heresy Editor
 
-  Copyright © 2014-2025 Ioan Chera
+  Copyright © 2014-2026 Ioan Chera
   Copyright © 2001-2020 Andrew Apted, et al
   Copyright © 1997-2003 Andre Majorel, et al
 
-  Eureka is free software; you can redistribute it and/or modify
+  Heresy Editor is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published
   by the Free Software Foundation; either version 2 of the License,
   or (at your option) any later version.
 
-  Eureka is distributed in the hope that it will be useful, but
+  Heresy Editor is distributed in the hope that it will be useful, but
   WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.

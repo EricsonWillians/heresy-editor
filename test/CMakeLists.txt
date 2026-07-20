@@ -78,6 +78,7 @@ add_executable(
     m_events_test.cpp
     m_files_test.cpp
     m_game_test.cpp
+    m_iwad_test.cpp
     m_keys_test.cpp
     m_parse_test.cpp
     m_select_test.cpp
@@ -141,7 +142,7 @@ if(NOT Python3_FOUND)
 else()
     add_test(NAME system_test_print_quit COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/python/test_print_quit.py
-        --executable $<TARGET_FILE:eureka>
+        --executable $<TARGET_FILE:heresy>
         --version ${PROJECT_VERSION}
     )
 endif()

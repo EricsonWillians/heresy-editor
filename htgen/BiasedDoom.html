@@ -1,0 +1,29 @@
+<div id='wikitext'>
+<h1>BiasedDoom Integration</h1>
+<p>BiasedDoom is the primary target engine for Heresy Editor. It is derived
+from GZDoom and retains the Doom-family command-line and map-format interfaces
+used by the editor.</p>
+
+<div class='vspace'></div><h2>Current Workflow</h2>
+<ol><li>Open File / New Project or File / Manage Project.
+</li><li>Select the game IWAD.
+</li><li>Select <code>zdoom</code> as the Source Port.
+</li><li>Use the port setup button or Tools / Test in Game and select the
+<code>biaseddoom</code> executable.
+</li></ol>
+
+<p class='vspace'>A typical local development build in this workspace is
+<code>~/workspace/BiasedDoom/build/biaseddoom</code>. Heresy Editor supplies
+<code>-iwad</code>, <code>-file</code> and <code>-warp</code> arguments when it
+launches the engine.</p>
+
+<div class='vspace'></div><h2>Compatibility Boundary</h2>
+<p>The current <code>zdoom</code> profile covers inherited ZDoom map formats,
+things, action specials and dynamic lights. It does not yet promise editor
+metadata for every BiasedDoom-only actor or extension. Dedicated BiasedDoom
+definitions remain an active compatibility goal.</p>
+
+<p class='vspace'>Heresy Editor currently edits WAD maps and resources.
+BiasedDoom can load additional PK3 resources when they are supplied separately
+to the engine.</p>
+</div>

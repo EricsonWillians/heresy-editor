@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Upload htdocs to SourceForge, replacing remote htdocs
+# Upload the Heresy Editor htdocs to the inherited SourceForge host.
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

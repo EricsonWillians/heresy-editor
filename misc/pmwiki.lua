@@ -1,9 +1,9 @@
 -- This is a custom writer for pandoc producing pmWiki format.
 -- Created by Andrew Apted, May 2018, based on sample.lua.
--- This script only works on the Eureka user manual
+-- This script only works on the Heresy Editor user manual
 -- (in conjunction with the pmconvert.sh script).
 
-WEBSITE = "http://eureka-editor.sourceforge.net/"
+WEBSITE = "https://github.com/EricsonWillians/heresy-editor/"
 DL_BASE = "http://sourceforge.net/projects/eureka-editor/files/Misc/Samples/"
 
 VERBOSE = false
@@ -416,4 +416,3 @@ meta.__index =
     return function() return "" end
   end
 setmetatable(_G, meta)
-

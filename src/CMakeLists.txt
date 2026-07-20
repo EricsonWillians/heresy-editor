@@ -82,6 +82,8 @@ set(source_m
     m_events.h
     m_files.cc
     m_files.h
+    m_iwad.cc
+    m_iwad.h
     m_game.cc
     m_game.h
     m_keys.cc
@@ -221,6 +223,9 @@ add_library(
 )
 
 target_link_libraries(eurekasrc PRIVATE eurekacore)
+if(WIN32)
+    target_link_libraries(eurekasrc PRIVATE advapi32)
+endif()
 
 # Needed for macOS release archiving!
 set_target_properties(eurekasrc eurekacore PROPERTIES ARCHIVE_OUTPUT_DIRECTORY

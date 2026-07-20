@@ -202,7 +202,7 @@ void FatalError(EUR_FORMAT_STRING(const char *fmt), ...)
 	else
 	{
 		std::wstring wideBuffer = UTF8ToWide(buffer.c_str());
-		MessageBoxW(NULL, wideBuffer.c_str(), L"Eureka : Error",
+		MessageBoxW(NULL, wideBuffer.c_str(), L"Heresy Editor: Error",
 		           MB_ICONEXCLAMATION | MB_OK |
 				   MB_SYSTEMMODAL | MB_SETFOREGROUND);
 	}
@@ -353,20 +353,22 @@ static void Determine_InstallPath(const char *argv0) noexcept(false)
 
 		for (const fs::path &prefix : prefixes)
 		{
-			global::install_dir = prefix / "share" / "eureka";
+			for(const fs::path &data_name : {fs::path("heresy"), fs::path("eureka")})
+			{
+				global::install_dir = prefix / "share" / data_name;
+				const fs::path filename = global::install_dir / "games" / "doom2.ugh";
 
-			fs::path filename = global::install_dir / "games" / "doom2.ugh";
+				gLog.debugPrintf("Trying install path: %s\n",
+						reinterpret_cast<const char *>(global::install_dir.u8string().c_str()));
+				gLog.debugPrintf("   looking for file: %s\n",
+						reinterpret_cast<const char *>(filename.u8string().c_str()));
 
-			gLog.debugPrintf("Trying install path: %s\n",
-							 reinterpret_cast<const char *>(global::install_dir.u8string().c_str()));
-			gLog.debugPrintf("   looking for file: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
-
-			bool exists = FileExists(filename);
-
-			if (exists)
+				if (FileExists(filename))
+					break;
+				global::install_dir.clear();
+			}
+			if(!global::install_dir.empty())
 				break;
-
-			global::install_dir.clear();
 		}
 #endif
 	}
@@ -685,7 +687,7 @@ static void Main_OpenWindow(Instance &inst)
 	// Set menu bindings now that we have them.
 	menu::updateBindings(inst.main_win->menu_bar);
 
-	inst.main_win->label("Eureka v" EUREKA_VERSION);
+	inst.main_win->label("Heresy Editor v" EUREKA_VERSION);
 
 #if !defined(__APPLE__) && !defined(_WIN32)
 #include "../misc/eureka.xpm"
@@ -716,7 +718,7 @@ static void Main_OpenWindow(Instance &inst)
 		int   argc = 1;
 		char *argv[2];
 
-		argv[0] = StringDup("Eureka.exe");
+		argv[0] = StringDup("heresy");
 		argv[1] = NULL;
 
 		inst.main_win->show(argc, argv);
@@ -1082,12 +1084,12 @@ static void ShowHelp()
 			"*** " EUREKA_TITLE " v" EUREKA_VERSION " © %s The Eureka Team ***\n"
 			"\n", buildYear);
 
-	printf(	"Eureka is free software, under the terms of the GNU General\n"
+	printf(	"Heresy Editor is free software, under the terms of the GNU General\n"
 			"Public License (GPL), and comes with ABSOLUTELY NO WARRANTY.\n"
-			"Home page: http://eureka-editor.sf.net/\n"
+			"Home page: https://github.com/EricsonWillians/heresy-editor\n"
 			"\n");
 
-	printf( "USAGE: eureka [options...] [FILE...]\n"
+	printf( "USAGE: heresy [options...] [FILE...]\n"
 			"\n"
 			"Available options are:\n");
 
@@ -1098,7 +1100,7 @@ static void ShowHelp()
 
 static void ShowVersion()
 {
-	printf("Eureka version " EUREKA_VERSION " (" BUILD_DATE ")\n");
+	printf("Heresy Editor version " EUREKA_VERSION " (" BUILD_DATE ")\n");
 
 	fflush(stdout);
 }

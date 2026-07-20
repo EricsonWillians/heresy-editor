@@ -15,7 +15,7 @@ the resource wads, or you can even load another wad file (which becomes the curr
 """
 "GivenFile <keyword>" = """
 Loads a new wad file for editing from the list of "given files", i.e. files that were specified on
-the command line when Eureka was started.
+the command line when Heresy Editor was started.
 
 Keywords:
     `next` : the next wad file in the list
@@ -56,7 +56,7 @@ DeleteMap = """
 Deletes the current map from the currently edited wad. Cannot be used on the game iwad.
 """
 Quit = """
-Quits Eureka. If you have unsaved changes, a dialog box will appear asking for confirmation.
+Quits Heresy Editor. If you have unsaved changes, a dialog box will appear asking for confirmation.
 """
 
 [CommandDoc.Edit]
@@ -226,6 +226,7 @@ Opens the Preferences dialog.
 """
 TestMap = """
 Tests your map by launching the game (using your chosen source port).
+For BiasedDoom projects, use the `zdoom` source-port profile and select the `biaseddoom` executable.
 """
 ChangeTestSettings = """
 Opens the test-map settings dialog box to configure what game program to start and with what custom
@@ -253,10 +254,10 @@ Opens the log viewer window.
 [CommandDoc.Help]
 heading = "Help Commands"
 OnlineDocs = """
-Launches a web browser to display Eureka's absolutely fabulous documentation.
+Launches a web browser to display Heresy Editor's documentation.
 """
 AboutDialog = """
-Displays a dialog with some brief information about Eureka.
+Displays a dialog with some brief information about Heresy Editor.
 """
 
 [CommandDoc.View2D]

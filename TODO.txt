@@ -1,8 +1,15 @@
 
-Eureka TODO / WISHLIST
+Heresy Editor TODO / WISHLIST
 ======================
 
-See also github.com/ioan-chera/eureka-editor list of issues.
+See also github.com/EricsonWillians/heresy-editor list of issues.
+
+BiasedDoom support
+------------------
+
+-  add a dedicated BiasedDoom port profile derived from the ZDoom profile
+-  add definitions for BiasedDoom-specific actors and map extensions
+-  verify the Test in Game workflow against packaged and local BiasedDoom builds
 
 IOAN NOTE: this is only kept here for archival.
 
@@ -34,7 +41,7 @@ Slightly Possible
    -  backup_max_files / backup_max_space
    -  floor_bump_xxx values
 
--  ability to autosave to a hidden file, and if Eureka crashes or
+-  ability to autosave to a hidden file, and if Heresy Editor crashes or
    power fails, can detect it and allow user to restore from it
 
 -  treat sprite UI_Pic in THING panel and DEFAULTS panel as a

@@ -1,5 +1,5 @@
 " Vim syntax file
-" Language:     Eureka Definition (.ugh)
+" Language:     Heresy Editor Definition (.ugh)
 " First Author: Andrew Apted
 " Last Change:  2018 Jun 18
 
