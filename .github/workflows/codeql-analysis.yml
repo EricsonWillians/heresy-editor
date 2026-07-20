@@ -38,7 +38,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.0
+      uses: actions/checkout@v7.0.1
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -64,7 +64,17 @@ jobs:
     #   If the Autobuild fails above, remove it and uncomment the following three lines.
     #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
 
-    - run: sudo apt-get update && sudo apt-get install --fix-missing cmake libjpeg-dev libgl-dev libglu1-mesa-dev libpng-dev libxpm-dev libz-dev python3 && mkdir build && cd build && cmake .. && make -j$(nproc)
+    - name: Install C++ build dependencies
+      if: matrix.language == 'cpp'
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends --yes \
+          cmake g++ libgl-dev libglu1-mesa-dev libjpeg-dev libpng-dev \
+          libxpm-dev libz-dev ninja-build python3
+
+    - name: Build C++ source for analysis
+      if: matrix.language == 'cpp'
+      run: ./build.sh --clean --type RelWithDebInfo --no-tests --jobs 2
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3

@@ -344,6 +344,12 @@ static void Determine_InstallPath(const char *argv0) noexcept(false)
 		global::install_dir = GetExecutablePath(argv0);
 
 #else
+		// Portable builds keep their data beside the executable.  Check this
+		// before system prefixes so an extracted artifact is self-contained.
+		global::install_dir = GetExecutablePath(argv0);
+		if (!FileExists(global::install_dir / "games" / "doom2.ugh"))
+			global::install_dir.clear();
+
 		static const fs::path prefixes[] =
 		{
 			"/usr/local",
@@ -353,6 +359,9 @@ static void Determine_InstallPath(const char *argv0) noexcept(false)
 
 		for (const fs::path &prefix : prefixes)
 		{
+			if (!global::install_dir.empty())
+				break;
+
 			for(const fs::path &data_name : {fs::path("heresy"), fs::path("eureka")})
 			{
 				global::install_dir = prefix / "share" / data_name;

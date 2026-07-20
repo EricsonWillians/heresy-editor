@@ -39,6 +39,28 @@ To install the resulting build system-wide, run:
 
 
 
+CONTINUOUS-INTEGRATION ARTIFACTS
+================================
+
+Every successful push to the master branch publishes tested, versioned builds
+on the corresponding GitHub Actions run.  The unified pipeline covers:
+
+  - Linux x86_64 and arm64 portable tarballs
+  - Windows x86_64 and x86 portable ZIP archives
+  - macOS x86_64 and arm64 disk images
+
+Each download includes a matching `.sha256` file.  Linux builds are tested with
+both GCC and Clang; only the GCC build is published because both use the same
+portable package layout.  Pull requests build and test the full platform matrix
+without publishing artifacts.  A maintainer can also publish artifacts from a
+manual workflow run.
+
+The macOS CI downloads use an ad-hoc signature so their bundle integrity can be
+verified, but they are not Apple-notarized.  Gatekeeper can therefore require
+explicit approval before first launch.
+
+
+
 COMPILING (macOS)
 =================
 

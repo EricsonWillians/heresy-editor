@@ -1,0 +1,194 @@
+name: Build, test, and publish artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heresy-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  CTEST_PARALLEL_LEVEL: 2
+
+jobs:
+  linux:
+    name: Linux / ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64 GCC
+            runner: ubuntu-24.04
+            architecture: x86_64
+            cc: gcc
+            cxx: g++
+            publish: true
+          - label: x86_64 Clang
+            runner: ubuntu-24.04
+            architecture: x86_64
+            cc: clang
+            cxx: clang++
+            publish: false
+          - label: arm64 GCC
+            runner: ubuntu-24.04-arm
+            architecture: arm64
+            cc: gcc
+            cxx: g++
+            publish: true
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            clang cmake g++ libgl-dev libglu1-mesa-dev libjpeg-dev \
+            libpng-dev libxpm-dev libz-dev ninja-build python3
+
+      - name: Build and test
+        run: >-
+          ./build.sh --clean --type Release --test --jobs 2
+          --cc "${{ matrix.cc }}" --cxx "${{ matrix.cxx }}"
+
+      - name: Package portable build
+        if: matrix.publish && github.event_name != 'pull_request'
+        id: package
+        run: |
+          archive="$(./scripts/package-linux.sh build dist "${{ matrix.architecture }}")"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Linux artifact
+        if: matrix.publish && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: HeresyEditor-linux-${{ matrix.architecture }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  windows:
+    name: Windows / ${{ matrix.label }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            cmake_architecture: x64
+            package_architecture: x86_64
+          - label: x86
+            cmake_architecture: Win32
+            package_architecture: x86
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G "Visual Studio 17 2022"
+          -A "${{ matrix.cmake_architecture }}"
+          -DUSE_SYSTEM_FLTK=OFF -DUSE_SYSTEM_GOOGLE_TEST=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Package portable build
+        if: github.event_name != 'pull_request'
+        id: package
+        shell: pwsh
+        run: |
+          $archive = ./scripts/package-windows.ps1 `
+            -BuildDirectory build `
+            -OutputDirectory dist `
+            -Architecture "${{ matrix.package_architecture }}"
+          "archive=$($archive -replace '\\', '/')" >> $env:GITHUB_OUTPUT
+
+      - name: Publish Windows artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: HeresyEditor-windows-${{ matrix.package_architecture }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  macos:
+    name: macOS / ${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x86_64
+            runner: macos-15-intel
+          - architecture: arm64
+            runner: macos-15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="${{ matrix.architecture }}"
+          -DUSE_SYSTEM_FLTK=OFF -DUSE_SYSTEM_GOOGLE_TEST=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Apply ad-hoc application signature
+        if: github.event_name != 'pull_request'
+        run: >-
+          codesign --force --deep --sign - --timestamp=none
+          --entitlements osx/EurekaApp/eureka.entitlements build/heresy.app
+
+      - name: Verify application bundle
+        if: github.event_name != 'pull_request'
+        run: codesign --verify --deep --strict --verbose=2 build/heresy.app
+
+      - name: Package disk image
+        if: github.event_name != 'pull_request'
+        id: package
+        run: |
+          archive="$(./scripts/package-macos.sh build dist "${{ matrix.architecture }}")"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Publish macOS artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: HeresyEditor-macos-${{ matrix.architecture }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
