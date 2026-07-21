@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum OS X deployment version")
 
-project(heresy-editor VERSION 2.1.1)
+project(heresy-editor VERSION 2.2.0)
 
 include(GNUInstallDirs)
 

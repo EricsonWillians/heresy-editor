@@ -55,10 +55,11 @@ portable package layout.  Pull requests build and test the full platform matrix
 without publishing artifacts.  A maintainer can also publish artifacts from a
 manual workflow run.
 
-Pushing a version tag such as `v2.1.1` runs the same complete matrix and then
+Pushing a version tag such as `v2.2.0` runs the same complete matrix and then
 publishes the packages as a GitHub Release.  The tag must match the project
-version in CMakeLists.txt.  Release publication verifies every checksum before
-uploading the packages and marks a successful version release as the latest.
+version in CMakeLists.txt and have a matching `changelogs/<version>.md` file.
+Release publication verifies every checksum before uploading the packages,
+uses that changelog as the release notes, and marks the version as the latest.
 
 The macOS CI downloads use an ad-hoc signature so their bundle integrity can be
 verified, but they are not Apple-notarized.  Gatekeeper can therefore require
