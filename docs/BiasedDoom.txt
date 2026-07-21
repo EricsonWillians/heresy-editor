@@ -78,7 +78,8 @@ Compatibility roadmap
    changing classic Doom or Hexen serialization.
 4. Complete: exercise dirty Doom, Hexen and UDMF maps through the full Tools /
    Test in Game save, node-build, argument, and launch path.
-5. Next: keep the profile synchronized with BiasedDoom releases.
+5. Complete: pin the audited BiasedDoom release contract and monitor GitHub's
+   latest published release weekly for compatibility drift.
 
 
 Legacy identifiers

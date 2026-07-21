@@ -1,0 +1,46 @@
+name: Monitor BiasedDoom compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/biaseddoom-compatibility.yml'
+      - 'docs/BiasedDoom.txt'
+      - 'docs/BiasedDoomInventory.txt'
+      - 'ports/biaseddoom.release'
+      - 'ports/biaseddoom.ugh'
+      - 'scripts/audit-biaseddoom-metadata.sh'
+      - 'scripts/check-biaseddoom-release.sh'
+  pull_request:
+    paths:
+      - '.github/workflows/biaseddoom-compatibility.yml'
+      - 'docs/BiasedDoom.txt'
+      - 'docs/BiasedDoomInventory.txt'
+      - 'ports/biaseddoom.release'
+      - 'ports/biaseddoom.ugh'
+      - 'scripts/audit-biaseddoom-metadata.sh'
+      - 'scripts/check-biaseddoom-release.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: biaseddoom-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-contract:
+    name: Latest release / metadata contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out Heresy Editor
+        uses: actions/checkout@v7.0.1
+
+      - name: Verify latest BiasedDoom release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/check-biaseddoom-release.sh --check-latest --remote

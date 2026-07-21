@@ -20,6 +20,23 @@ script otherwise derives the baseline from the checkout's `gzdoom/master` ref.
 It exits unsuccessfully when canonical map metadata or DoomEdNum registration
 sources change, making a future BiasedDoom update require deliberate review.
 
+Release synchronization
+-----------------------
+
+`ports/biaseddoom.release` is the authoritative compatibility contract.  It
+pins the published BiasedDoom tag, its exact source commit, and the exact
+GZDoom merge base used by this inventory.  Verify a local checkout with:
+
+    scripts/check-biaseddoom-release.sh --check-latest ~/workspace/BiasedDoom
+
+When no checkout is supplied or available beside Heresy Editor, the verifier
+fetches only the pinned tag and baseline into a temporary repository.  It
+checks GitHub's latest published release, tag identity, profile and inventory
+annotations, and then runs the source audit below.  A scheduled GitHub Actions
+workflow repeats this check every Monday and can also be dispatched manually.
+Any newer BiasedDoom release or map-facing source change fails visibly and
+requires a deliberate inventory and profile review before advancing the pin.
+
 Inventory result
 ----------------
 

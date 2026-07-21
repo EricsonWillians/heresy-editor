@@ -167,6 +167,14 @@ IWAD and ordered resource/project arguments, map warp, process launch, and
 cleared dirty state.  The UDMF case additionally verifies that extended
 BiasedDoom-compatible properties reach the exact TEXTMAP passed to the engine.
 
+Stage 10 is complete: a machine-readable compatibility contract pins the
+audited BiasedDoom release, source commit, and exact GZDoom merge base.  A
+single verifier checks the current published release, tag identity, profile
+and inventory annotations, and map-facing source audit using either a local
+checkout or a minimal temporary fetch.  GitHub Actions runs that contract
+weekly, on relevant pull requests, and on demand so release drift cannot pass
+silently.
+
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
 validated before becoming authoritative package metadata.  Explicit WAD and

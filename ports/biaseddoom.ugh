@@ -18,7 +18,8 @@
 #  translators, and UDMF grammar are unchanged.  Its procedural generator
 #  emits the zdoom namespace, stock Doom/Doom II things, and existing ZDoom
 #  specials.  Keep that shared compatibility in one place; see
-#  docs/BiasedDoomInventory.txt for the reproducible inventory.
+#  docs/BiasedDoomInventory.txt for the reproducible inventory and
+#  ports/biaseddoom.release for the machine-checked release contract.
 #
 #------------------------------------------------------------------------
 
