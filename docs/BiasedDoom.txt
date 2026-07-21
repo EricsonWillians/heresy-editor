@@ -62,9 +62,9 @@ The BiasedDoom 4.15.7 metadata inventory found no engine-only DoomEdNums,
 action specials, or UDMF namespace to add.  Procedural generation uses stock
 Doom/Doom II things and established ZDoom specials.  Renderer settings, Python
 integration, glTF models, and related extensions remain external resource or
-runtime features.  Heresy Editor does not yet preserve every extended UDMF
-property emitted by the generator; see `docs/BiasedDoomInventory.txt` for the
-audited list and reproducible check.
+runtime features.  The extended line, side, and sector properties emitted by
+the generator now survive UDMF load/edit/save cycles; see
+`docs/BiasedDoomInventory.txt` for the audited list and reproducible check.
 
 
 Compatibility roadmap
@@ -74,9 +74,9 @@ Compatibility roadmap
    definitions, executable discovery, and launch regression coverage.
 2. Complete: inventory BiasedDoom-only editor numbers, specials and namespaces.
    BiasedDoom 4.15.7 adds none; generator coverage is regression-tested.
-3. Next: preserve the relevant established ZDoom UDMF properties without
+3. Complete: preserve the relevant established ZDoom UDMF properties without
    changing classic Doom or Hexen serialization.
-4. Exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
+4. Next: exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
 5. Keep the profile synchronized with BiasedDoom releases.
 
 

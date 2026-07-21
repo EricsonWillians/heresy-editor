@@ -21,6 +21,7 @@
 #define LINEDEF_H_
 
 #include "Side.h"
+#include "UdmfProperty.h"
 
 class LineDef
 {
@@ -42,6 +43,9 @@ public:
 	int arg5 = 0;
 
 	int lineid = 0;
+
+	// Unrecognized UDMF extension fields, retained verbatim across saves.
+	UdmfProperties udmf_properties;
 
 public:
 	bool TouchesVertex(int v_num) const

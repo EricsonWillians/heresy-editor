@@ -151,6 +151,15 @@ The audit separately classifies renderer, Python, glTF, and MAPINFO extensions
 as resource/runtime metadata and records the established ZDoom UDMF properties
 that the editor should preserve in the next compatibility stage.
 
+Stage 8 is complete: unrecognized UDMF properties on linedefs, sidedefs, and
+sectors are retained as validated name/value tokens and written back with the
+objects they belong to.  This preserves BiasedDoom's generated light, fade,
+damage, texture-scale, and lock metadata during ordinary editing without
+teaching the geometry editor renderer-specific semantics.  Round-trip tests
+cover every audited generator field, editing recognized fields in the same
+objects, and a second reload.  Separate byte comparisons prove the added state
+does not affect classic Doom or Hexen binary serialization.
+
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
 validated before becoming authoritative package metadata.  Explicit WAD and

@@ -91,6 +91,7 @@ add_executable(
     m_streams_test.cpp
     m_zip_test.cpp
     m_testmap_test.cpp
+    m_udmf_test.cpp
     main_test.cpp
     r_grid_test.cpp
 	SafeOutFileTest.cpp
