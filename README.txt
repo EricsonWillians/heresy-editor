@@ -6,7 +6,7 @@ INTRODUCTION
 
 Heresy Editor is a map editor for the classic DOOM games and related games
 such as Heretic, Hexen and Strife.  This fork is being developed as a mapping
-companion for BiasedDoom while retaining the established Eureka Editor editing
+companion for BiasedDoom while retaining the established upstream editing
 workflow.  The supported operating systems are Linux (and other Unix-likes),
 Windows and macOS.
 
@@ -34,6 +34,7 @@ FEATURES
 -  Key binding system
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
+-  Campaign Navigator with safe multi-map working state
 
 
 SUPPORTED GAMES
@@ -100,6 +101,11 @@ to work.
 
 You can open a WAD or PK3 project using File/Open Map, or create one with
 File/New Project.
+
+File/Campaign Navigator shows configured and additional maps together with
+their current, dirty, or missing state.  It can open, create, duplicate,
+rename, and delete maps.  Navigation retains up to eight resident map
+documents (one active and seven cached), never evicting unsaved work.
 
 You can also specify the WAD or PK3 package to edit on the command line, either
 on its own or with the -file option:

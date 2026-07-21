@@ -194,3 +194,41 @@ TEST_F(ProjectTest, WadProjectPreservesMapsResourcesAndReadOnlyIwad)
 	ASSERT_TRUE(FileLoad(iwadPath, iwadAfter));
 	EXPECT_EQ(iwadAfter, iwadBefore);
 }
+
+TEST_F(ProjectTest, CampaignStatusesPutConfiguredSlotsBeforeAdditionalMaps)
+{
+	auto package = Wad_file::Open(getSubPath("campaign.wad"),
+			WadOpenMode::write);
+	ASSERT_TRUE(package);
+	AddDoomMap(*package, "MAP99");
+	AddDoomMap(*package, "MAP01");
+	AddDoomMap(*package, "MAP99");
+
+	ProjectMetadata project;
+	project.version = ProjectMetadata::CURRENT_VERSION;
+	project.package = ProjectPackage::wad;
+	project.campaign = CampaignMode::custom;
+	project.mapSlots = { "map01", "MAP02", "MAP01" };
+
+	std::vector<CampaignMapStatus> statuses = M_CampaignMapStatuses(project,
+			*package, "map01", { "MAP01", "map99" });
+
+	ASSERT_EQ(statuses.size(), 3u);
+	EXPECT_EQ(statuses[0].name, "MAP01");
+	EXPECT_TRUE(statuses[0].configured);
+	EXPECT_TRUE(statuses[0].exists);
+	EXPECT_TRUE(statuses[0].current);
+	EXPECT_TRUE(statuses[0].dirty);
+	EXPECT_FALSE(statuses[0].missing());
+
+	EXPECT_EQ(statuses[1].name, "MAP02");
+	EXPECT_TRUE(statuses[1].configured);
+	EXPECT_FALSE(statuses[1].exists);
+	EXPECT_TRUE(statuses[1].missing());
+	EXPECT_FALSE(statuses[1].current);
+
+	EXPECT_EQ(statuses[2].name, "MAP99");
+	EXPECT_FALSE(statuses[2].configured);
+	EXPECT_TRUE(statuses[2].exists);
+	EXPECT_TRUE(statuses[2].dirty);
+}

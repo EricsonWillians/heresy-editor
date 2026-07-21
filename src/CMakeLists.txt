@@ -77,6 +77,8 @@ set(source_lib
 set(source_m
     m_config.cc
     m_config.h
+    m_document_cache.cc
+    m_document_cache.h
     m_editlump.cc
     m_events.cc
     m_events.h
@@ -123,6 +125,8 @@ set(source_ui
     ui_args.h
     ui_browser.cc
     ui_browser.h
+    ui_campaign.cc
+    ui_campaign.h
     ui_canvas.cc
     ui_canvas.h
     ui_default.cc
