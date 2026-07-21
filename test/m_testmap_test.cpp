@@ -19,8 +19,11 @@
 #include "testUtils/TempDirContext.hpp"
 
 #include "Instance.h"
+#include "m_config.h"
 #include "m_files.h"
 #include "m_testmap.h"
+#include "w_rawdef.h"
+#include "w_texture.h"
 
 #include "gtest/gtest.h"
 
@@ -293,6 +296,195 @@ TEST_F(TestMapFixture, TestMapBiasedDoomProfileArguments)
 		"-file", res1Path.string(), res2Path.string(), editWadPath.string(), "-warp", "7"};
 	ASSERT_EQ(lines, expected);
 }
+
+class BiasedDoomFormatLaunchFixture : public TestMapFixture,
+		public ::testing::WithParamInterface<MapFormat>
+{
+protected:
+	fs::path previousHome;
+	bool previousBspOnSave = false;
+	int previousBackupFiles = 0;
+
+	void SetUp() override
+	{
+		TestMapFixture::SetUp();
+		previousHome = global::home_dir;
+		previousBspOnSave = config::bsp_on_save;
+		previousBackupFiles = config::backup_max_files;
+		global::home_dir = getSubPath("home");
+		ASSERT_TRUE(FileMakeDir(global::home_dir));
+		mDeleteList.push(global::home_dir);
+		mDeleteList.push(global::home_dir / "misc.cfg");
+		config::bsp_on_save = true;
+		config::backup_max_files = 0;
+		inst.Editor_Init();
+	}
+
+	void TearDown() override
+	{
+		DLG_Confirm_Override = nullptr;
+		inst.wad.master.MasterDir_CloseAll();
+		config::bsp_on_save = previousBspOnSave;
+		config::backup_max_files = previousBackupFiles;
+		global::home_dir = previousHome;
+		TempDirContext::TearDown();
+	}
+
+	static std::string textOf(const Lump_c &lump)
+	{
+		const std::vector<byte> &data = lump.getData();
+		return std::string(reinterpret_cast<const char *>(data.data()), data.size());
+	}
+};
+
+TEST_P(BiasedDoomFormatLaunchFixture, SavesBuildsAndLaunchesDirtyMap)
+{
+	const MapFormat format = GetParam();
+	setPortName("biaseddoom");
+	addIWAD();
+	addResources();
+	addPWAD();
+	mDeleteList.push(editWadPath);
+
+	inst.loaded.gameName = "doom2";
+	inst.loaded.levelName = "MAP07";
+	inst.loaded.levelFormat = format;
+	inst.loaded.udmfNamespace = "ZDoom";
+	inst.conf.default_wall_tex = "STARTAN3";
+	inst.conf.default_floor_tex = "FLOOR0_1";
+	inst.conf.default_ceil_tex = "CEIL1_1";
+	auto sector = std::make_shared<Sector>();
+	sector->floorh = 0;
+	sector->ceilh = 128;
+	sector->floor_tex = BA_InternaliseString("FLOOR0_1");
+	sector->ceil_tex = BA_InternaliseString("CEIL1_1");
+	sector->light = 160;
+	inst.level.sectors.push_back(std::move(sector));
+	for (int index = 0; index < 4; ++index)
+	{
+		auto vertex = std::make_shared<Vertex>();
+		vertex->SetRawXY(format, {
+				(index >= 2) ? 256.0 : -256.0,
+				(index == 1 || index == 2) ? 256.0 : -256.0});
+		inst.level.vertices.push_back(std::move(vertex));
+
+		auto side = std::make_shared<SideDef>();
+		side->sector = 0;
+		side->upper_tex = BA_InternaliseString("STARTAN3");
+		side->mid_tex = BA_InternaliseString("STARTAN3");
+		side->lower_tex = BA_InternaliseString("STARTAN3");
+		inst.level.sidedefs.push_back(std::move(side));
+
+		auto line = std::make_shared<LineDef>();
+		line->start = index;
+		line->end = (index + 1) % 4;
+		line->right = index;
+		line->flags = MLF_Blocking;
+		inst.level.linedefs.push_back(std::move(line));
+
+		auto thing = std::make_shared<Thing>();
+		thing->type = index + 1;
+		thing->angle = 90;
+		thing->SetRawXY(format, {index * 32.0 - 48.0, 0.0});
+		inst.level.things.push_back(std::move(thing));
+	}
+	inst.level.CalculateLevelBounds();
+	if (format == MapFormat::udmf)
+	{
+		inst.level.linedefs[0]->udmf_properties.push_back({"locknumber", "3"});
+		inst.level.sidedefs[0]->udmf_properties.push_back({"scalex_mid", "1.25"});
+		inst.level.sectors[0]->udmf_properties.push_back({"lightcolor", "16755200"});
+	}
+	inst.level.markRecovered();
+
+	bool savePromptSeen = false;
+	DLG_Confirm_Override = [&savePromptSeen](const std::vector<SString> &,
+			const char *message, va_list)
+	{
+		savePromptSeen = true;
+		EXPECT_NE(std::string(message).find("unsaved changes"), std::string::npos);
+		return 1; // Save and continue to the engine launch.
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	const std::vector<std::string> expected = {
+		portPath.string(), "-iwad", gameWadPath.string(), "-file",
+		res1Path.string(), res2Path.string(), editWadPath.string(), "-warp", "7"
+	};
+	EXPECT_EQ(lines, expected);
+	EXPECT_TRUE(savePromptSeen);
+	EXPECT_FALSE(inst.level.hasChanges());
+
+	const std::shared_ptr<Wad_file> savedWad = inst.wad.master.editWad();
+	ASSERT_TRUE(savedWad);
+	const int level = savedWad->LevelFind("MAP07");
+	ASSERT_GE(level, 0);
+	EXPECT_EQ(savedWad->LevelFormat(level), format);
+	auto lump = [&](const char *name) -> const Lump_c *
+	{
+		const int index = savedWad->LevelLookupLump(level, name);
+		return index < 0 ? nullptr : savedWad->GetLump(index);
+	};
+
+	if (format == MapFormat::doom)
+	{
+		const Lump_c *things = lump("THINGS");
+		const Lump_c *linedefs = lump("LINEDEFS");
+		ASSERT_NE(things, nullptr);
+		ASSERT_NE(linedefs, nullptr);
+		EXPECT_EQ(things->Length(), 4 * static_cast<int>(sizeof(raw_thing_t)));
+		EXPECT_EQ(linedefs->Length(), 4 * static_cast<int>(sizeof(raw_linedef_t)));
+		EXPECT_EQ(lump("BEHAVIOR"), nullptr);
+		EXPECT_EQ(lump("TEXTMAP"), nullptr);
+		ASSERT_NE(lump("NODES"), nullptr);
+		ASSERT_NE(lump("SEGS"), nullptr);
+		ASSERT_NE(lump("SSECTORS"), nullptr);
+		EXPECT_GT(lump("SEGS")->Length(), 0);
+		EXPECT_GT(lump("SSECTORS")->Length(), 0);
+	}
+	else if (format == MapFormat::hexen)
+	{
+		const Lump_c *things = lump("THINGS");
+		const Lump_c *linedefs = lump("LINEDEFS");
+		ASSERT_NE(things, nullptr);
+		ASSERT_NE(linedefs, nullptr);
+		EXPECT_EQ(things->Length(), 4 * static_cast<int>(sizeof(raw_hexen_thing_t)));
+		EXPECT_EQ(linedefs->Length(), 4 * static_cast<int>(sizeof(raw_hexen_linedef_t)));
+		ASSERT_NE(lump("BEHAVIOR"), nullptr);
+		EXPECT_EQ(lump("TEXTMAP"), nullptr);
+		ASSERT_NE(lump("NODES"), nullptr);
+		ASSERT_NE(lump("SEGS"), nullptr);
+		ASSERT_NE(lump("SSECTORS"), nullptr);
+		EXPECT_GT(lump("SEGS")->Length(), 0);
+		EXPECT_GT(lump("SSECTORS")->Length(), 0);
+	}
+	else
+	{
+		const Lump_c *textmap = lump("TEXTMAP");
+		ASSERT_NE(textmap, nullptr);
+		const std::string text = textOf(*textmap);
+		EXPECT_NE(text.find("namespace = \"ZDoom\";"), std::string::npos);
+		EXPECT_NE(text.find("locknumber = 3;"), std::string::npos);
+		EXPECT_NE(text.find("scalex_mid = 1.25;"), std::string::npos);
+		EXPECT_NE(text.find("lightcolor = 16755200;"), std::string::npos);
+		ASSERT_NE(lump("ENDMAP"), nullptr);
+		ASSERT_NE(lump("ZNODES"), nullptr);
+		EXPECT_GT(lump("ZNODES")->Length(), 0);
+	}
+}
+
+INSTANTIATE_TEST_SUITE_P(AllMapFormats, BiasedDoomFormatLaunchFixture,
+		::testing::Values(MapFormat::doom, MapFormat::hexen, MapFormat::udmf),
+		[](const ::testing::TestParamInfo<MapFormat> &info)
+		{
+			switch (info.param)
+			{
+				case MapFormat::doom:  return std::string("Doom");
+				case MapFormat::hexen: return std::string("Hexen");
+				case MapFormat::udmf:  return std::string("UDMF");
+				default:               return std::string("Unknown");
+			}
+		});
 
 TEST_F(TestMapFixture, TestMapPortWithoutResources)
 {
