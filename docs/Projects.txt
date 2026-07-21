@@ -160,6 +160,13 @@ cover every audited generator field, editing recognized fields in the same
 objects, and a second reload.  Separate byte comparisons prove the added state
 does not affect classic Doom or Hexen binary serialization.
 
+Stage 9 is complete: parameterized integration coverage sends dirty Doom,
+Hexen, and UDMF documents through Tools / Test in Game.  Each case confirms the
+save prompt, format-specific serialization, internal node building, read-only
+IWAD and ordered resource/project arguments, map warp, process launch, and
+cleared dirty state.  The UDMF case additionally verifies that extended
+BiasedDoom-compatible properties reach the exact TEXTMAP passed to the engine.
+
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
 validated before becoming authoritative package metadata.  Explicit WAD and

@@ -76,8 +76,9 @@ Compatibility roadmap
    BiasedDoom 4.15.7 adds none; generator coverage is regression-tested.
 3. Complete: preserve the relevant established ZDoom UDMF properties without
    changing classic Doom or Hexen serialization.
-4. Next: exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
-5. Keep the profile synchronized with BiasedDoom releases.
+4. Complete: exercise dirty Doom, Hexen and UDMF maps through the full Tools /
+   Test in Game save, node-build, argument, and launch path.
+5. Next: keep the profile synchronized with BiasedDoom releases.
 
 
 Legacy identifiers
