@@ -1,0 +1,6 @@
+# BiasedDoom release compatibility contract for Heresy Editor.
+repository=EricsonWillians/BiasedDoom
+upstream=ZDoom/gzdoom
+tag=v4.15.7
+commit=e47b5acb911afadca44246f5f15a8b41d146d653
+baseline=092b9c0515c2861270cde175cd8eaa30a253c8b1
