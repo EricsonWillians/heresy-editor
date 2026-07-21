@@ -1,0 +1,85 @@
+BIASEDDOOM MAP-METADATA INVENTORY
+================================
+
+Scope and revisions
+-------------------
+
+This inventory determines whether Heresy Editor needs BiasedDoom-only thing
+definitions, action specials, or a new UDMF namespace.  It covers BiasedDoom
+4.15.7 at commit `e47b5acb911afadca44246f5f15a8b41d146d653` and compares it with the
+fork's exact GZDoom merge base,
+`092b9c0515c2861270cde175cd8eaa30a253c8b1`.  Comparing the merge base avoids
+mistaking unrelated later GZDoom work for a BiasedDoom extension.
+
+Run the repeatable source audit from the Heresy Editor checkout:
+
+    scripts/audit-biaseddoom-metadata.sh ~/workspace/BiasedDoom
+
+An explicit repository, baseline, and head can be supplied positionally.  The
+script otherwise derives the baseline from the checkout's `gzdoom/master` ref.
+It exits unsuccessfully when canonical map metadata or DoomEdNum registration
+sources change, making a future BiasedDoom update require deliberate review.
+
+Inventory result
+----------------
+
+No BiasedDoom-only map identifiers were found in this revision:
+
+* DoomEdNums: none added or changed.  The static MAPINFO actor registrations
+  and native actor registration sources are unchanged.
+* Action specials: none added or changed.  The line-special implementation,
+  declarations, game translators, and static translators are unchanged.
+* UDMF namespaces: none added or changed.  The parser and UDMF specification
+  are unchanged, and the procedural generator explicitly emits `zdoom`.
+
+The `biaseddoom` profile should therefore continue to include `zdoom` instead
+of copying definitions or assigning speculative numbers.
+
+Procedural-generator coverage
+-----------------------------
+
+BiasedDoom's generator emits four existing ZDoom action specials: 11
+(`Door_Open`), 12 (`Door_Raise`), 62 (`Plat_DownWaitUpStay`), and 243
+(`Exit_Normal`).  It marks secrets with generalized sector flag 1024.  Every
+thing it can emit is a stock Doom or Doom II thing.  An automated definition
+test loads the Doom II and BiasedDoom profiles together and verifies all of
+those things, specials, and the secret flag are present.
+
+The generator currently selects the Doom or Doom II roster from `GI_MAPxx`.
+This inventory does not claim that it emits native Heretic, Hexen, or Strife
+content merely because the BiasedDoom profile supports editing those games.
+
+Resource and runtime features
+-----------------------------
+
+The fork adds substantial capabilities that do not belong in editor-number or
+action-special definitions:
+
+* procedural generation creates an in-memory UDMF map at runtime;
+* glTF models, Python scripting, and their ZScript APIs are external resource
+  or runtime systems;
+* renderer, atmosphere, post-process, dynamic-light, player-skin, mugshot, and
+  autoaim controls are runtime or resource metadata;
+* MAPINFO `lightblendmode` accepts the additional tonemap values `Gothic`,
+  `GothicNoir`, `Moonlit`, `Candlelit`, `Graveyard`, `SilentHill`,
+  `BleachBypass`, `Lottes`, and `ACES`.
+
+These features can be packaged beside maps and passed to BiasedDoom without
+inventing map-geometry definitions.  A future resource-metadata editor may
+surface them independently.
+
+Round-trip work identified
+--------------------------
+
+Although the generated map uses established ZDoom UDMF fields, Heresy Editor
+does not yet preserve every non-core field if such a map is exported and then
+edited.  The relevant generator output includes:
+
+* sector `lightcolor`, `fadecolor`, `damageamount`, `damageinterval`,
+  `damagetype`, `leakiness`, and `damageterraineffect`;
+* sidedef `scaley_top`, `scalex_mid`, and `scaley_mid`; and
+* linedef `locknumber`.
+
+This is a UDMF property-preservation task, not evidence of new BiasedDoom
+identifiers.  The next compatibility stage should preserve these established
+ZDoom fields without changing classic Doom or Hexen serialization.

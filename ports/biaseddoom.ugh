@@ -13,10 +13,12 @@
 #
 #------------------------------------------------------------------------
 #
-#  BiasedDoom 4.15.x is derived from GZDoom and currently uses the same
-#  supported games, map formats, namespace, things and action specials.
-#  Keep that shared compatibility in one place.  BiasedDoom-only editor
-#  definitions can be layered below as they are inventoried.
+#  BiasedDoom 4.15.7 (e47b5acb9) was audited against its exact GZDoom merge
+#  base (092b9c051).  Its DoomEdNum registrations, action-special tables,
+#  translators, and UDMF grammar are unchanged.  Its procedural generator
+#  emits the zdoom namespace, stock Doom/Doom II things, and existing ZDoom
+#  specials.  Keep that shared compatibility in one place; see
+#  docs/BiasedDoomInventory.txt for the reproducible inventory.
 #
 #------------------------------------------------------------------------
 

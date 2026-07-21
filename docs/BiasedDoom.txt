@@ -58,12 +58,13 @@ absolute IWAD path and is never passed to BiasedDoom.
 Known boundary
 --------------
 
-The current compatibility layer describes features inherited from ZDoom.  It
-does not yet promise editor metadata for every BiasedDoom-only actor, procedural
-mission feature, renderer setting, Python integration, or glTF extension.  Maps
-and resources can still be passed to BiasedDoom for testing, but specialized
-features may need to be authored as external resources until dedicated editor
-definitions are added.
+The BiasedDoom 4.15.7 metadata inventory found no engine-only DoomEdNums,
+action specials, or UDMF namespace to add.  Procedural generation uses stock
+Doom/Doom II things and established ZDoom specials.  Renderer settings, Python
+integration, glTF models, and related extensions remain external resource or
+runtime features.  Heresy Editor does not yet preserve every extended UDMF
+property emitted by the generator; see `docs/BiasedDoomInventory.txt` for the
+audited list and reproducible check.
 
 
 Compatibility roadmap
@@ -71,8 +72,10 @@ Compatibility roadmap
 
 1. Complete: add a named BiasedDoom port profile derived from the ZDoom
    definitions, executable discovery, and launch regression coverage.
-2. Next: inventory BiasedDoom-only editor numbers, specials and namespaces.
-3. Add definitions without weakening classic Doom and GZDoom compatibility.
+2. Complete: inventory BiasedDoom-only editor numbers, specials and namespaces.
+   BiasedDoom 4.15.7 adds none; generator coverage is regression-tested.
+3. Next: preserve the relevant established ZDoom UDMF properties without
+   changing classic Doom or Hexen serialization.
 4. Exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
 5. Keep the profile synchronized with BiasedDoom releases.
 
