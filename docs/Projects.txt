@@ -140,8 +140,16 @@ environment override, `PATH`, portable installations, local CMake builds, and
 conventional Linux, Windows, and macOS locations.  Invalid candidates are
 skipped and the manual picker remains the final fallback.  Profile inheritance,
 discovery priority, invalid-path handling, and launch arguments have automated
-regression coverage.  The next compatibility stage inventories BiasedDoom-only
-editor numbers, specials, and namespaces before adding isolated definitions.
+regression coverage.
+
+Stage 7 is complete: the BiasedDoom 4.15.7 source was compared with its exact
+GZDoom merge base using a reproducible audit.  It adds no DoomEdNums, action
+specials, or UDMF namespace, and its procedural generator uses stock Doom/Doom
+II things plus existing ZDoom specials.  Regression coverage loads the real
+Doom II and BiasedDoom definitions and verifies every generated identifier.
+The audit separately classifies renderer, Python, glTF, and MAPINFO extensions
+as resource/runtime metadata and records the established ZDoom UDMF properties
+that the editor should preserve in the next compatibility stage.
 
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
