@@ -60,12 +60,21 @@ GZDoom and keeps the standard IWAD, WAD, PK3, ZDoom map-format and command-line
 workflows that Heresy Editor relies on.  Heresy Editor creates direct WAD
 projects and BiasedDoom/GZDoom-style PK3 projects using `maps/<slot>.wad`.
 
-For current projects, select "zdoom" as the source port.  That profile supports
-Doom, Hexen and UDMF map formats and supplies the closest available definitions
-for BiasedDoom.  When using Tools / Test in Game for the first time, choose the
-BiasedDoom executable.  In this workspace it is typically found at:
+Select "biaseddoom" as the source port.  Its profile derives from the ZDoom
+definitions and supports Doom, Hexen and UDMF map formats, all five compatible
+games, ZDoom action specials, and dynamic lights without duplicating the shared
+definitions.
+
+Tools / Test in Game automatically finds the BiasedDoom executable when a
+remembered path is unavailable.  The search checks `BIASEDDOOM_EXE`, the
+process `PATH`, portable editor locations, common CMake build layouts, and
+platform installation locations in that order.  A typical local build is:
 
    ~/workspace/BiasedDoom/build/biaseddoom
+
+Windows builds use `biaseddoom.exe`; macOS application bundles and Linux
+AppImages are also recognized.  If no candidate is valid, the existing engine
+picker remains available and remembers the selected path.
 
 Heresy Editor will pass the selected IWAD, resource WADs or PK3s, edited project
 package, and map name to BiasedDoom.  BiasedDoom-specific actors and features

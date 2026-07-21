@@ -14,9 +14,10 @@ direct WAD projects and PK3 projects with maps stored at `maps/<slot>.wad`.
 Current support
 ---------------
 
-Use the `zdoom` source-port profile for BiasedDoom projects.  It provides Doom,
-Hexen and UDMF map formats, the ZDoom namespace, common ZDoom things and action
-specials, and dynamic-light definitions.
+Use the `biaseddoom` source-port profile for BiasedDoom projects.  It derives
+from the shared ZDoom definitions and provides Doom, Hexen and UDMF map formats,
+the ZDoom namespace, common ZDoom things and action specials, dynamic-light
+definitions, and support for Doom, Doom II, Heretic, Hexen, and Strife.
 
 For a new project, choose WAD package for maximum classic-port compatibility or
 PK3 package for a BiasedDoom/GZDoom-style mod.  Campaign layout can follow the
@@ -27,15 +28,26 @@ Test in Game command invokes the selected engine with:
 - resource files and the edited WAD or PK3 via `-file`; and
 - the current map via `-warp`.
 
-Those arguments are supported by BiasedDoom.  On the first test, select the
-BiasedDoom executable when Heresy Editor asks for the engine path.  A typical
-local development build in this workspace is:
+Those arguments are supported by BiasedDoom.  Tools / Test in Game keeps an
+existing valid engine selection.  Otherwise it searches these bounded,
+non-recursive locations in order:
+
+1. the explicit `BIASEDDOOM_EXE` environment variable;
+2. each directory in the process `PATH`;
+3. an executable beside the editor or in the same installation prefix;
+4. common single- and multi-configuration CMake build directories under a
+   sibling checkout, `~/workspace/BiasedDoom`, or `~/BiasedDoom`; and
+5. conventional per-user and system installation locations.
+
+A typical local development build in this workspace is:
 
     ~/workspace/BiasedDoom/build/biaseddoom
 
 The exact output directory can vary with the BiasedDoom CMake generator and
 build configuration.  Windows builds use `biaseddoom.exe`; packaged macOS
-builds may be selected as an application bundle.
+application bundles and Linux AppImages are recognized.  Invalid or stale
+candidates are skipped.  If automatic discovery finds nothing, Heresy Editor
+opens the engine picker and remembers the user's selection as before.
 
 An explicit project's adjacent `.heresy` file restores its active map,
 Campaign Navigator selection, and portable IWAD hint.  Keep that file beside
@@ -57,8 +69,9 @@ definitions are added.
 Compatibility roadmap
 ---------------------
 
-1. Add a named BiasedDoom port profile derived from the ZDoom definitions.
-2. Inventory BiasedDoom-only editor numbers, specials and namespaces.
+1. Complete: add a named BiasedDoom port profile derived from the ZDoom
+   definitions, executable discovery, and launch regression coverage.
+2. Next: inventory BiasedDoom-only editor numbers, specials and namespaces.
 3. Add definitions without weakening classic Doom and GZDoom compatibility.
 4. Exercise Doom, Hexen and UDMF maps through Tools / Test in Game.
 5. Keep the profile synchronized with BiasedDoom releases.
