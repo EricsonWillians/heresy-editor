@@ -6,9 +6,9 @@ Purpose
 
 Heresy Editor is being developed as a Doom-family map editor with BiasedDoom as
 its primary target engine.  BiasedDoom is derived from GZDoom and retains the
-standard IWAD, WAD, ZDoom map-format and command-line interfaces used by the
-editor's existing test-map workflow.  BiasedDoom also supports PK3 mods, while
-Heresy Editor currently edits WAD maps and resources.
+standard IWAD, WAD, PK3, ZDoom map-format and command-line interfaces used by
+the editor's existing test-map workflow.  Heresy Editor creates and edits both
+direct WAD projects and PK3 projects with maps stored at `maps/<slot>.wad`.
 
 
 Current support
@@ -18,10 +18,12 @@ Use the `zdoom` source-port profile for BiasedDoom projects.  It provides Doom,
 Hexen and UDMF map formats, the ZDoom namespace, common ZDoom things and action
 specials, and dynamic-light definitions.
 
-Heresy Editor's Tools / Test in Game command invokes the selected engine with:
+For a new project, choose WAD package for maximum classic-port compatibility or
+PK3 package for a BiasedDoom/GZDoom-style mod.  Heresy Editor's Tools / Test in
+Game command invokes the selected engine with:
 
 - the project IWAD via `-iwad`;
-- resource files and the edited WAD via `-file`; and
+- resource files and the edited WAD or PK3 via `-file`; and
 - the current map via `-warp`.
 
 Those arguments are supported by BiasedDoom.  On the first test, select the

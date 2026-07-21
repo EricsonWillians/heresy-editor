@@ -77,7 +77,7 @@ TEST_F(EurekaLumpFixture, WriteEurekaLump)
 	// Now read the data
 	// Expected content is:
 	SString expected =
-		"# Eureka project info\n"
+		"# Heresy Editor project info\n"
 		"game Mood\n"
 		"testing_command_line \"\"\n"
 		"port Voom\n"
@@ -114,7 +114,7 @@ TEST_F(EurekaLumpFixture, WriteEurekaLump)
 	ASSERT_EQ(wad->GetLump(2)->Name(), EUREKA_LUMP);	// moved to the end
 
 	static const char expected2[] = {
-		"# Eureka project info\n"
+		"# Heresy Editor project info\n"
 		"game Mood\n"
 		"testing_command_line \"\"\n"
 	};
@@ -230,9 +230,16 @@ void ParseEurekaLumpFixture::makeGame(const fs::path &gamesDir, const char *ughN
 
 TEST_F(ParseEurekaLumpFixture, TryWithoutLump)
 {
+	// State from a previously opened explicit project must not leak into an
+	// ordinary WAD which has no editor metadata.
+	loading.project.version = ProjectMetadata::CURRENT_VERSION;
+	loading.project.package = ProjectPackage::wad;
+	loading.project.mapSlots = { "MAP01" };
+
 	// Safe on empty wad
 	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir, recent, wad.get()));
 	assertEmptyLoading();
+	ASSERT_FALSE(loading.project.isExplicit());
 
 	// Safe on wad with some lumps
 	Lump_c &lump1 = wad->AddLump("LUMP1");
@@ -245,6 +252,27 @@ TEST_F(ParseEurekaLumpFixture, TryWithoutLump)
 
 	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir, recent, wad.get()));
 	assertEmptyLoading();
+}
+
+TEST_F(ParseEurekaLumpFixture, ProjectMetadataRoundTrip)
+{
+	Lump_c &metadata = wad->AddLump(EUREKA_LUMP);
+	metadata.Printf("project_version 1\n");
+	metadata.Printf("project_name \"Test Campaign\"\n");
+	metadata.Printf("project_package wad\n");
+	metadata.Printf("campaign_mode full_iwad\n");
+	metadata.Printf("map_slot MAP01\n");
+	metadata.Printf("map_slot MAP02\n");
+
+	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir,
+			recent, wad.get()));
+	ASSERT_TRUE(loading.project.isExplicit());
+	EXPECT_EQ(loading.project.name, "Test Campaign");
+	EXPECT_EQ(loading.project.package, ProjectPackage::wad);
+	EXPECT_EQ(loading.project.campaign, CampaignMode::fullIwad);
+	ASSERT_EQ(loading.project.mapSlots.size(), 2u);
+	EXPECT_EQ(loading.project.mapSlots[0], "MAP01");
+	EXPECT_EQ(loading.project.mapSlots[1], "MAP02");
 }
 
 TEST_F(ParseEurekaLumpFixture, TryGameAndPort)

@@ -51,9 +51,9 @@ SUPPORTED GAMES
 BIASEDDOOM SUPPORT
 
 BiasedDoom is the primary target engine for this fork.  It is derived from
-GZDoom and keeps the standard IWAD, WAD, ZDoom map-format and command-line
-workflows that Heresy Editor relies on.  BiasedDoom can also load PK3 mods;
-Heresy Editor currently edits WAD maps and resources.
+GZDoom and keeps the standard IWAD, WAD, PK3, ZDoom map-format and command-line
+workflows that Heresy Editor relies on.  Heresy Editor creates direct WAD
+projects and BiasedDoom/GZDoom-style PK3 projects using `maps/<slot>.wad`.
 
 For current projects, select "zdoom" as the source port.  That profile supports
 Doom, Hexen and UDMF map formats and supplies the closest available definitions
@@ -62,10 +62,11 @@ BiasedDoom executable.  In this workspace it is typically found at:
 
    ~/workspace/BiasedDoom/build/biaseddoom
 
-Heresy Editor will pass the selected IWAD, resource WADs, edited WAD and map name
-to BiasedDoom.  BiasedDoom-specific actors and features which are not inherited
-from ZDoom may still require dedicated editor definitions; expanding those
-definitions is part of the fork's ongoing support work.
+Heresy Editor will pass the selected IWAD, resource WADs or PK3s, edited project
+package, and map name to BiasedDoom.  BiasedDoom-specific actors and features
+which are not inherited from ZDoom may still require dedicated editor
+definitions; expanding those definitions is part of the fork's ongoing support
+work.
 
 
 REQUIREMENTS
@@ -97,15 +98,15 @@ The executable is named `heresy`.  The inherited `eureka` configuration-
 directory names remain compatibility identifiers so existing settings continue
 to work.
 
-You can open a PWAD file using the File/Open menu command, or start
-a new map with File/New command.
+You can open a WAD or PK3 project using File/Open Map, or create one with
+File/New Project.
 
-You can also specify the PWAD to edit on the command line, either
+You can also specify the WAD or PK3 package to edit on the command line, either
 on its own or with the -file option:
 
    heresy -file masterpiece.wad
 
-If that PWAD contains multiple maps, you may need to specify which
+If that package contains multiple maps, you may need to specify which
 one to edit using the -warp option:
 
    heresy -file masterpiece.wad -warp 14

@@ -93,3 +93,32 @@ TEST_F(SafeOutFileTest, Stuff)
 
 	checkFileContent(path, "New stuff!");
 }
+
+TEST_F(SafeOutFileTest, FailedValidationPreservesOriginal)
+{
+	fs::path path = getSubPath("validated.txt");
+
+	{
+		BufferedOutFile initial(path);
+		initial.write("known good", 10);
+		initial.commit();
+	}
+	mDeleteList.push(path);
+
+	BufferedOutFile replacement(path);
+	replacement.write("corrupt", 7);
+	EXPECT_THROW(replacement.commit([](const fs::path &)
+	{
+		return false;
+	}), std::runtime_error);
+
+	checkFileContent(path, "known good");
+
+	int entries = 0;
+	for (const auto &entry : fs::directory_iterator(mTempDir))
+	{
+		(void)entry;
+		++entries;
+	}
+	EXPECT_EQ(entries, 1);
+}

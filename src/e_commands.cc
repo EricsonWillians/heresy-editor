@@ -1465,6 +1465,10 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_FreshMap
 	},
 
+	{	"CreateNextMap",  "File",
+		&Instance::CMD_CreateNextMap
+	},
+
 	{	"CopyMap",  "File",
 		&Instance::CMD_CopyMap
 	},

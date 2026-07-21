@@ -28,6 +28,7 @@
 #include "Instance.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "Errors.h"
 #include "lib_adler.h"
@@ -224,6 +225,28 @@ std::shared_ptr<Wad_file> Wad_file::loadFromFile(const fs::path &filename)
 		return nullptr;
 	}
 	return createAndReadDirectory(filename, WadOpenMode::append, fp);
+}
+
+std::shared_ptr<Wad_file> Wad_file::loadFromData(const fs::path &displayName,
+		const std::vector<byte> &data, WadOpenMode mode)
+{
+	SYS_ASSERT(mode == WadOpenMode::read || mode == WadOpenMode::append);
+	auto wad = std::shared_ptr<Wad_file>(new Wad_file(displayName, mode));
+	if (!wad->ReadDirectory(data))
+		return nullptr;
+
+	wad->DetectLevels();
+	wad->ProcessNamespaces();
+	return wad;
+}
+
+std::shared_ptr<Wad_file> Wad_file::CreateVirtual(const fs::path &displayName,
+		SaveHandler saveHandler, WadOpenMode mode)
+{
+	SYS_ASSERT(mode == WadOpenMode::read || mode == WadOpenMode::append);
+	auto wad = std::shared_ptr<Wad_file>(new Wad_file(displayName, mode));
+	wad->saveHandler_ = std::move(saveHandler);
+	return wad;
 }
 
 std::shared_ptr<Wad_file> Wad_file::readFromDir(const fs::path &path)
@@ -429,6 +452,15 @@ inline static bool IsGLNodeLump(const SString &name) noexcept
 //
 int Wad_file::TotalSize() const noexcept
 {
+	if (saveHandler_)
+	{
+		std::error_code error;
+		const uintmax_t packageSize = fs::file_size(filename, error);
+		if (!error)
+			return static_cast<int>(std::min<uintmax_t>(packageSize,
+					static_cast<uintmax_t>(std::numeric_limits<int>::max())));
+	}
+
 	int size = 12;
 	for(const LumpRef &ref : directory)
 	{
@@ -580,6 +612,12 @@ int Wad_file::LevelHeader(int lev_num) const noexcept
 	SYS_ASSERT(0 <= lev_num && lev_num < LevelCount());
 
 	return levels[lev_num];
+}
+
+const SString &Wad_file::LevelName(int lev_num) const noexcept
+{
+	SYS_ASSERT(0 <= lev_num && lev_num < LevelCount());
+	return directory[LevelHeader(lev_num)].lump->Name();
 }
 
 
@@ -790,6 +828,56 @@ bool Wad_file::ReadDirectory(FILE *fp, int total_size)
 	return true;
 }
 
+bool Wad_file::ReadDirectory(const std::vector<byte> &data)
+{
+	if (data.size() < sizeof(raw_wad_header_t))
+		return false;
+
+	raw_wad_header_t header;
+	memcpy(&header, data.data(), sizeof(header));
+	if (!((header.ident[0] == 'P' || header.ident[0] == 'I') &&
+			header.ident[1] == 'W' && header.ident[2] == 'A' &&
+			header.ident[3] == 'D'))
+	{
+		return false;
+	}
+
+	kind = header.ident[0] == 'I' ? WadKind::IWAD : WadKind::PWAD;
+	const uint32_t dirCount = LE_U32(header.num_entries);
+	const uint32_t dirStart = LE_U32(header.dir_start);
+	const uint64_t dirEnd = static_cast<uint64_t>(dirStart) +
+			static_cast<uint64_t>(dirCount) * sizeof(raw_wad_entry_t);
+	if (dirEnd > data.size())
+		return false;
+
+	directory.reserve(dirCount);
+	for (uint32_t index = 0; index < dirCount; ++index)
+	{
+		raw_wad_entry_t entry;
+		memcpy(&entry, data.data() + dirStart +
+				index * sizeof(raw_wad_entry_t), sizeof(entry));
+		const uint32_t lumpStart = LE_U32(entry.pos);
+		const uint32_t lumpLength = LE_U32(entry.size);
+		if (static_cast<uint64_t>(lumpStart) + lumpLength > data.size())
+			return false;
+
+		auto lump = std::make_unique<Lump_c>(SString(entry.name, 8));
+		if (lumpLength > 0)
+		{
+			std::vector<byte> lumpData(data.begin() + lumpStart,
+					data.begin() + lumpStart + lumpLength);
+			lump->setData(std::move(lumpData));
+		}
+
+		LumpRef reference{};
+		reference.lump = std::move(lump);
+		reference.ns = WadNamespace::Global;
+		directory.push_back(std::move(reference));
+	}
+
+	return true;
+}
+
 
 void Wad_file::DetectLevels()
 {
@@ -970,8 +1058,10 @@ void Wad_file::writeToDisk() noexcept(false)
 					   reinterpret_cast<const char *>(filename.u8string().c_str()));
 	}
 
-	// Write to our path now
-	writeToPath(filename);
+	if (saveHandler_)
+		saveHandler_(*this);
+	else
+		writeToPath(filename);
 
 	// reset the insertion point
 	insert_point = -1;
@@ -1103,47 +1193,88 @@ void Wad_file::FixLevelGroup(int index, int num_added, int num_removed)
 //
 void Wad_file::writeToPath(const fs::path &path) const noexcept(false)
 {
-	int32_t le32;
-
+	const std::vector<byte> data = serialize();
 	BufferedOutFile sof(path);
-	// Write the header
-	if(kind == WadKind::PWAD)
-		sof.write("PWAD", 4);
-	else
-		sof.write("IWAD", 4);
-
-	int32_t numlumps = (int32_t)directory.size();
-	le32 = LE_S32(numlumps);
-	sof.write(&le32, 4);
-
-	int32_t infotableofs = 12;
-	for(const LumpRef &ref : directory)
-		infotableofs += (int32_t)ref.lump->Length();
-
-	le32 = LE_S32(infotableofs);
-	sof.write(&le32, 4);
-	for(const LumpRef &ref : directory)
+	sof.write(data.data(), data.size());
+	sof.commit([](const fs::path &temporary)
 	{
-		assert(ref.lump.get() != nullptr);
-		const Lump_c &lump = *ref.lump;
-		sof.write(lump.getData().data(), lump.Length());
-	}
-	infotableofs = 12;
-	for(const LumpRef &ref : directory)
+		// Parsing the complete temporary WAD catches invalid headers,
+		// directories, offsets, and lump data before the original is replaced.
+		return Wad_file::Open(temporary, WadOpenMode::read) != nullptr;
+	});
+}
+
+std::vector<byte> Wad_file::serializeRange(int start, int finish,
+		WadKind outputKind) const
+{
+	if (start < 0 || finish < start || finish >= NumLumps())
+		throw std::runtime_error("Invalid WAD serialization range.");
+
+	const uint32_t count = static_cast<uint32_t>(finish - start + 1);
+	uint64_t directoryOffset64 = sizeof(raw_wad_header_t);
+	for (int index = start; index <= finish; ++index)
+		directoryOffset64 += directory[index].lump->Length();
+	const uint64_t totalSize = directoryOffset64 +
+			static_cast<uint64_t>(count) * sizeof(raw_wad_entry_t);
+	if (totalSize > std::numeric_limits<uint32_t>::max())
+		throw std::runtime_error("WAD exceeds its 32-bit size limit.");
+
+	std::vector<byte> result;
+	result.reserve(static_cast<size_t>(totalSize));
+	const char *ident = outputKind == WadKind::IWAD ? "IWAD" : "PWAD";
+	result.insert(result.end(), ident, ident + 4);
+	auto append32 = [&result](uint32_t value)
 	{
-		le32 = LE_S32(infotableofs);
-		sof.write(&le32, 4);
+		value = LE_U32(value);
+		const byte *bytes = reinterpret_cast<const byte *>(&value);
+		result.insert(result.end(), bytes, bytes + sizeof(value));
+	};
+	append32(count);
+	append32(static_cast<uint32_t>(directoryOffset64));
 
-		const Lump_c &lump = *ref.lump;
-		numlumps = lump.Length();
-		le32 = LE_S32(numlumps);
-		sof.write(&le32, 4);
-
-		infotableofs += numlumps;
-		int64_t nm = lump.getName8();
-		sof.write(&nm, 8);
+	for (int index = start; index <= finish; ++index)
+	{
+		const std::vector<byte> &lumpData = directory[index].lump->getData();
+		result.insert(result.end(), lumpData.begin(), lumpData.end());
 	}
-	sof.commit();
+
+	uint32_t lumpOffset = sizeof(raw_wad_header_t);
+	for (int index = start; index <= finish; ++index)
+	{
+		const Lump_c &lump = *directory[index].lump;
+		append32(lumpOffset);
+		append32(static_cast<uint32_t>(lump.Length()));
+		lumpOffset += static_cast<uint32_t>(lump.Length());
+		const int64_t name = lump.getName8();
+		const byte *nameBytes = reinterpret_cast<const byte *>(&name);
+		result.insert(result.end(), nameBytes, nameBytes + 8);
+	}
+
+	return result;
+}
+
+std::vector<byte> Wad_file::serialize() const
+{
+	if (directory.empty())
+	{
+		std::vector<byte> result(sizeof(raw_wad_header_t));
+		const char *ident = kind == WadKind::IWAD ? "IWAD" : "PWAD";
+		memcpy(result.data(), ident, 4);
+		const uint32_t zero = 0;
+		const uint32_t directoryOffset = LE_U32(sizeof(raw_wad_header_t));
+		memcpy(result.data() + 4, &zero, sizeof(zero));
+		memcpy(result.data() + 8, &directoryOffset, sizeof(directoryOffset));
+		return result;
+	}
+	return serializeRange(0, NumLumps() - 1, kind);
+}
+
+std::vector<byte> Wad_file::serializeLevel(int lev_num) const
+{
+	if (lev_num < 0 || lev_num >= LevelCount())
+		throw std::runtime_error("Invalid level selected for WAD serialization.");
+	return serializeRange(LevelHeader(lev_num), LevelLastLump(lev_num),
+			WadKind::PWAD);
 }
 
 
@@ -1196,6 +1327,37 @@ Lump_c * Wad_file::AddLevel(const SString &name, int *lev_num)
 	return &lump;
 }
 
+void Wad_file::AppendLevelFrom(const Wad_file &source, int sourceLev)
+{
+	if (sourceLev < 0 || sourceLev >= source.LevelCount())
+		throw std::runtime_error("Cannot copy an invalid WAD level.");
+
+	const int start = source.LevelHeader(sourceLev);
+	const int finish = source.LevelLastLump(sourceLev);
+	for (int index = start; index <= finish; ++index)
+	{
+		const Lump_c *sourceLump = source.GetLump(index);
+		Lump_c *targetLump = index == start ? AddLevel(sourceLump->Name()) :
+				&AddLump(sourceLump->Name());
+		if (!sourceLump->getData().empty())
+			targetLump->Write(sourceLump->getData().data(), sourceLump->Length());
+	}
+}
+
+void Wad_file::ReplaceLevelFrom(int targetLev, const Wad_file &source,
+		int sourceLev)
+{
+	if (targetLev < 0 || targetLev >= LevelCount())
+		throw std::runtime_error("Cannot replace an invalid WAD level.");
+
+	const int insertionPoint = LevelHeader(targetLev);
+	RemoveLevel(targetLev);
+	InsertPoint(insertionPoint);
+	AppendLevelFrom(source, sourceLev);
+	InsertPoint();
+	SortLevels();
+}
+
 
 void Wad_file::InsertPoint(int index) noexcept
 {
@@ -1210,7 +1372,18 @@ bool Wad_file::Backup(const fs::path &new_filename) const
 {
 	try
 	{
-		writeToPath(new_filename);
+		if (saveHandler_)
+		{
+			std::error_code error;
+			if (!fs::copy_file(filename, new_filename,
+					fs::copy_options::overwrite_existing, error))
+			{
+				throw fs::filesystem_error("Could not back up package",
+						filename, new_filename, error);
+			}
+		}
+		else
+			writeToPath(new_filename);
 	}
 	catch(const std::exception &e)
 	{

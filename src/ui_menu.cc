@@ -64,6 +64,11 @@ static void file_do_fresh_map(Fl_Widget *w, void * data)
 	static_cast<Instance *>(data)->ExecuteCommand("FreshMap");
 }
 
+static void file_do_create_next_map(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("CreateNextMap");
+}
+
 static void file_do_copy_map(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("CopyMap");
@@ -445,6 +450,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{file_do_save, {"SaveMap"} },
 	{file_do_export, {"ExportMap"} },
 	{file_do_fresh_map, {"FreshMap"} },
+	{file_do_create_next_map, {"CreateNextMap"} },
 	{file_do_copy_map, {"CopyMap"} },
 	{file_do_rename, {"RenameMap"} },
 	{file_do_delete, {"DeleteMap"} },
@@ -546,6 +552,7 @@ static Fl_Menu_Item menu_items[] =
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
+		{ "Create Ne&xt Map", 0, FCAL file_do_create_next_map },
 		{ "&Fresh Map",    0, FCAL file_do_fresh_map },
 		{ "&Copy Map",    0,  FCAL file_do_copy_map },
 		{ "Rename Map",   0,  FCAL file_do_rename },

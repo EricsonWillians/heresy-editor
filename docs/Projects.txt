@@ -1,0 +1,135 @@
+Heresy Editor project workflow
+==============================
+
+Architecture assessment
+-----------------------
+
+Heresy Editor's established editing path is centered on one `Instance`, one
+active `Document`, and a `WadData::MasterDir`.  The master directory keeps the
+game IWAD, optional resources, and the editable project package separate.  Game
+IWADs are opened with `WadOpenMode::read` and are never modified.
+
+`PackageBackend` is the package boundary.  Its WAD implementation opens the
+traditional editable PWAD directly.  Its PK3 implementation projects embedded
+`maps/<slot>.wad` entries into the same editable `Wad_file` view, so map
+serialization, navigation, rename, deletion, dirty state, and node building do
+not have separate WAD and PK3 implementations.  It projects root resources and
+the conventional `flats/`, `sprites/`, and `textures/` namespaces into that
+view without treating them as editable map data.
+
+The ZIP layer reads STORE and DEFLATE entries.  When a map or metadata entry is
+changed, every unrelated entry retains its complete original local record and
+central-directory metadata (apart from the necessarily updated local offset).
+The finished archive is parsed and validated from a same-directory temporary
+file before it atomically replaces the destination.
+
+`Wad_file` detects and replaces one map's ordered lump group while retaining
+other maps and unrelated lumps.
+`Document` owns the editable geometry and serializes the Doom, Hexen, or UDMF
+map data.  `LoadingData` carries the selected game, port, IWAD, map format,
+resources, and current map.  These settings are persisted in the legacy-named
+`__EUREKA` lump for WADs.  PK3 projects store the same payload at
+`heresy/project.txt` and project it back to `__EUREKA` in memory.  The lump name
+is retained for compatibility with existing WADs and older editor versions.
+
+File -> New Project creates either backend, loads a selected IWAD and game
+configuration, creates a valid starter room, and saves the first canonical IWAD
+map slot.  File -> Fresh Map can add an arbitrary map, while File -> Create Next
+Map follows the configured campaign order.  Direct WAD and PK3 opening remains
+available independently of the project command.
+
+The current editor is deliberately single-document: switching maps asks the
+user to save or discard the current document.  There is no campaign navigator,
+multi-document dirty-state manager, autosave recovery, or Save All operation
+yet.
+
+Completed project foundation
+----------------------------
+
+The first two slices adapt the established WAD path rather than replacing it:
+
+1. A small project module owns package type, campaign mode, project name, and
+   the ordered map slots derived from the selected IWAD.
+2. New WAD or PK3 projects default to a full-IWAD replacement campaign.  The
+   selected IWAD remains a read-only resource and is never copied into or
+   changed by the project.
+3. Heresy project fields carry a metadata version.  Ordinary packages without
+   those fields continue to open as implicit projects.
+4. File -> Create Next Map saves the current map, creates the next configured
+   slot when it is missing, and opens it.  If that slot already exists, the
+   command opens it without overwriting it.
+5. WAD writes preserve unrelated lumps and maps.  PK3 writes target only the
+   selected embedded map and metadata entries while byte-preserving unrelated
+   archive records.  Both backends validate a same-directory temporary package
+   before atomically replacing the destination.
+
+Creating and reopening a WAD or PK3 project
+--------------------------------------------
+
+1. Choose File -> New Project.
+2. Select WAD package or PK3 package, then select the game IWAD, source-port
+   compatibility profile, map format, and optional resource files.  Keep Full
+   IWAD replacement selected for a normal campaign.
+3. Pick a new `.wad` or `.pk3` destination.  Heresy Editor refuses to overwrite
+   an existing destination or a known IWAD.
+4. The editor creates and opens the first canonical map (for Doom II this is
+   `MAP01`).  In a PK3 it is stored as `maps/MAP01.wad`.
+5. Edit normally and choose File -> Create Next Map.  The current map is saved
+   before the next slot is created (for Doom II this is `MAP02`).
+6. Save with File -> Save Map and close the editor.
+7. Reopen the `.wad` or `.pk3` with File -> Open Map, the recent-files menu, or the
+   command line.  The game/profile settings and campaign slot order are read
+   from the package, and every saved map remains selectable through Open Map or
+   the existing next/previous-map commands.
+
+Staged implementation plan
+--------------------------
+
+Stage 1 is complete: explicit metadata, safe new WAD destinations,
+canonical first-map creation, sequential map creation, reopen compatibility,
+and automated tests.
+
+Stage 2 is complete: `PackageBackend` adapts the direct-WAD path and adds a
+preservation-safe ZIP/PK3 implementation using BiasedDoom/GZDoom-standard
+`maps/<slot>.wad` paths.  PK3 creation, save, reopen, rename/delete-compatible
+map persistence, sequential map creation, metadata, conventional resource
+projection, recent-file loading, and command-line loading all use the backend.
+Automated tests compare the raw local record of an unknown compressed entry
+before and after a targeted update.
+
+Stage 3 should add the Campaign Navigator over the project module.  It should
+show configured, existing, current, dirty, and missing states, with Open,
+Create, Duplicate, Rename, and Delete actions.  This stage should also move
+from the current single-document state to a bounded map-document cache.
+
+Stage 4 should add Save Project, Save All, per-map autosave, rotating backups,
+startup recovery, and explicit project-level dirty state.  All package backends
+should write a temporary package, validate it, and atomically replace the
+destination.
+
+Stage 5 should add sidecar/session metadata for editor-only state, portable IWAD
+resolution hints, custom campaign layouts, recent-project entries, and restore
+of the last active map and navigator selection.
+
+Known limitations of the current foundation
+-------------------------------------------
+
+* New Project is a compact project-settings dialog followed by a destination,
+  not yet a paged wizard with a final summary.
+* Campaign slots come from maps present in the selected IWAD.  Custom slot
+  lists and engine-specific overrides are not exposed yet.
+* Only one map document is resident, so map changes must be saved or discarded
+  before navigation.  Save All is not needed until multiple documents exist.
+* The full Campaign Navigator UI is not included.  Open Map, next/previous map,
+  and Create Next Map provide the first sequential workflow.
+* WAD metadata remains embedded in `__EUREKA` for compatibility.  PK3 metadata
+  uses `heresy/project.txt`; a separate editor-only session sidecar is planned.
+* Autosave recovery and configurable rotating project backups are not part of
+  this slice; the existing WAD backup behavior remains active.
+* PK3 writing supports classic single-disk ZIP archives with STORE and DEFLATE
+  managed entries.  ZIP64, multi-disk archives, and encrypted map entries are
+  refused explicitly.  Unrelated entries using other compression methods are
+  preserved byte-for-byte but are not decoded by the editor.
+* PK3 resource projection covers root files and one-level `flats/`, `sprites/`,
+  and `textures/` paths.  Deeper engine-specific resource trees remain safely
+  in the package but are not yet exposed in the resource browser.

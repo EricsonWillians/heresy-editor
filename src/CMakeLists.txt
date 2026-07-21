@@ -92,6 +92,12 @@ set(source_m
     m_loadsave.h
     m_nodes.cc
     m_nodes.h
+    m_package.cc
+    m_package.h
+    m_project.cc
+    m_project.h
+    m_zip.cc
+    m_zip.h
     m_select.cc
     m_select.h
     m_testmap.cc
