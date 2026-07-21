@@ -218,6 +218,70 @@ const RecentMap &RecentFiles_c::Lookup(int index) const
 	return list[index];
 }
 
+
+RecentProjects_c::Deque::iterator RecentProjects_c::find(const fs::path &file)
+{
+	std::error_code absoluteError;
+	const fs::path absolute = fs::absolute(file, absoluteError).lexically_normal();
+	for (auto it = list.begin(); it != list.end(); ++it)
+	{
+		std::error_code equivalentError;
+		if (fs::equivalent(file, it->file, equivalentError) && !equivalentError)
+			return it;
+
+		std::error_code otherError;
+		const fs::path other = fs::absolute(it->file, otherError).lexically_normal();
+		if (absoluteError || otherError)
+			continue;
+#ifdef WIN32
+		if (SString(absolute.u8string()).noCaseEqual(SString(other.u8string())))
+			return it;
+#else
+		if (absolute == other)
+			return it;
+#endif
+	}
+	return list.end();
+}
+
+
+void RecentProjects_c::insert(const fs::path &file, const SString &map)
+{
+	auto existing = find(file);
+	if (existing != list.end())
+		list.erase(existing);
+	if (list.size() >= MAX_RECENT)
+		list.pop_back();
+	list.push_front({GetAbsolutePath(file), map.asUpper()});
+}
+
+
+void RecentProjects_c::Write(std::ostream &stream) const
+{
+	for (auto it = list.rbegin(); it != list.rend(); ++it)
+		stream << "recent_project " << it->map.spaceEscape() << " " <<
+				escape(it->file) << std::endl;
+}
+
+
+SString RecentProjects_c::Format(int index) const
+{
+	SYS_ASSERT(index >= 0 && index < static_cast<int>(list.size()));
+	const fs::path &path = list[index].file;
+	const SString file = path.filename().u8string();
+	const SString parent = path.parent_path().filename().u8string();
+	return SString::printf("%s%s%d:  %-.30s  —  %-.18s",
+			index < 9 ? "  " : "", index < 9 ? "&" : "", index + 1,
+			file.c_str(), parent.c_str());
+}
+
+
+const RecentMap &RecentProjects_c::Lookup(int index) const
+{
+	SYS_ASSERT(index >= 0 && index < static_cast<int>(list.size()));
+	return list[index];
+}
+
 namespace global
 {
 RecentKnowledge recent;
@@ -249,10 +313,25 @@ void RecentKnowledge::parseMiscConfig(std::istream &is)
 				gLog.printf("Expected WAD path as second arg in 'recent' in recents config\n");
 				continue;
 			}
-			if(Wad_file::Validate(path))
+			if(M_ValidateEditablePackage(path))
 				files.insert(path, map);
 			else
 				gLog.printf("  no longer exists: %s\n", reinterpret_cast<const char *>(path.u8string().c_str()));
+		}
+		else if(keyword == "recent_project")
+		{
+			SString map;
+			fs::path path;
+			if (!parse.getNext(map) || !parse.getNext(path))
+			{
+				gLog.printf("Expected map and path after 'recent_project' in recents config\n");
+				continue;
+			}
+			if (M_ValidateEditablePackage(path))
+				projects.insert(path, map);
+			else
+				gLog.printf("  project no longer exists: %s\n",
+						reinterpret_cast<const char *>(path.u8string().c_str()));
 		}
 		else if(keyword == "known_iwad")
 		{
@@ -324,6 +403,7 @@ void RecentKnowledge::load(const fs::path &home_dir, const fs::path &old_home_di
 	gLog.printf("Reading recent list from: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
 
 	files.clear();
+	projects.clear();
 	known_iwads.clear();
 	port_paths.clear();
 
@@ -345,6 +425,7 @@ void RecentKnowledge::save(const fs::path &home_dir) const
 	os << "# Heresy Editor miscellaneous settings" << std::endl;
 
 	files.Write(os);
+	projects.Write(os);
 
 	writeKnownIWADs(os);
 
@@ -367,6 +448,23 @@ void M_OpenRecentFromMenu(void *priv_data)
 	}
 }
 
+
+void M_OpenRecentProjectFromMenu(void *priv_data)
+{
+	SYS_ASSERT(priv_data);
+	RecentMap *data = static_cast<RecentMap *>(priv_data);
+	try
+	{
+		OpenFileMap(data->file, data->map);
+	}
+	catch (const std::runtime_error &error)
+	{
+		DLG_ShowError(false, "Could not open project %s: %s",
+				reinterpret_cast<const char *>(data->file.u8string().c_str()),
+				error.what());
+	}
+}
+
 void RecentKnowledge::addRecent(const fs::path &filename, const SString &map_name, const fs::path &home_dir)
 {
 	files.insert(GetAbsolutePath(filename), map_name);
@@ -375,12 +473,26 @@ void RecentKnowledge::addRecent(const fs::path &filename, const SString &map_nam
 }
 
 
+void RecentKnowledge::addRecentProject(const fs::path &filename,
+		const SString &map_name, const fs::path &home_dir)
+{
+	projects.insert(filename, map_name);
+	if (!home_dir.empty())
+		save(home_dir);
+}
+
+
 bool Instance::M_TryOpenMostRecent()
 {
-	if (global::recent.getFiles().getSize() == 0)
+	const RecentMap *selected = nullptr;
+	if (global::recent.getProjects().getSize() > 0)
+		selected = &global::recent.getProjects().Lookup(0);
+	else if (global::recent.getFiles().getSize() > 0)
+		selected = &global::recent.getFiles().Lookup(0);
+	if (!selected)
 		return false;
 
-	RecentMap recentMap = global::recent.getFiles().Lookup(0);
+	RecentMap recentMap = *selected;
 
 	// M_LoadRecent has already validated the filename, so this should
 	// normally work.

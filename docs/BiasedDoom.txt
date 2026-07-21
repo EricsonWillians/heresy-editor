@@ -19,8 +19,9 @@ Hexen and UDMF map formats, the ZDoom namespace, common ZDoom things and action
 specials, and dynamic-light definitions.
 
 For a new project, choose WAD package for maximum classic-port compatibility or
-PK3 package for a BiasedDoom/GZDoom-style mod.  Heresy Editor's Tools / Test in
-Game command invokes the selected engine with:
+PK3 package for a BiasedDoom/GZDoom-style mod.  Campaign layout can follow the
+IWAD, contain one map, or use a custom ordered list.  Heresy Editor's Tools /
+Test in Game command invokes the selected engine with:
 
 - the project IWAD via `-iwad`;
 - resource files and the edited WAD or PK3 via `-file`; and
@@ -35,6 +36,11 @@ local development build in this workspace is:
 The exact output directory can vary with the BiasedDoom CMake generator and
 build configuration.  Windows builds use `biaseddoom.exe`; packaged macOS
 builds may be selected as an application bundle.
+
+An explicit project's adjacent `.heresy` file restores its active map,
+Campaign Navigator selection, and portable IWAD hint.  Keep that file beside
+the WAD or PK3 when relocating the project.  It contains no gameplay data or
+absolute IWAD path and is never passed to BiasedDoom.
 
 
 Known boundary

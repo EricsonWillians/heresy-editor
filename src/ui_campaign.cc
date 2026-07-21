@@ -86,6 +86,15 @@ UI_CampaignNavigator::UI_CampaignNavigator(Instance &instance) :
 		for (size_t index = 0; index < statuses_.size(); ++index)
 			if (statuses_[index].current)
 				current = static_cast<int>(index + 1);
+		for (size_t index = 0; index < statuses_.size(); ++index)
+		{
+			if (statuses_[index].name.noCaseEqual(
+					instance_.Project_NavigatorSelection()))
+			{
+				current = static_cast<int>(index + 1);
+				break;
+			}
+		}
 		maps_->value(current);
 	}
 
@@ -160,6 +169,8 @@ CampaignNavigatorResult UI_CampaignNavigator::Run()
 	show();
 	while (!finished_)
 		Fl::wait(0.2);
+	if (const CampaignMapStatus *selected = selectedStatus())
+		instance_.Project_SetNavigatorSelection(selected->name);
 	hide();
 	return result_;
 }

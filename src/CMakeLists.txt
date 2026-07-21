@@ -100,6 +100,8 @@ set(source_m
     m_project.h
     m_recovery.cc
     m_recovery.h
+    m_session.cc
+    m_session.h
     m_zip.cc
     m_zip.h
     m_select.cc

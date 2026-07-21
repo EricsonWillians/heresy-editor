@@ -20,6 +20,7 @@
 
 #include "m_files.h"
 #include "m_loadsave.h"
+#include "m_package.h"
 #include "m_parse.h"
 #include "m_streams.h"
 
@@ -653,6 +654,23 @@ TEST(RecentFiles, InsertPastCap)
 	}
 }
 
+
+TEST(RecentProjects, KeepsSameNamedProjectsFromDifferentDirectories)
+{
+	RecentProjects_c projects;
+	projects.insert("first/campaign.wad", "MAP01");
+	projects.insert("second/campaign.wad", "MAP02");
+	projects.insert("first/campaign.wad", "MAP03");
+
+	ASSERT_EQ(projects.getSize(), 2);
+	EXPECT_EQ(projects.Lookup(0).map, "MAP03");
+	EXPECT_EQ(projects.Lookup(0).file.filename(), "campaign.wad");
+	EXPECT_EQ(projects.Lookup(1).map, "MAP02");
+	EXPECT_NE(projects.Lookup(0).file.parent_path(),
+			projects.Lookup(1).file.parent_path());
+	EXPECT_NE(projects.Format(0).find("first"), SString::npos);
+}
+
 class RecentFilesFixture : public TempDirContext
 {
 protected:
@@ -889,4 +907,54 @@ TEST_F(RecentFilesFixture, MSaveRecent)
 		ASSERT_TRUE(recent.queryPortPath(item.first));
 		ASSERT_EQ(*recent.queryPortPath(item.first), item.second);
 	}
+}
+
+TEST_F(RecentFilesFixture, PersistsWadAndPk3ProjectsSeparatelyFromRecentFiles)
+{
+	const fs::path projectDirectory = getSubPath("projects");
+	ASSERT_TRUE(fs::create_directories(projectDirectory));
+	mDeleteList.push(projectDirectory);
+
+	auto createPackage = [this](const fs::path &name, ProjectPackage type,
+			const SString &map)
+	{
+		const fs::path path = getSubPath(name);
+		std::shared_ptr<PackageBackend> backend = M_CreatePackageBackend(path, type);
+		EXPECT_TRUE(backend);
+		std::shared_ptr<Wad_file> package = backend ? backend->openEditable() : nullptr;
+		EXPECT_TRUE(package);
+		if (!package)
+			return path;
+		package->AddLevel(map);
+		package->AddLump("THINGS");
+		package->AddLump("LINEDEFS");
+		package->AddLump("SIDEDEFS");
+		package->AddLump("VERTEXES");
+		package->AddLump("SECTORS");
+		package->writeToDisk();
+		return path;
+	};
+
+	const fs::path wadPath = createPackage("projects/campaign.wad",
+			ProjectPackage::wad, "MAP01");
+	const fs::path pk3Path = createPackage("projects/campaign.pk3",
+			ProjectPackage::pk3, "MAP02");
+	mDeleteList.push(wadPath);
+	mDeleteList.push(pk3Path);
+
+	RecentKnowledge recent;
+	recent.addRecentProject(wadPath, "MAP01", mTempDir);
+	recent.addRecentProject(pk3Path, "MAP02", mTempDir);
+	recent.addRecent(wadPath, "MAP03", mTempDir);
+	mDeleteList.push(mTempDir / "misc.cfg");
+
+	RecentKnowledge restored;
+	restored.load(mTempDir, {});
+	ASSERT_EQ(restored.getProjects().getSize(), 2);
+	EXPECT_EQ(restored.getProjects().Lookup(0).file, fs::absolute(pk3Path));
+	EXPECT_EQ(restored.getProjects().Lookup(0).map, "MAP02");
+	EXPECT_EQ(restored.getProjects().Lookup(1).file, fs::absolute(wadPath));
+	EXPECT_EQ(restored.getProjects().Lookup(1).map, "MAP01");
+	ASSERT_EQ(restored.getFiles().getSize(), 1);
+	EXPECT_EQ(restored.getFiles().Lookup(0).file, fs::absolute(wadPath));
 }

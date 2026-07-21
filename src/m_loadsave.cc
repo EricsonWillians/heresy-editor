@@ -39,6 +39,7 @@
 #include "m_files.h"
 #include "m_package.h"
 #include "m_recovery.h"
+#include "m_session.h"
 #include "m_loadsave.h"
 #include "m_testmap.h"
 #include "r_subdiv.h"
@@ -63,6 +64,72 @@ static const char overwrite_message[] =
 	"This operation will destroy that map (overwrite it)."
 	"\n\n"
 	"Are you sure you want to continue?";
+
+
+std::optional<ProjectSession> Instance::Project_LoadSession(
+		const fs::path &packagePath, LoadingData &loading,
+		bool preserveExplicitIWAD)
+{
+	std::optional<ProjectSession> session = M_LoadProjectSession(packagePath);
+	if (!session)
+		return {};
+
+	const fs::path *known = global::recent.queryIWAD(session->iwadGame);
+	const std::optional<fs::path> knownPath = known ?
+			std::optional<fs::path>(*known) : std::nullopt;
+	const std::optional<fs::path> resolved = M_ResolveProjectIWAD(packagePath,
+			*session, knownPath, M_SystemIWADSearchLocations(global::home_dir,
+					global::old_linux_home_and_cache_dir));
+	if (resolved && (!preserveExplicitIWAD || loading.iwadName.empty()))
+	{
+		loading.iwadName = *resolved;
+		global::recent.addIWAD(*resolved);
+		if (!global::home_dir.empty())
+			global::recent.save(global::home_dir);
+	}
+	return session;
+}
+
+
+void Instance::Project_AdoptSession(
+		const std::optional<ProjectSession> &session)
+{
+	projectSession_ = session;
+	navigatorSelection_ = session ? session->navigatorMap : SString{};
+}
+
+
+void Instance::Project_SaveSession() noexcept
+{
+	const std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package || package->PathName().empty() || !loaded.project.isExplicit())
+		return;
+	try
+	{
+		ProjectSession session = M_MakeProjectSession(package->PathName(),
+				loaded.iwadName, loaded.gameName, loaded.levelName,
+				navigatorSelection_);
+		M_SaveProjectSession(package->PathName(), session);
+		projectSession_ = std::move(session);
+		global::recent.addRecentProject(package->PathName(), loaded.levelName,
+				global::home_dir);
+	}
+	catch (const std::exception &error)
+	{
+		gLog.printf("WARNING: could not save project session sidecar: %s\n",
+				error.what());
+	}
+}
+
+
+void Instance::Project_SetNavigatorSelection(const SString &mapName) noexcept
+{
+	if (mapName.good() && M_IsValidProjectMapName(mapName))
+		navigatorSelection_ = mapName.asUpper();
+	else
+		navigatorSelection_.clear();
+	Project_SaveSession();
+}
 
 static Document makeFreshDocument(Instance &inst, const ConfigData &config, MapFormat levelFormat)
 {
@@ -182,6 +249,13 @@ static void updateLoading(const UI_ProjectSetup::Result &result, LoadingData &lo
 	for(int i = 0; i < UI_ProjectSetup::RES_NUM; ++i)
 		if(!result.resources[i].empty())
 			loading.resourceList.push_back(result.resources[i]);
+
+	if (loading.project.isExplicit())
+	{
+		loading.project.campaign = result.campaign;
+		if (result.campaign == CampaignMode::custom)
+			loading.project.mapSlots = result.mapSlots;
+	}
 }
 
 void Instance::Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexcept(false)
@@ -190,6 +264,11 @@ void Instance::Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexc
 	updateLoading(result, loading);
 	Fl::wait(0.1);
 	Main_LoadResources(loading);
+	if (loaded.project.isExplicit() && loaded.project.campaign != CampaignMode::custom &&
+			wad.master.gameWad())
+	{
+		M_RefreshProjectMapSlots(loaded.project, *wad.master.gameWad());
+	}
 	documentCache.updateLoadingContext(loaded);
 	Project_MarkMetadataDirty();
 	Fl::wait(0.1);
@@ -270,6 +349,8 @@ void Instance::CMD_NewProject()
 
 		newres.loading.project = M_NewProjectMetadata(*filename,
 				result->package, result->campaign, *gameWad);
+		if (result->campaign == CampaignMode::custom)
+			newres.loading.project.mapSlots = result->mapSlots;
 		if (newres.loading.project.mapSlots.empty())
 			ThrowException("The selected IWAD does not contain a valid map slot.");
 
@@ -301,6 +382,7 @@ void Instance::CMD_NewProject()
 		this->wad.master.ReplaceEditWad(wad);
 		Project_ClearDocumentCache();
 		ConfirmLevelSaveSuccess(loaded, *wad);
+		Project_SaveSession();
 		UpdateViewOnResources();
 		if (discardOldRecovery && !oldPackagePath.empty())
 			RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
@@ -400,6 +482,8 @@ void Instance::CMD_FreshMap()
 
 		// save it now : sets Level_name and window title
 		SaveLevelAndUpdateWindow(loaded, map_name, *wad.master.editWad(), false);
+		Project_SaveSession();
+		Project_SynchronizeRecoveryAfterSave();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -1380,6 +1464,7 @@ bool Instance::Project_SwitchMap(const std::shared_ptr<Wad_file> &package,
 		menu::setRedoDetail(main_win->menu_bar, level.basis.redoMenuName());
 	}
 	refreshViewAfterLoad(bad, package.get(), mapName, false);
+	Project_SaveSession();
 	return true;
 }
 
@@ -1416,6 +1501,7 @@ bool Instance::Project_CreateMap(const SString &mapName)
 		documentCache.erase(mapName);
 		SaveLevelAndUpdateWindow(loaded, mapName, *package, false);
 		Status_Set("Created %s", mapName.c_str());
+		Project_SaveSession();
 		Project_SynchronizeRecoveryAfterSave();
 		RedrawMap();
 		return true;
@@ -1679,6 +1765,18 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 		return;
 	}
 
+	LoadingData loading = gInstance->loaded;
+	// Opening another package must not leak explicit project state from the
+	// previously active package. Legacy WADs remain implicit projects.
+	loading.project.clear();
+	const std::optional<ProjectSession> openedSession =
+			gInstance->Project_LoadSession(wad->PathName(), loading, false);
+	if (map_name.empty() && openedSession &&
+			wad->LevelFind(openedSession->activeMap) >= 0)
+	{
+		map_name = openedSession->activeMap;
+	}
+
 
 	// determine which level to use
 	int lev_num = -1;
@@ -1699,11 +1797,6 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 
 		return;
 	}
-
-	LoadingData loading = gInstance->loaded;
-	// Opening another package must not leak explicit project state from the
-	// previously active package.  Legacy WADs remain implicit projects.
-	loading.project.clear();
 
 	if (wad->FindLump(EUREKA_LUMP))
 	{
@@ -1738,6 +1831,7 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 	gInstance->wad = std::move(newres.waddata);
 	gInstance->wad.master.ReplaceEditWad(wad);
 	gInstance->Project_ClearDocumentCache();
+	gInstance->Project_AdoptSession(openedSession);
 
 	if(gInstance->main_win)
 		testmap::updateMenuName(gInstance->main_win->menu_bar, gInstance->loaded);
@@ -1746,6 +1840,7 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 	if (discardOldRecovery && !oldPackagePath.empty())
 		RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
 	gInstance->Project_ResetAutosaveTimer();
+	gInstance->Project_SaveSession();
 	gInstance->Project_CheckRecovery();
 }
 
@@ -1795,6 +1890,9 @@ void Instance::CMD_OpenMap()
 	{
 		loading.project.clear();
 	}
+	std::optional<ProjectSession> openedSession;
+	if (did_load)
+		openedSession = Project_LoadSession(wad->PathName(), loading, false);
 	if (did_load && wad->FindLump(EUREKA_LUMP) && !loading.parseEurekaLump(global::home_dir,
 		global::old_linux_home_and_cache_dir, global::install_dir, global::recent, wad.get()))
 	{
@@ -1870,6 +1968,8 @@ void Instance::CMD_OpenMap()
 	else if (newEditWad)
 		this->wad.master.ReplaceEditWad(newEditWad);
 	Project_ClearDocumentCache();
+	if (newEditWad)
+		Project_AdoptSession(openedSession);
 
 	level = std::move(newdoc.doc);
 	if(!new_resources)	// we already updated loaded with resources
@@ -1882,7 +1982,10 @@ void Instance::CMD_OpenMap()
 		RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
 	Project_ResetAutosaveTimer();
 	if (newEditWad)
+	{
+		Project_SaveSession();
 		Project_CheckRecovery();
+	}
 }
 
 
@@ -2337,7 +2440,11 @@ void Instance::SaveLevel(LoadingData &loading, const SString &mapName,
 
 void Instance::ConfirmLevelSaveSuccess(const LoadingData &loading, const Wad_file &wad)
 {
-	global::recent.addRecent(wad.PathName(), loading.levelName, global::home_dir);
+	if (loading.project.isExplicit())
+		global::recent.addRecentProject(wad.PathName(), loading.levelName,
+				global::home_dir);
+	else
+		global::recent.addRecent(wad.PathName(), loading.levelName, global::home_dir);
 
 	Status_Set("Saved %s", loading.levelName.c_str());
 
@@ -2399,6 +2506,7 @@ bool Instance::M_SaveMap(bool inhibit_node_build)
 		DLG_ShowError(false, "Could not save map: %s", e.what());
 		return false;
 	}
+	Project_SaveSession();
 	Project_SynchronizeRecoveryAfterSave();
 
 	return true;
@@ -2435,6 +2543,7 @@ bool Instance::M_SaveProject(bool inhibit_node_build)
 	}
 	if (!Project_HasChanges())
 	{
+		Project_SaveSession();
 		Status_Set("Project is already saved");
 		return true;
 	}
@@ -2485,8 +2594,6 @@ bool Instance::M_SaveProject(bool inhibit_node_build)
 		level.markSaved();
 	projectMetadataDirty_ = false;
 
-	if (!global::home_dir.empty())
-		global::recent.addRecent(packagePath, loaded.levelName, global::home_dir);
 	Status_Set("Saved project (%zu map%s)", mapCount,
 			mapCount == 1 ? "" : "s");
 	if (main_win)
@@ -2494,6 +2601,7 @@ bool Instance::M_SaveProject(bool inhibit_node_build)
 		main_win->SetTitle(packagePath.u8string(), loaded.levelName, false);
 		M_SaveUserState();
 	}
+	Project_SaveSession();
 	Project_DiscardRecovery();
 	Project_ResetAutosaveTimer();
 	return true;
@@ -2731,6 +2839,7 @@ void Instance::CMD_CopyMap()
 		SaveLevelAndUpdateWindow(loaded, new_name, *wad.master.editWad(), false);
 
 		Status_Set("Copied to %s", loaded.levelName.c_str());
+		Project_SaveSession();
 		Project_SynchronizeRecoveryAfterSave();
 	}
 	catch (const std::runtime_error& e)
@@ -2825,6 +2934,7 @@ void Instance::CMD_RenameMap()
 					loaded.levelName, false);
 
 		Status_Set("Renamed to %s", loaded.levelName.c_str());
+		Project_SaveSession();
 		Project_SynchronizeRecoveryAfterSave();
 	}
 	catch (const std::runtime_error& e)

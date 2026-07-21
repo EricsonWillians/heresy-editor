@@ -126,6 +126,11 @@ static void file_do_load_recent(Fl_Widget *w, void *data)
 	M_OpenRecentFromMenu(data);
 }
 
+static void file_do_load_recent_project(Fl_Widget *w, void *data)
+{
+	M_OpenRecentProjectFromMenu(data);
+}
+
 static void file_do_quit(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("Quit");
@@ -541,6 +546,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 
 #define M_GIVEN_FILES	"&Given Files"
 #define M_RECENT_FILES	"&Recent Files"
+#define M_RECENT_PROJECTS "Recent &Projects"
 
 
 #undef FCAL
@@ -562,6 +568,8 @@ static Fl_Menu_Item menu_items[] =
 
 		{ "&Open Map",  0, FCAL file_do_open },
 		{ M_GIVEN_FILES, 0, 0, 0, FL_SUBMENU|FL_MENU_INACTIVE },
+			{ 0 },
+		{ M_RECENT_PROJECTS, 0, 0, 0, FL_SUBMENU|FL_MENU_INACTIVE },
 			{ 0 },
 		{ M_RECENT_FILES, 0, 0, 0, FL_SUBMENU|FL_MENU_INACTIVE },
 			{ 0 },
@@ -923,6 +931,34 @@ static Fl_Menu_Item * Menu_PopulateRecentFiles(Fl_Menu_Item *items, Fl_Callback 
 	return new_array;
 }
 
+
+static Fl_Menu_Item *Menu_PopulateRecentProjects(Fl_Menu_Item *items,
+		Fl_Callback *callback)
+{
+	const int count = global::recent.getProjects().getSize();
+	if (count < 1)
+		return items;
+	int menuPosition = Menu_FindItem(items, M_RECENT_PROJECTS);
+	if (menuPosition < 0)
+		return items;
+	items[menuPosition++].activate();
+
+	const int total = items[0].size();
+	Fl_Menu_Item *newArray = new Fl_Menu_Item[total + count];
+	Fl_Menu_Item *position = newArray;
+	for (int index = 0; index < menuPosition; ++index)
+		Menu_CopyItem(position, items[index]);
+	for (int index = 0; index < count; ++index)
+	{
+		const SString name = global::recent.getProjects().Format(index);
+		auto data = new RecentMap(global::recent.getProjects().Lookup(index));
+		Menu_AddItem(position, name.c_str(), callback, data, 0);
+	}
+	for (; menuPosition < total; ++menuPosition)
+		Menu_CopyItem(position, items[menuPosition]);
+	return newArray;
+}
+
 namespace menu
 {
 
@@ -1023,6 +1059,7 @@ Fl_Sys_Menu_Bar *create(int x, int y, int w, int h, void *userData)
 	Menu_RemovedBoundKeys(items);
 
 	items = Menu_PopulateGivenFiles(items);
+	items = Menu_PopulateRecentProjects(items, FCAL file_do_load_recent_project);
 	items = Menu_PopulateRecentFiles(items, FCAL file_do_load_recent);
 
 	SYS_ASSERT(items != menu_items);	// by now we know we made one for ourselves
