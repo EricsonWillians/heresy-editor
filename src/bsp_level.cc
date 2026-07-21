@@ -1912,7 +1912,7 @@ void LevelData::UpdateGLMarker(Lump_c *marker) const
 		marker->Printf("LEVEL=%s\n", current_name.c_str());
 	}
 
-	marker->Printf("BUILDER=%s\n", "Eureka " EUREKA_VERSION);
+	marker->Printf("BUILDER=%s\n", "Heresy Editor " EUREKA_VERSION);
 	marker->Printf("OPTIONS=%s\n", CalcOptionsString().c_str());
 
 	SString time_str = UtilTimeString();

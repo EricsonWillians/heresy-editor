@@ -42,7 +42,9 @@ The active document is backed by a bounded cache of seven inactive map
 documents.  Switching within a project therefore retains undo history and
 unsaved work for at most eight resident maps.  Clean least-recently-used maps
 can be reloaded from the package; dirty maps are never automatically evicted.
-Save All and autosave recovery are not included yet.
+Save Project and Save All serialize every dirty resident document and project
+metadata into one package transaction.  Save Map remains the focused command
+for the active document.
 
 Completed project foundation
 ----------------------------
@@ -77,7 +79,9 @@ Creating and reopening a WAD or PK3 project
    `MAP01`).  In a PK3 it is stored as `maps/MAP01.wad`.
 5. Edit normally and choose File -> Create Next Map.  The current map remains
    resident while the next slot is created (for Doom II this is `MAP02`).
-6. Save with File -> Save Map and close the editor.
+6. Save the current map with File -> Save Map, or atomically save every dirty
+   resident map with File -> Save Project or File -> Save All, then close the
+   editor.
 7. Reopen the `.wad` or `.pk3` with File -> Open Map, the recent-files menu, or the
    command line.  The game/profile settings and campaign slot order are read
    from the package, and every saved map remains selectable through Open Map or
@@ -105,10 +109,20 @@ commands.  One active document and a seven-entry least-recently-used cache
 retain independent undo/redo and dirty state.  Clean documents may be evicted
 and reloaded, while dirty documents are never automatically discarded.
 
-Stage 4 should add Save Project, Save All, per-map autosave, rotating backups,
-startup recovery, and explicit project-level dirty state.  All package backends
-should write a temporary package, validate it, and atomically replace the
-destination.
+Stage 4 is complete: Save Project and Save All commit every dirty resident map
+and explicit project-level metadata through one package write.  Both WAD and
+PK3 backends write a same-directory temporary package, parse and validate it,
+then atomically replace the destination.  Dirty flags clear only after that
+commit succeeds; a failed write reloads the preserved original package.
+
+Per-map autosave writes outside the project package and skips node building.
+It retains three validated recovery generations, records the package timestamp,
+and falls back to an older generation if the newest one is damaged.  Startup
+and newly opened projects offer Recover, Later, and Discard choices, including
+a warning when the package changed after the snapshot.  Recovered maps stay
+dirty until Save Project commits them.  The interval is configurable in
+Preferences (two minutes by default, zero to disable).  Existing configurable
+package backups continue to rotate independently before interactive saves.
 
 Stage 5 should add sidecar/session metadata for editor-only state, portable IWAD
 resolution hints, custom campaign layouts, recent-project entries, and restore
@@ -121,15 +135,16 @@ Known limitations of the current foundation
   not yet a paged wizard with a final summary.
 * Campaign slots come from maps present in the selected IWAD.  Custom slot
   lists and engine-specific overrides are not exposed yet.
-* Save Map writes only the active document.  Cached dirty maps must be reopened
-  and saved individually until Stage 4 adds Save All and recovery.
+* Save Map intentionally writes only the active document.  Use Save Project or
+  Save All to commit cached dirty maps in the same atomic package transaction.
 * The cache is intentionally bounded at eight total resident documents.  If
   all eight contain unsaved changes, another map cannot open until one is
   saved; clean documents are evicted automatically as needed.
 * WAD metadata remains embedded in `__EUREKA` for compatibility.  PK3 metadata
   uses `heresy/project.txt`; a separate editor-only session sidecar is planned.
-* Autosave recovery and configurable rotating project backups are not part of
-  this slice; the existing WAD backup behavior remains active.
+* Recovery snapshots contain unsaved project settings and dirty resident maps,
+  not clean maps that can already be reloaded from the project package.  The
+  document cache remains bounded at eight total maps.
 * PK3 writing supports classic single-disk ZIP archives with STORE and DEFLATE
   managed entries.  ZIP64, multi-disk archives, and encrypted map entries are
   refused explicitly.  Unrelated entries using other compression methods are

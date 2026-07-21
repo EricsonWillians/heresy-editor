@@ -112,6 +112,25 @@ std::vector<SString> MapDocumentCache::mapNames() const
 	return result;
 }
 
+std::vector<CachedMapDocument *> MapDocumentCache::dirtyDocuments() noexcept
+{
+	std::vector<CachedMapDocument *> result;
+	for (CachedMapDocument &entry : entries_)
+		if (entry.document.hasChanges())
+			result.push_back(&entry);
+	return result;
+}
+
+std::vector<const CachedMapDocument *> MapDocumentCache::dirtyDocuments()
+		const noexcept
+{
+	std::vector<const CachedMapDocument *> result;
+	for (const CachedMapDocument &entry : entries_)
+		if (entry.document.hasChanges())
+			result.push_back(&entry);
+	return result;
+}
+
 void MapDocumentCache::erase(const SString &mapName) noexcept
 {
 	auto entry = find(mapName);

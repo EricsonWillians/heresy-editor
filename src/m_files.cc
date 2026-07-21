@@ -35,6 +35,7 @@
 #include "ui_window.h"
 
 #include <filesystem>
+#include <limits>
 namespace fs = std::filesystem;
 
 // list of known iwads (mapping GAME name --> PATH)
@@ -341,7 +342,7 @@ void RecentKnowledge::save(const fs::path &home_dir) const
 	}
 
 	gLog.printf("Writing recent list to: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
-	os << "# Eureka miscellaneous stuff" << std::endl;
+	os << "# Heresy Editor miscellaneous settings" << std::endl;
 
 	files.Write(os);
 
@@ -690,7 +691,7 @@ bool LoadingData::parseEurekaLump(const fs::path &home_dir, const fs::path &old_
 }
 
 
-void LoadingData::writeEurekaLump(Wad_file &wad) const
+void LoadingData::writeEurekaLump(Wad_file &wad, bool absoluteResources) const
 {
 	gLog.printf("Writing '%s' lump\n", EUREKA_LUMP);
 
@@ -718,9 +719,10 @@ void LoadingData::writeEurekaLump(Wad_file &wad) const
 	for (const fs::path &resource : resourceList)
 	{
 		fs::path absoluteResourcePath = fs::absolute(resource);
-		fs::path relative = fs::proximate(absoluteResourcePath, pwadPath);
+		fs::path storedPath = absoluteResources ? absoluteResourcePath :
+				fs::proximate(absoluteResourcePath, pwadPath);
 
-		lump.Printf("resource %s\n", escape(relative).c_str());
+		lump.Printf("resource %s\n", escape(storedPath).c_str());
 	}
 }
 
@@ -733,6 +735,7 @@ void LoadingData::writeEurekaLump(Wad_file &wad) const
 // config variables
 int config::backup_max_files = 30;
 int config::backup_max_space = 60;  // MB
+int config::autosave_interval = 2;  // minutes; zero disables recovery snapshots
 
 
 struct backup_scan_data_t
@@ -785,7 +788,7 @@ static void Backup_Prune(const fs::path &dir_name, int b_low, int b_high,
 	if (backup_num > config::backup_max_files)
 		backup_num = config::backup_max_files;
 
-	for ( ; b_low <= b_high - backup_num + 1 ; b_low++)
+	for ( ; b_low <= b_high - backup_num ; b_low++)
 	{
 		FileDelete(Backup_Name(dir_name, b_low, extension));
 	}
@@ -839,7 +842,7 @@ void M_BackupWad(const Wad_file *wad)
 		}
 		catch(const std::runtime_error &e)
 		{
-			gLog.printf("Failed copying directly %s to %s (%s). Trying to re-save the WAD.\n", reinterpret_cast<const char *>(wad->PathName().u8string().c_str()), reinterpret_cast<const char *>(dest_name.u8string().c_str()), e.what());
+			gLog.printf("Failed copying directly %s to %s (%s). Trying to re-save the package.\n", reinterpret_cast<const char *>(wad->PathName().u8string().c_str()), reinterpret_cast<const char *>(dest_name.u8string().c_str()), e.what());
 		}
 	}
 	if (!copiedReadOnly && ! wad->Backup(dest_name))
@@ -849,15 +852,21 @@ void M_BackupWad(const Wad_file *wad)
 		return;
 	}
 
-	// Now do the pruning:
-	if (b_low < b_high)
-	{
-		int wad_size = wad->TotalSize();
+	// Include the copy just written in the bounds and use the real package size
+	// when possible. A PK3's projected WAD size can differ substantially from
+	// its compressed archive size.
+	const int new_high = b_high + 1;
+	if (b_low > new_high)
+		b_low = new_high;
+	int package_size = wad->TotalSize();
+	std::error_code sizeError;
+	const uintmax_t fileSize = fs::file_size(wad->PathName(), sizeError);
+	if (!sizeError)
+		package_size = static_cast<int>(std::min<uintmax_t>(fileSize,
+				std::numeric_limits<int>::max()));
+	Backup_Prune(dir_name, b_low, new_high, package_size, extension);
 
-		Backup_Prune(dir_name, b_low, b_high, wad_size, extension);
-	}
-
-	gLog.printf("Backed up wad to: %s\n", reinterpret_cast<const char *>(dest_name.u8string().c_str()));
+	gLog.printf("Backed up package to: %s\n", reinterpret_cast<const char *>(dest_name.u8string().c_str()));
 }
 
 bool RecentKnowledge::hasIwadByPath(const fs::path &path) const

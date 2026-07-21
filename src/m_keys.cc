@@ -621,7 +621,7 @@ void M_SaveBindings()
 
 	gLog.printf("Writing key bindings to: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
 
-	os << "# Eureka key bindings (local)\n";
+	os << "# Heresy Editor key bindings (local)\n";
 	os << "# vi:ts=16:noexpandtab\n\n";
 
 	for (KeyContext ctx : validKeyContexts)

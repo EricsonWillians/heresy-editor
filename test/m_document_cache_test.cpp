@@ -145,6 +145,26 @@ TEST_F(MapDocumentCacheTest, LoadingContextUpdatesWithoutChangingMapIdentity)
 	EXPECT_TRUE(cached->document.hasChanges());
 }
 
+TEST_F(MapDocumentCacheTest, EnumeratesOnlyDirtyResidentDocuments)
+{
+	MapDocumentCache cache;
+	LoadingData loading;
+	Document clean = makeDocument(1);
+	Document dirty = makeDocument(2, true);
+	ASSERT_TRUE(cache.store("MAP01", std::move(clean), loading));
+	ASSERT_TRUE(cache.store("MAP02", std::move(dirty), loading));
+
+	std::vector<CachedMapDocument *> mutableDocuments = cache.dirtyDocuments();
+	ASSERT_EQ(mutableDocuments.size(), 1u);
+	EXPECT_EQ(mutableDocuments.front()->mapName, "MAP02");
+
+	const MapDocumentCache &constCache = cache;
+	std::vector<const CachedMapDocument *> constDocuments =
+			constCache.dirtyDocuments();
+	ASSERT_EQ(constDocuments.size(), 1u);
+	EXPECT_EQ(constDocuments.front()->mapName, "MAP02");
+}
+
 TEST_F(MapDocumentCacheTest, InstanceReportsActiveAndCachedDirtyMaps)
 {
 	LoadingData cachedLoading;

@@ -1461,6 +1461,14 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_SaveMap
 	},
 
+	{	"SaveProject",  "File",
+		&Instance::CMD_SaveProject
+	},
+
+	{	"SaveAll",  "File",
+		&Instance::CMD_SaveAll
+	},
+
 	{	"ExportMap",  "File",
 		&Instance::CMD_ExportMap
 	},

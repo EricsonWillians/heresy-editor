@@ -350,7 +350,8 @@ build_result_e Instance::BuildAllNodes(nodebuildinfo_t *info)
 }
 
 
-void Instance::BuildNodesAfterSave(int lev_idx, const LoadingData& loading, Wad_file &wad)
+void Instance::BuildNodesAfterSave(int lev_idx, const LoadingData& loading,
+		Wad_file &wad, const Document &document)
 {
 	nodeialog.reset();
 
@@ -358,7 +359,8 @@ void Instance::BuildNodesAfterSave(int lev_idx, const LoadingData& loading, Wad_
 
 	PrepareInfo(&nb_info);
 
-	build_result_e ret = AJBSP_BuildLevel(&nb_info, lev_idx, *this, level, loading, wad);
+	build_result_e ret = AJBSP_BuildLevel(&nb_info, lev_idx, *this, document,
+			loading, wad);
 
 	// TODO : maybe print # of serious/minor warnings
 

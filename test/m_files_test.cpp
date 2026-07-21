@@ -123,6 +123,24 @@ TEST_F(EurekaLumpFixture, WriteEurekaLump)
 	ASSERT_EQ(content, expected2);
 }
 
+TEST_F(EurekaLumpFixture, RecoveryContextStoresAbsoluteResourcePaths)
+{
+	const fs::path wadPath = getSubPath("recovery/context.wad");
+	const fs::path resourcePath = getSubPath("resources/textures.wad");
+	std::shared_ptr<Wad_file> wad = Wad_file::Open(wadPath, WadOpenMode::write);
+	ASSERT_TRUE(wad);
+	loaded.resourceList.push_back(resourcePath);
+
+	loaded.writeEurekaLump(*wad, true);
+	const Lump_c *lump = wad->FindLump(EUREKA_LUMP);
+	ASSERT_TRUE(lump);
+	SString content(reinterpret_cast<const char *>(lump->getData().data()),
+			lump->Length());
+	const SString expected = SString::printf("resource %s\n",
+			escape(fs::absolute(resourcePath)).c_str());
+	EXPECT_NE(content.find(expected), SString::npos);
+}
+
 //
 // Fixture for parsing. Depends on TempDirContext due to technicalities.
 //

@@ -84,6 +84,8 @@ add_executable(
     m_parse_test.cpp
     m_package_test.cpp
     m_project_test.cpp
+    m_project_save_test.cpp
+    m_recovery_test.cpp
     m_select_test.cpp
     m_streams_test.cpp
     m_zip_test.cpp

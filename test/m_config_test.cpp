@@ -719,6 +719,7 @@ rgb_color_t config::transparent_col = rgbMake(0, 255, 255);
 bool config::auto_load_recent = false;
 int config::backup_max_files = 30;
 int config::backup_max_space = 60;  // MB
+int config::autosave_interval = 2;
 int  config::bsp_split_factor    = DEFAULT_FACTOR;
 int config::floor_bump_medium = 8;
 int config::floor_bump_large  = 64;

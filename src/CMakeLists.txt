@@ -98,6 +98,8 @@ set(source_m
     m_package.h
     m_project.cc
     m_project.h
+    m_recovery.cc
+    m_recovery.h
     m_zip.cc
     m_zip.h
     m_select.cc

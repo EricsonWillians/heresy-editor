@@ -59,6 +59,16 @@ static void file_do_save(Fl_Widget *w, void * data)
 	static_cast<Instance *>(data)->ExecuteCommand("SaveMap");
 }
 
+static void file_do_save_project(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("SaveProject");
+}
+
+static void file_do_save_all(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("SaveAll");
+}
+
 static void file_do_export(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("ExportMap");
@@ -454,6 +464,8 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{file_do_campaign_navigator, {"CampaignNavigator"} },
 	{file_do_open, {"OpenMap"} },
 	{file_do_save, {"SaveMap"} },
+	{file_do_save_project, {"SaveProject"} },
+	{file_do_save_all, {"SaveAll"} },
 	{file_do_export, {"ExportMap"} },
 	{file_do_fresh_map, {"FreshMap"} },
 	{file_do_create_next_map, {"CreateNextMap"} },
@@ -555,6 +567,8 @@ static Fl_Menu_Item menu_items[] =
 			{ 0 },
 
 		{ "&Save Map",    0, FCAL file_do_save },
+		{ "Save &Project", 0, FCAL file_do_save_project },
+		{ "Save &All",     0, FCAL file_do_save_all },
 		{ "&Export Map",  0, FCAL file_do_export },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
@@ -695,7 +709,7 @@ static Fl_Menu_Item menu_items[] =
 	{ "&Help", 0, 0, 0, FL_SUBMENU },
 
 		{ "&Online Docs...",    0, FCAL help_do_online_docs },
-		{ "&About Eureka...",   0, FCAL help_do_about },
+		{ "&About Heresy Editor...", 0, FCAL help_do_about },
 		{ 0 },
 
 	{ 0 }

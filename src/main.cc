@@ -243,7 +243,7 @@ static void CreateHomeDirs()
 	static const fs::path subdirs[] =
 	{
 		// these under $cache_dir
-		"cache", "backups",
+		"cache", "backups", "recovery",
 
 		// these under $home_dir
 		"iwads", "games", "ports"
@@ -251,7 +251,7 @@ static void CreateHomeDirs()
 
 	for (int i = 0 ; i < (int)lengthof(subdirs) ; i++)
 	{
-		dir_name = (i < 2 ? global::cache_dir : global::home_dir) / subdirs[i];
+		dir_name = (i < 3 ? global::cache_dir : global::home_dir) / subdirs[i];
 		FileMakeDir(dir_name);
 	}
 }
@@ -888,8 +888,13 @@ void Main_Loop()
 
 		if (global::want_quit)
 		{
+			const bool discardChanges = gInstance->Project_HasChanges();
 			if (gInstance->Project_ConfirmClose("quit"))
+			{
+				if (discardChanges && !gInstance->Project_HasDeferredRecovery())
+					gInstance->Project_DiscardRecovery();
 				break;
+			}
 
 			global::want_quit = false;
 		}
@@ -897,7 +902,8 @@ void Main_Loop()
 		// TODO: handle these in a better way
 
 		// TODO: HANDLE ALL INSTANCES
-		gInstance->main_win->UpdateTitle(gInstance->level.hasChanges() ? '*' : 0);
+		gInstance->main_win->UpdateTitle(gInstance->Project_HasChanges() ? '*' : 0);
+		gInstance->Project_AutosaveTick();
 
 		gInstance->main_win->scroll->UpdateBounds();
 
@@ -1370,6 +1376,7 @@ int EurekaMain(int argc, char *argv[])
 		// do this *after* loading the level, since config file parsing
 		// can depend on the map format and UDMF namespace.
 		gInstance->Main_LoadResources(gInstance->loaded);	// TODO: instance management
+		gInstance->Project_CheckRecovery();
 
 
 		Main_Loop();
