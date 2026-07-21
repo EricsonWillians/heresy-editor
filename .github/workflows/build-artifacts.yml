@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
 
@@ -192,3 +193,80 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate release version
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          project_version="$(sed -nE 's/^project\(heresy-editor VERSION ([0-9.]+)\)$/\1/p' CMakeLists.txt)"
+          if [[ -z "$project_version" || "$release_version" != "$project_version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match project version ${project_version:-unknown}." >&2
+            exit 1
+          fi
+
+      - name: Download packaged builds
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: HeresyEditor-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          mapfile -d '' release_assets < <(
+            find release-assets -maxdepth 1 -type f -print0 | sort -z
+          )
+          mapfile -d '' checksum_files < <(
+            find release-assets -maxdepth 1 -type f -name '*.sha256' -print0 | sort -z
+          )
+
+          if (( ${#checksum_files[@]} == 0 || ${#release_assets[@]} != ${#checksum_files[@]} * 2 )); then
+            echo "Expected one checksum for every release package." >&2
+            exit 1
+          fi
+
+          for release_asset in "${release_assets[@]}"; do
+            asset_name="${release_asset##*/}"
+            if [[ "$asset_name" != "Heresy-Editor-${release_version}-"* ]]; then
+              echo "Unexpected release asset version: $asset_name" >&2
+              exit 1
+            fi
+          done
+
+          for checksum_file in "${checksum_files[@]}"; do
+            checksum_directory="${checksum_file%/*}"
+            checksum_name="${checksum_file##*/}"
+            (
+              cd "$checksum_directory"
+              sha256sum --check "$checksum_name"
+            )
+          done
+
+          release_notes="Cross-platform release builds for Heresy Editor ${release_version}. Each package includes a matching SHA-256 checksum. The macOS builds are ad-hoc signed but are not Apple-notarized."
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${release_assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${release_assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Heresy Editor ${release_version}" \
+              --notes "$release_notes" \
+              --generate-notes \
+              --latest
+          fi

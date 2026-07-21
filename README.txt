@@ -16,6 +16,15 @@ PROJECT SITE
 https://github.com/EricsonWillians/heresy-editor
 
 
+DOWNLOADS
+
+Tested release builds for Linux, Windows and macOS are published at:
+
+https://github.com/EricsonWillians/heresy-editor/releases/latest
+
+Every package has a matching SHA-256 checksum file.
+
+
 FEATURES
 
 -  Undo/Redo (multiple levels)
