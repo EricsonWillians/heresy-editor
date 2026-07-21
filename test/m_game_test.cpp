@@ -146,6 +146,40 @@ TEST_F(MGameFixture, MCollectKnownDefs)
 	ASSERT_EQ(M_CollectKnownDefs({install_dir, home_dir}, folder), expected);
 }
 
+TEST(MGame, BiasedDoomProfileInheritsZDoomCompatibility)
+{
+	struct GlobalPathRestore
+	{
+		fs::path install = global::install_dir;
+		fs::path home = global::home_dir;
+		fs::path oldHome = global::old_linux_home_and_cache_dir;
+		~GlobalPathRestore()
+		{
+			global::install_dir = install;
+			global::home_dir = home;
+			global::old_linux_home_and_cache_dir = oldHome;
+		}
+	} restore;
+
+	global::install_dir = fs::path(HERESY_TEST_SOURCE_DIR);
+	global::home_dir.clear();
+	global::old_linux_home_and_cache_dir.clear();
+	const PortInfo_c *profile = M_LoadPortInfo("biaseddoom");
+
+	ASSERT_NE(profile, nullptr);
+	EXPECT_TRUE(profile->SupportsGame("doom"));
+	EXPECT_TRUE(profile->SupportsGame("doom2"));
+	EXPECT_TRUE(profile->SupportsGame("heretic"));
+	EXPECT_TRUE(profile->SupportsGame("hexen"));
+	EXPECT_TRUE(profile->SupportsGame("strife"));
+	const map_format_bitset_t expectedFormats =
+			(1 << static_cast<int>(MapFormat::doom)) |
+			(1 << static_cast<int>(MapFormat::hexen)) |
+			(1 << static_cast<int>(MapFormat::udmf));
+	EXPECT_EQ(profile->formats, expectedFormats);
+	EXPECT_EQ(profile->udmf_namespace, "ZDoom");
+}
+
 TEST_F(MGameFixture, ParseDefinitionFileThingFlags)
 {
 	// Tests both the population, the clearing and the same-position overriding

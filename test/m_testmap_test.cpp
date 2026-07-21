@@ -20,6 +20,7 @@
 
 #include "Instance.h"
 #include "m_files.h"
+#include "m_testmap.h"
 
 #include "gtest/gtest.h"
 
@@ -279,6 +280,20 @@ TEST_F(TestMapFixture, TestMapPortWithResources)
 	ASSERT_EQ(lines, expected);
 }
 
+TEST_F(TestMapFixture, TestMapBiasedDoomProfileArguments)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addResources();
+	addPWAD();
+	inst.loaded.levelName = "MAP07";
+
+	std::vector<std::string> lines = testMapAndGetLines();
+	std::vector<std::string> expected = {portPath.string(), "-iwad", gameWadPath.string(),
+		"-file", res1Path.string(), res2Path.string(), editWadPath.string(), "-warp", "7"};
+	ASSERT_EQ(lines, expected);
+}
+
 TEST_F(TestMapFixture, TestMapPortWithoutResources)
 {
 	setPortName("boom");
@@ -340,3 +355,86 @@ TEST_F(TestMapFixture, TestMapPortWithoutResourcesBadMap)
 }
 
 // TODO: add mac app bundle test
+
+class PortExecutableDiscoveryFixture : public TempDirContext
+{
+protected:
+	fs::path makeDirectory(const char *name)
+	{
+		const fs::path directory = getSubPath(name);
+		EXPECT_TRUE(FileMakeDir(directory));
+		mDeleteList.push(directory);
+		return directory;
+	}
+
+	fs::path makeExecutable(const fs::path &directory, const char *name)
+	{
+		const fs::path executable = directory / name;
+		std::ofstream stream(executable);
+		EXPECT_TRUE(stream.is_open());
+		stream << "test executable" << std::endl;
+		stream.close();
+		mDeleteList.push(executable);
+#ifndef _WIN32
+		EXPECT_EQ(chmod(executable.string().c_str(), S_IRWXU), 0);
+#endif
+		return executable;
+	}
+
+	const char *executableName() const
+	{
+#ifdef _WIN32
+		return "biaseddoom.exe";
+#else
+		return "biaseddoom";
+#endif
+	}
+};
+
+TEST_F(PortExecutableDiscoveryFixture, ConfiguredPathHasHighestPriority)
+{
+	const fs::path configured = makeExecutable(makeDirectory("configured"), "custom-engine");
+	const fs::path pathCandidate = makeExecutable(makeDirectory("path"), executableName());
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	PortExecutableSearchLocations locations = {
+		.configuredPath = configured,
+		.searchDirectories = {pathCandidate.parent_path()},
+		.fallbackCandidates = {fallback}
+	};
+
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(configured));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, SearchesPathBeforeFallbackCandidates)
+{
+	const fs::path pathCandidate = makeExecutable(makeDirectory("path"), executableName());
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	PortExecutableSearchLocations locations = {
+		.configuredPath = getSubPath("missing"),
+		.searchDirectories = {getSubPath("also-missing"), pathCandidate.parent_path()},
+		.fallbackCandidates = {fallback}
+	};
+
+	ASSERT_EQ(M_FindPortExecutable("BIASEDDOOM", locations), fs::absolute(pathCandidate));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, SkipsInvalidCandidates)
+{
+	const fs::path invalidDirectory = makeDirectory("not-an-executable");
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	PortExecutableSearchLocations locations = {
+		.configuredPath = invalidDirectory,
+		.searchDirectories = {},
+		.fallbackCandidates = {getSubPath("missing"), fallback}
+	};
+
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(fallback));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, DoesNotGuessExecutablesForOtherProfiles)
+{
+	const fs::path configured = makeExecutable(makeDirectory("configured"), "custom-engine");
+	PortExecutableSearchLocations locations = {.configuredPath = configured};
+
+	ASSERT_FALSE(M_FindPortExecutable("zdoom", locations));
+}

@@ -133,6 +133,16 @@ resolution tries that portable relative hint, a sibling IWAD, remembered IWADs,
 and the normal cross-platform/Steam discovery paths.  The sidecar is parsed
 defensively and written through a validated same-directory atomic replacement.
 
+Stage 6 is complete: BiasedDoom has a dedicated source-port profile derived
+from the shared ZDoom definitions.  Test in Game keeps a valid remembered
+engine path, then performs ordered, non-recursive discovery through an explicit
+environment override, `PATH`, portable installations, local CMake builds, and
+conventional Linux, Windows, and macOS locations.  Invalid candidates are
+skipped and the manual picker remains the final fallback.  Profile inheritance,
+discovery priority, invalid-path handling, and launch arguments have automated
+regression coverage.  The next compatibility stage inventories BiasedDoom-only
+editor numbers, specials, and namespaces before adding isolated definitions.
+
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
 validated before becoming authoritative package metadata.  Explicit WAD and
