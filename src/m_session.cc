@@ -21,6 +21,37 @@ namespace
 
 constexpr uintmax_t MaxSessionBytes = 64 * 1024;
 
+std::string GenericPathText(const fs::path &path)
+{
+	const std::u8string text = path.generic_u8string();
+	return std::string(reinterpret_cast<const char *>(text.data()), text.size());
+}
+
+bool IsPortableFilename(const fs::path &path)
+{
+	if (path.empty() || path.has_root_path() || path != path.filename())
+		return false;
+	const std::string text = GenericPathText(path);
+	return text.find_first_of("/\\:") == std::string::npos;
+}
+
+bool IsPortableRelativePath(const fs::path &path)
+{
+	if (path.empty() || path.has_root_path() || !path.is_relative())
+		return false;
+	const std::string text = GenericPathText(path);
+	if (text.empty() || text.front() == '/' || text.front() == '\\' ||
+			text.find('\\') != std::string::npos)
+	{
+		return false;
+	}
+	// A drive-qualified Windows path is relative on POSIX, but must never be
+	// accepted as a portable hint there.
+	return !(text.size() >= 2 &&
+			((text[0] >= 'A' && text[0] <= 'Z') ||
+			 (text[0] >= 'a' && text[0] <= 'z')) && text[1] == ':');
+}
+
 std::optional<ProjectSession> LoadSessionFile(const fs::path &path)
 {
 	std::error_code sizeError;
@@ -80,14 +111,14 @@ std::optional<ProjectSession> LoadSessionFile(const fs::path &path)
 		else if (key == "iwad_file")
 		{
 			const fs::path file(reinterpret_cast<const char8_t *>(value.c_str()));
-			if (file.empty() || file != file.filename())
+			if (!IsPortableFilename(file))
 				return {};
 			session.iwadFile = file;
 		}
 		else if (key == "iwad_relative")
 		{
 			const fs::path relative(reinterpret_cast<const char8_t *>(value.c_str()));
-			if (relative.empty() || relative.is_absolute())
+			if (!IsPortableRelativePath(relative))
 				return {};
 			session.iwadRelative = relative.lexically_normal();
 		}
@@ -174,9 +205,10 @@ void M_SaveProjectSession(const fs::path &packagePath,
 	if (session.navigatorMap.good() &&
 			!M_IsValidProjectMapName(session.navigatorMap))
 		throw std::runtime_error("Invalid navigator map in project session.");
-	if (!session.iwadFile.empty() && session.iwadFile != session.iwadFile.filename())
+	if (!session.iwadFile.empty() && !IsPortableFilename(session.iwadFile))
 		throw std::runtime_error("Project session IWAD hint must be a filename.");
-	if (!session.iwadRelative.empty() && session.iwadRelative.is_absolute())
+	if (!session.iwadRelative.empty() &&
+			!IsPortableRelativePath(session.iwadRelative))
 		throw std::runtime_error("Project session IWAD hint must be relative.");
 
 	const fs::path sidecar = M_ProjectSessionPath(packagePath);
@@ -200,9 +232,9 @@ std::optional<fs::path> M_ResolveProjectIWAD(const fs::path &packagePath,
 
 	const fs::path directory = packagePath.parent_path();
 	std::vector<fs::path> candidates;
-	if (!session.iwadRelative.empty())
+	if (IsPortableRelativePath(session.iwadRelative))
 		candidates.push_back((directory / session.iwadRelative).lexically_normal());
-	if (!session.iwadFile.empty())
+	if (IsPortableFilename(session.iwadFile))
 		candidates.push_back(directory / session.iwadFile);
 	if (knownIWAD)
 		candidates.push_back(*knownIWAD);

@@ -88,6 +88,10 @@ TEST_F(ProjectSessionTest, RejectsCorruptDuplicateAndAbsoluteFields)
 	EXPECT_FALSE(M_LoadProjectSession(package));
 	write("session_version 1\niwad_relative /private/doom2.wad\n");
 	EXPECT_FALSE(M_LoadProjectSession(package));
+	write("session_version 1\niwad_relative C:/private/doom2.wad\n");
+	EXPECT_FALSE(M_LoadProjectSession(package));
+	write("session_version 1\niwad_file C:\\\\private\\\\doom2.wad\n");
+	EXPECT_FALSE(M_LoadProjectSession(package));
 	write("session_version 2\nactive_map MAP01\n");
 	EXPECT_FALSE(M_LoadProjectSession(package));
 	write("active_map MAP01\n");
