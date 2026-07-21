@@ -23,9 +23,11 @@
 #include "Document.h"
 #include "e_main.h"
 #include "im_img.h"
+#include "m_document_cache.h"
 #include "m_game.h"
 #include "m_loadsave.h"
 #include "m_nodes.h"
+#include "m_session.h"
 #include "main.h"
 #include "r_grid.h"
 #include "r_render.h"
@@ -35,6 +37,7 @@
 #include "w_wad.h"
 #include "WadData.h"
 
+#include <chrono>
 #include <unordered_map>
 
 class Fl_RGB_Image;
@@ -86,6 +89,7 @@ public:
 	void CMD_Clipboard_Paste();
 	void CMD_CopyAndPaste();
 	void CMD_CopyMap();
+	void CMD_CampaignNavigator();
 	void CMD_CreateNextMap();
 	void CMD_CopyProperties();
 	void CMD_DefaultProps();
@@ -142,6 +146,8 @@ public:
 	void CMD_Rotate90();
 	void CMD_RotateObjects_Dialog();
 	void CMD_SaveMap();
+	void CMD_SaveProject();
+	void CMD_SaveAll();
 	void CMD_ScaleObjects_Dialog();
 	void CMD_Scroll();
 	void CMD_SEC_Ceil();
@@ -294,10 +300,12 @@ public:
 	void LoadLevelNum(const Wad_file *wad, int lev_num) noexcept(false);
 	bool MissingIWAD_Dialog();
 	bool M_SaveMap(bool inhibit_node_build);
+	bool M_SaveProject(bool inhibit_node_build = false);
 	void refreshViewAfterLoad(const BadCount& bad, const Wad_file* wad, const SString& map_name, bool new_resources);
 
 	// M_NODES
-	void BuildNodesAfterSave(int lev_idx, const LoadingData& loading, Wad_file &wad);
+	void BuildNodesAfterSave(int lev_idx, const LoadingData& loading,
+			Wad_file &wad, const Document &document);
 	void GB_PrintMsg(EUR_FORMAT_STRING(const char *str), ...) EUR_PRINTF(2, 3);
 
 	// M_TESTMAP
@@ -305,7 +313,8 @@ public:
 
 	// M_UDMF
 	void UDMF_LoadLevel(int loading_level, const Wad_file *load_wad, Document &doc, LoadingData &loading, BadCount &bad) const;
-	void UDMF_SaveLevel(const LoadingData &loading, Wad_file &wad) const;
+	void UDMF_SaveLevel(const LoadingData &loading, Wad_file &wad,
+			const Document &document) const;
 
 	// MAIN
 	fs::path Main_FileOpFolder() const;
@@ -389,6 +398,51 @@ public:
 			main_win->info_bar->UpdateRatio();
 	}
 
+	bool Project_ConfirmClose(const char *action) const;
+	bool Project_SwitchMap(const std::shared_ptr<Wad_file> &package,
+			const SString &mapName);
+	bool Project_CreateMap(const SString &mapName);
+	std::vector<SString> Project_DirtyMapNames() const;
+	void Project_AutosaveTick() noexcept;
+	bool Project_WriteAutosave(bool notify = false) noexcept;
+	bool Project_CheckRecovery();
+	void Project_DiscardRecovery() noexcept;
+	void Project_ResetAutosaveTimer() noexcept;
+	std::optional<ProjectSession> Project_LoadSession(const fs::path &packagePath,
+			LoadingData &loading, bool preserveExplicitIWAD);
+	void Project_AdoptSession(const std::optional<ProjectSession> &session);
+	void Project_SaveSession() noexcept;
+	void Project_SetNavigatorSelection(const SString &mapName) noexcept;
+	const SString &Project_NavigatorSelection() const noexcept
+	{
+		return navigatorSelection_;
+	}
+	bool Project_HasChanges() const noexcept
+	{
+		return projectMetadataDirty_ || level.hasChanges() ||
+				documentCache.dirtyCount() > 0;
+	}
+	bool Project_MetadataHasChanges() const noexcept
+	{
+		return projectMetadataDirty_;
+	}
+	bool Project_HasDeferredRecovery() const noexcept
+	{
+		return recoveryDeferred_;
+	}
+	void Project_MarkMetadataDirty() noexcept
+	{
+		projectMetadataDirty_ = true;
+	}
+	void Project_ClearDocumentCache() noexcept
+	{
+		documentCache.clear();
+		projectMetadataDirty_ = false;
+		recoveryDeferred_ = false;
+		projectSession_.reset();
+		navigatorSelection_.clear();
+	}
+
 private:
 	// New private methods
 	void navigationScroll(float *editNav, nav_release_func_t func);
@@ -444,8 +498,11 @@ private:
 	void Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexcept(false);
 	std::optional<fs::path> Project_AskFile(ProjectPackage package) const;
 	void SaveLevel(LoadingData &loading, const SString &level, Wad_file &wad, bool inhibit_node_build);
+	void StoreDocumentInWad(LoadingData &loading, const SString &mapName,
+			Wad_file &wad, const Document &document, bool inhibitNodeBuild);
 	void ConfirmLevelSaveSuccess(const LoadingData &loading, const Wad_file &wad);
 	void SaveLevelAndUpdateWindow(LoadingData& loading, const SString& level, Wad_file &wad, bool inhibit_node_build);
+	void Project_SynchronizeRecoveryAfterSave() noexcept;
 
 	// M_NODES
 	build_result_e BuildAllNodes(nodebuildinfo_t *info);
@@ -467,6 +524,7 @@ private:
 
 public:	// will be private when we encapsulate everything
 	Document level{*this};	// level data proper
+	MapDocumentCache documentCache;
 
 	UI_MainWindow *main_win = nullptr;
 	Editor_State_t edit = {};
@@ -535,6 +593,12 @@ public:	// will be private when we encapsulate everything
 	unsigned nav_time = 0;
 	bool no_operation_cfg = false;
 	std::unordered_map<SString, Fl_Menu_Button *> op_all_menus;
+	bool projectMetadataDirty_ = false;
+	bool recoveryDeferred_ = false;
+	std::optional<ProjectSession> projectSession_;
+	SString navigatorSelection_;
+	int autosaveInterval_ = -1;
+	std::chrono::steady_clock::time_point autosaveDeadline_{};
 	// these are grabbed from FL_MOUSEWHEEL events
 	v2int_t wheel_dpos = {};
 

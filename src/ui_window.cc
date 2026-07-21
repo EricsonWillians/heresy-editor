@@ -565,7 +565,7 @@ UI_LogViewer * log_viewer;
 
 
 UI_LogViewer::UI_LogViewer(Instance &inst) :
-	UI_Escapable_Window(580, 400, "Eureka Log Viewer"), inst(inst)
+		UI_Escapable_Window(580, 400, "Heresy Editor Log Viewer"), inst(inst)
 {
 	box(FL_NO_BOX);
 

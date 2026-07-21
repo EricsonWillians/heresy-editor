@@ -22,10 +22,42 @@
 
 #include "Instance.h"
 #include "m_game.h"
+#include "m_loadsave.h"
 
 class MGameFixture : public TempDirContext
 {
 };
+
+namespace
+{
+
+class SourceDefinitionPaths
+{
+public:
+	SourceDefinitionPaths() :
+		install_(global::install_dir),
+		home_(global::home_dir),
+		oldHome_(global::old_linux_home_and_cache_dir)
+	{
+		global::install_dir = fs::path(HERESY_TEST_SOURCE_DIR);
+		global::home_dir.clear();
+		global::old_linux_home_and_cache_dir.clear();
+	}
+
+	~SourceDefinitionPaths()
+	{
+		global::install_dir = install_;
+		global::home_dir = home_;
+		global::old_linux_home_and_cache_dir = oldHome_;
+	}
+
+private:
+	fs::path install_;
+	fs::path home_;
+	fs::path oldHome_;
+};
+
+} // namespace
 
 //=============================================================================
 //
@@ -144,6 +176,62 @@ TEST_F(MGameFixture, MCollectKnownDefs)
 	// Hidden and dirs are skipped
 	auto expected = std::vector<SString>{"doom", "Extra", "hasugh", "Heretic", "MooD"};
 	ASSERT_EQ(M_CollectKnownDefs({install_dir, home_dir}, folder), expected);
+}
+
+TEST(MGame, BiasedDoomProfileInheritsZDoomCompatibility)
+{
+	SourceDefinitionPaths sourceDefinitions;
+	const PortInfo_c *profile = M_LoadPortInfo("biaseddoom");
+
+	ASSERT_NE(profile, nullptr);
+	EXPECT_TRUE(profile->SupportsGame("doom"));
+	EXPECT_TRUE(profile->SupportsGame("doom2"));
+	EXPECT_TRUE(profile->SupportsGame("heretic"));
+	EXPECT_TRUE(profile->SupportsGame("hexen"));
+	EXPECT_TRUE(profile->SupportsGame("strife"));
+	const map_format_bitset_t expectedFormats =
+			(1 << static_cast<int>(MapFormat::doom)) |
+			(1 << static_cast<int>(MapFormat::hexen)) |
+			(1 << static_cast<int>(MapFormat::udmf));
+	EXPECT_EQ(profile->formats, expectedFormats);
+	EXPECT_EQ(profile->udmf_namespace, "ZDoom");
+}
+
+TEST(MGame, BiasedDoomProfileCoversProceduralGeneratorIdentifiers)
+{
+	SourceDefinitionPaths sourceDefinitions;
+	LoadingData loading;
+	loading.gameName = "doom2";
+	loading.portName = "biaseddoom";
+	loading.levelFormat = MapFormat::udmf;
+	loading.udmfNamespace = "ZDoom";
+
+	auto parseVars = loading.prepareConfigVariables();
+	ConfigData config;
+	readConfiguration(parseVars, GAMES_DIR, loading.gameName, config);
+	readConfiguration(parseVars, PORTS_DIR, loading.portName, config);
+
+	// Every thing the 4.15.7 generator can emit is a stock Doom/Doom II type.
+	const int thingTypes[] = {
+		1, 5, 6, 8, 9, 13, 15, 16, 17, 20, 35, 41, 43, 44, 45, 46, 48,
+		55, 56, 57, 65, 66, 67, 69, 71, 82, 83, 85, 86,
+		2001, 2002, 2003, 2004, 2006, 2007, 2008, 2010, 2011, 2012, 2013,
+		2014, 2015, 2019, 2022, 2023, 2024, 2026, 2028, 2035, 2045, 2046,
+		2047, 2048, 2049, 3001, 3002, 3003, 3004, 3005, 3006
+	};
+	for (int type : thingTypes)
+		EXPECT_NE(config.thing_types.find(type), config.thing_types.end()) << type;
+
+	// The generated doors, lifts, and exit use existing ZDoom specials.
+	const int lineSpecials[] = {11, 12, 62, 243};
+	for (int special : lineSpecials)
+		EXPECT_NE(config.line_types.find(special), config.line_types.end()) << special;
+
+	bool hasSecretFlag = false;
+	for (const gensector_t &sector : config.gen_sectors)
+		if (sector.options.empty() && sector.value == 1024)
+			hasSecretFlag = true;
+	EXPECT_TRUE(hasSecretFlag);
 }
 
 TEST_F(MGameFixture, ParseDefinitionFileThingFlags)

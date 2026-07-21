@@ -122,6 +122,7 @@ extern rgb_color_t normal_small_col;
 
 extern int backup_max_files;
 extern int backup_max_space;
+extern int autosave_interval;
 
 extern bool browser_small_tex;
 extern bool browser_combine_tex;

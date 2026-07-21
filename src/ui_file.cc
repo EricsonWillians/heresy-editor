@@ -654,9 +654,10 @@ void UI_OpenMap::LoadFile()
 
 UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_startup) :
 	UI_Escapable_Window(is_startup ? 400 : 500,
-			is_startup ? 200 : (new_project ? 477 : 440),
+			is_startup ? 200 : (new_project ? 514 : 477),
 			new_project ? "New Project" : "Manage Project"),
-	inst(inst)
+	inst(inst),
+	newProject_(new_project)
 {
 	callback(close_callback, this);
 
@@ -711,12 +712,23 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 		package_choice->value(0);
 		package_choice->callback((Fl_Callback*)package_callback, this);
 
-		campaign_choice = new Fl_Choice(140, by+173, 240, 29, "Campaign: ");
+	}
+
+	if (!is_startup)
+	{
+		const int campaignY = by + (new_project ? 173 : 136);
+		campaign_choice = new Fl_Choice(140, campaignY, 340, 29, "Campaign: ");
 		campaign_choice->labelfont(FL_HELVETICA_BOLD);
 		campaign_choice->down_box(FL_BORDER_BOX);
-		campaign_choice->add("Full IWAD replacement|Single map");
+		campaign_choice->add("Full IWAD replacement|Single map|Custom map order");
 		campaign_choice->value(0);
 		campaign_choice->callback((Fl_Callback*)campaign_callback, this);
+
+		custom_slots = new Fl_Input(140, campaignY + 37, 340, 29, "Map order: ");
+		custom_slots->tooltip("Comma- or space-separated map names, in campaign order");
+		custom_slots->callback((Fl_Callback*)custom_slots_callback, this);
+		custom_slots->when(FL_WHEN_CHANGED);
+		custom_slots->deactivate();
 	}
 
 #if 0  // Disabled for now
@@ -737,7 +749,7 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 
 	if (! is_startup)
 	{
-		const int project_shift = new_project ? 37 : 0;
+		const int project_shift = new_project ? 74 : 37;
 		Fl_Box *res_title = new Fl_Box(15, by+190+project_shift, 185, 30,
 				"Resource Files or Folders:");
 		res_title->labelfont(FL_HELVETICA_BOLD);
@@ -751,7 +763,7 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 		if (is_startup)
 			continue;
 
-		int cy = by + 220 + (new_project ? 37 : 0) + r * 35;
+		int cy = by + 220 + (new_project ? 74 : 37) + r * 35;
 
 		char res_label[64];
 		snprintf(res_label, sizeof(res_label), "%d. ", 1 + r);
@@ -782,7 +794,7 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 
 	// bottom buttons
 	{
-		by += is_startup ? 80 : 375 + (new_project ? 37 : 0);
+		by += is_startup ? 80 : 375 + (new_project ? 74 : 37);
 
 		Fl_Group *g = new Fl_Group(0, by, w(), h() - by);
 		g->box(FL_FLAT_BOX);
@@ -811,6 +823,7 @@ std::optional<UI_ProjectSetup::Result> UI_ProjectSetup::Run()
 	PopulateIWADs();
 	PopulatePort();
 	PopulateMapFormat();
+	PopulateCampaign();
 	PopulateResources();
 
 	set_modal();
@@ -823,6 +836,41 @@ std::optional<UI_ProjectSetup::Result> UI_ProjectSetup::Run()
 	}
 
 	return (action == Action::accept) ? result : std::optional<UI_ProjectSetup::Result>{};
+}
+
+
+void UI_ProjectSetup::PopulateCampaign()
+{
+	if (!campaign_choice || !custom_slots)
+		return;
+
+	if (!newProject_ && inst.loaded.project.isExplicit())
+	{
+		result.campaign = inst.loaded.project.campaign;
+		result.mapSlots = inst.loaded.project.mapSlots;
+	}
+
+	if (result.mapSlots.empty())
+	{
+		const fs::path *iwadPath = global::recent.queryIWAD(result.game);
+		std::shared_ptr<Wad_file> iwad = iwadPath ?
+				Wad_file::Open(*iwadPath, WadOpenMode::read) : nullptr;
+		if (iwad)
+			result.mapSlots = M_ProjectMapSlots(*iwad);
+	}
+
+	int selection = 0;
+	if (result.campaign == CampaignMode::singleMap)
+		selection = 1;
+	else if (result.campaign == CampaignMode::custom)
+		selection = 2;
+	campaign_choice->value(selection);
+	const SString formatted = M_FormatCustomMapSlots(result.mapSlots);
+	custom_slots->value(formatted.c_str());
+	if (result.campaign == CampaignMode::custom)
+		custom_slots->activate();
+	else
+		custom_slots->deactivate();
 }
 
 void UI_ProjectSetup::PopulateIWADs()
@@ -1077,6 +1125,18 @@ void UI_ProjectSetup::close_callback(Fl_Widget *w, void *data)
 void UI_ProjectSetup::use_callback(Fl_Button *w, void *data)
 {
 	UI_ProjectSetup * that = (UI_ProjectSetup *)data;
+	if (that->result.campaign == CampaignMode::custom)
+	{
+		SString error;
+		std::optional<std::vector<SString>> slots = M_ParseCustomMapSlots(
+				that->custom_slots->value(), &error);
+		if (!slots)
+		{
+			DLG_Notify("Invalid custom campaign:\n\n%s", error.c_str());
+			return;
+		}
+		that->result.mapSlots = std::move(*slots);
+	}
 
 	that->action = Action::accept;
 }
@@ -1101,6 +1161,11 @@ void UI_ProjectSetup::game_callback(Fl_Choice *w, void *data)
 
 	that->PopulatePort();
 	that->PopulateMapFormat();
+	if (that->result.campaign != CampaignMode::custom)
+	{
+		that->result.mapSlots.clear();
+		that->PopulateCampaign();
+	}
 }
 
 
@@ -1135,8 +1200,23 @@ void UI_ProjectSetup::format_callback(Fl_Choice *w, void *data)
 void UI_ProjectSetup::campaign_callback(Fl_Choice *w, void *data)
 {
 	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
-	that->result.campaign = (w->value() == 1) ? CampaignMode::singleMap :
-			CampaignMode::fullIwad;
+	that->result.campaign = w->value() == 2 ? CampaignMode::custom :
+			(w->value() == 1 ? CampaignMode::singleMap : CampaignMode::fullIwad);
+	if (that->result.campaign == CampaignMode::custom)
+		that->custom_slots->activate();
+	else
+		that->custom_slots->deactivate();
+}
+
+
+void UI_ProjectSetup::custom_slots_callback(Fl_Input *input, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	SString ignored;
+	std::optional<std::vector<SString>> slots =
+			M_ParseCustomMapSlots(input->value(), &ignored);
+	if (slots)
+		that->result.mapSlots = std::move(*slots);
 }
 
 void UI_ProjectSetup::package_callback(Fl_Choice *w, void *data)
@@ -1244,13 +1324,13 @@ void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
 #ifdef __APPLE__
-		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nHeresy Editor defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 #endif
 	}
 	else
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_FILE);
-		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nHeresy Editor defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 	}
 	chooser.directory(reinterpret_cast<const char *>(that->inst.Main_FileOpFolder().u8string().c_str()));
 

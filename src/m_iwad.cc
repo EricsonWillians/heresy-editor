@@ -663,5 +663,13 @@ std::map<SString, fs::path> M_DiscoverIWADs(const std::vector<SString> &games,
 	return found;
 }
 
+
+bool M_IsIWADForGame(const fs::path &path, const SString &game)
+{
+	const ExpectedIWADs expected = MakeExpectedIWADs({game});
+	FoundIWADs found;
+	return RecordIWAD(path, expected, found);
+}
+
 //--- editor settings ---
 // vi:ts=4:sw=4:noexpandtab

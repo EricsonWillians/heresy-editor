@@ -6,7 +6,10 @@
 
 #include "w_wad.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <set>
 
 namespace
 {
@@ -75,7 +78,12 @@ bool ProjectMetadata::parseField(const SString &key, const SString &value)
 	if (key == "map_slot")
 	{
 		SString slot = value.asUpper();
-		if (!slot.empty())
+		const bool duplicate = std::any_of(mapSlots.begin(), mapSlots.end(),
+				[&slot](const SString &existing)
+				{
+					return existing.noCaseEqual(slot);
+				});
+		if (M_IsValidProjectMapName(slot) && !duplicate)
 			mapSlots.push_back(slot);
 		return true;
 	}
@@ -108,6 +116,87 @@ std::vector<SString> M_ProjectMapSlots(const Wad_file &iwad)
 	for (int level = 0; level < iwad.LevelCount(); ++level)
 		result.push_back(iwad.LevelName(level));
 
+	return result;
+}
+
+
+bool M_IsValidProjectMapName(const SString &name) noexcept
+{
+	if (name.empty() || name.size() > 8)
+		return false;
+	return std::all_of(name.begin(), name.end(), [](char ch)
+	{
+		return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+				(ch >= '0' && ch <= '9') || ch == '_';
+	});
+}
+
+
+std::optional<std::vector<SString>> M_ParseCustomMapSlots(
+		const SString &text, SString *error)
+{
+	std::vector<SString> result;
+	std::set<SString> seen;
+	SString current;
+	auto fail = [error](const SString &message)
+	{
+		if (error)
+			*error = message;
+		return std::optional<std::vector<SString>>{};
+	};
+	auto flush = [&]() -> bool
+	{
+		if (current.empty())
+			return true;
+		SString slot = current.asUpper();
+		current.clear();
+		if (!M_IsValidProjectMapName(slot))
+		{
+			if (error)
+				*error = SString::printf("Invalid map slot '%s'. Use 1-8 letters, "
+						"digits, or underscores.", slot.c_str());
+			return false;
+		}
+		if (!seen.insert(slot).second)
+		{
+			if (error)
+				*error = SString::printf("Map slot '%s' appears more than once.",
+						slot.c_str());
+			return false;
+		}
+		result.push_back(slot);
+		return true;
+	};
+
+	for (unsigned char ch : text)
+	{
+		if (std::isspace(ch) || ch == ',' || ch == ';')
+		{
+			if (!flush())
+				return {};
+		}
+		else
+			current += static_cast<char>(ch);
+	}
+	if (!flush())
+		return {};
+	if (result.empty())
+		return fail("A custom campaign needs at least one map slot.");
+	if (result.size() > 256)
+		return fail("A custom campaign cannot contain more than 256 map slots.");
+	return result;
+}
+
+
+SString M_FormatCustomMapSlots(const std::vector<SString> &slots)
+{
+	SString result;
+	for (const SString &slot : slots)
+	{
+		if (result.good())
+			result += ", ";
+		result += slot.asUpper();
+	}
 	return result;
 }
 
@@ -155,4 +244,69 @@ std::optional<SString> M_NextProjectMap(const ProjectMetadata &project,
 	}
 
 	return {};
+}
+
+std::vector<CampaignMapStatus> M_CampaignMapStatuses(
+		const ProjectMetadata &project, const Wad_file &package,
+		const SString &currentMap, const std::vector<SString> &dirtyMaps)
+{
+	auto isDirty = [&dirtyMaps](const SString &name)
+	{
+		return std::any_of(dirtyMaps.begin(), dirtyMaps.end(),
+				[&name](const SString &dirty)
+				{
+					return dirty.noCaseEqual(name);
+				});
+	};
+
+	std::vector<CampaignMapStatus> result;
+	for (const SString &slot : project.mapSlots)
+	{
+		const bool duplicate = std::any_of(result.begin(), result.end(),
+				[&slot](const CampaignMapStatus &status)
+				{
+					return status.name.noCaseEqual(slot);
+				});
+		if (duplicate)
+			continue;
+
+		CampaignMapStatus status;
+		status.name = slot.asUpper();
+		status.configured = true;
+		status.exists = package.LevelFind(slot) >= 0;
+		status.current = slot.noCaseEqual(currentMap);
+		status.dirty = isDirty(slot);
+		result.push_back(std::move(status));
+	}
+
+	std::vector<SString> extras;
+	for (int level = 0; level < package.LevelCount(); ++level)
+	{
+		const SString &name = package.LevelName(level);
+		const bool configured = std::any_of(result.begin(), result.end(),
+				[&name](const CampaignMapStatus &status)
+				{
+					return status.name.noCaseEqual(name);
+				});
+		const bool alreadyAdditional = std::any_of(extras.begin(), extras.end(),
+				[&name](const SString &extra)
+				{
+					return extra.noCaseEqual(name);
+				});
+		if (!configured && !alreadyAdditional)
+			extras.push_back(name);
+	}
+	std::sort(extras.begin(), extras.end());
+
+	for (const SString &name : extras)
+	{
+		CampaignMapStatus status;
+		status.name = name.asUpper();
+		status.exists = true;
+		status.current = name.noCaseEqual(currentMap);
+		status.dirty = isDirty(name);
+		result.push_back(std::move(status));
+	}
+
+	return result;
 }

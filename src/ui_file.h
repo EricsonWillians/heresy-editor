@@ -154,6 +154,7 @@ public:
 		SString nameSpace;
 		ProjectPackage package = ProjectPackage::wad;
 		CampaignMode campaign = CampaignMode::fullIwad;
+		std::vector<SString> mapSlots;
 		fs::path resources[RES_NUM];
 	};
 
@@ -163,6 +164,7 @@ private:
 	Fl_Choice *format_choice;
 	Fl_Choice *package_choice = nullptr;
 	Fl_Choice *campaign_choice = nullptr;
+	Fl_Input *custom_slots = nullptr;
 
 	Fl_Output *res_name[RES_NUM];
 
@@ -185,6 +187,7 @@ private:
 	static void format_callback(Fl_Choice*, void*);
 	static void package_callback(Fl_Choice*, void*);
 	static void campaign_callback(Fl_Choice*, void*);
+	static void custom_slots_callback(Fl_Input*, void*);
 	static void namespace_callback(Fl_Choice*, void*);
 
 	static void  find_callback(Fl_Button*, void*);
@@ -198,6 +201,7 @@ private:
 	void PopulateIWADs();
 	void PopulatePort();
 	void PopulateMapFormat();
+	void PopulateCampaign();
 	void PopulateNamespaces();
 	void PopulateResources();
 
@@ -208,6 +212,7 @@ private:
 	Fl_Button* mClearButtons[RES_NUM] = {};
 
 	Instance &inst;
+	bool newProject_ = false;
 
 public:
 	UI_ProjectSetup(Instance &inst, bool new_project = false, bool is_startup = false);

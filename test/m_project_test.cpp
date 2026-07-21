@@ -93,6 +93,27 @@ TEST_F(ProjectTest, MetadataFieldsRoundTrip)
 	EXPECT_FALSE(parsed.parseField("future_setting", "value"));
 }
 
+
+TEST(ProjectModel, ParsesAndValidatesCustomCampaignOrder)
+{
+	SString error;
+	std::optional<std::vector<SString>> slots = M_ParseCustomMapSlots(
+			"map01, MAP02  e1m9;secret_1", &error);
+	ASSERT_TRUE(slots) << error.c_str();
+	EXPECT_EQ(*slots, (std::vector<SString>{
+			"MAP01", "MAP02", "E1M9", "SECRET_1" }));
+	EXPECT_EQ(M_FormatCustomMapSlots(*slots),
+			"MAP01, MAP02, E1M9, SECRET_1");
+
+	EXPECT_FALSE(M_ParseCustomMapSlots("", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("MAP01 map01", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("TOO_LONG_1", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("MAP-01", &error));
+	EXPECT_TRUE(M_IsValidProjectMapName("E1M1"));
+	EXPECT_TRUE(M_IsValidProjectMapName("SECRET_1"));
+	EXPECT_FALSE(M_IsValidProjectMapName("SECRET_01"));
+}
+
 TEST_F(ProjectTest, SingleMapCampaignHasNoNextSlot)
 {
 	auto iwad = Wad_file::Open(getSubPath("doom.wad"), WadOpenMode::write);
@@ -193,4 +214,42 @@ TEST_F(ProjectTest, WadProjectPreservesMapsResourcesAndReadOnlyIwad)
 	std::vector<uint8_t> iwadAfter;
 	ASSERT_TRUE(FileLoad(iwadPath, iwadAfter));
 	EXPECT_EQ(iwadAfter, iwadBefore);
+}
+
+TEST_F(ProjectTest, CampaignStatusesPutConfiguredSlotsBeforeAdditionalMaps)
+{
+	auto package = Wad_file::Open(getSubPath("campaign.wad"),
+			WadOpenMode::write);
+	ASSERT_TRUE(package);
+	AddDoomMap(*package, "MAP99");
+	AddDoomMap(*package, "MAP01");
+	AddDoomMap(*package, "MAP99");
+
+	ProjectMetadata project;
+	project.version = ProjectMetadata::CURRENT_VERSION;
+	project.package = ProjectPackage::wad;
+	project.campaign = CampaignMode::custom;
+	project.mapSlots = { "map01", "MAP02", "MAP01" };
+
+	std::vector<CampaignMapStatus> statuses = M_CampaignMapStatuses(project,
+			*package, "map01", { "MAP01", "map99" });
+
+	ASSERT_EQ(statuses.size(), 3u);
+	EXPECT_EQ(statuses[0].name, "MAP01");
+	EXPECT_TRUE(statuses[0].configured);
+	EXPECT_TRUE(statuses[0].exists);
+	EXPECT_TRUE(statuses[0].current);
+	EXPECT_TRUE(statuses[0].dirty);
+	EXPECT_FALSE(statuses[0].missing());
+
+	EXPECT_EQ(statuses[1].name, "MAP02");
+	EXPECT_TRUE(statuses[1].configured);
+	EXPECT_FALSE(statuses[1].exists);
+	EXPECT_TRUE(statuses[1].missing());
+	EXPECT_FALSE(statuses[1].current);
+
+	EXPECT_EQ(statuses[2].name, "MAP99");
+	EXPECT_FALSE(statuses[2].configured);
+	EXPECT_TRUE(statuses[2].exists);
+	EXPECT_TRUE(statuses[2].dirty);
 }

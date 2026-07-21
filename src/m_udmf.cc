@@ -421,91 +421,153 @@ static void UDMF_ParseVertexField(const Document &doc, Vertex *V, const Udmf_Tok
 	}
 }
 
-static void UDMF_ParseLinedefField(const Document &doc, LineDef *LD, const Udmf_Token& field, const Udmf_Token& value)
+static bool UDMF_ParseLinedefField(LineDef *LD, const Udmf_Token& field,
+		const Udmf_Token& value)
 {
 	// Note: vertex and sidedef numbers are validated later on
 
-	// just ignore any setting with the "false" keyword
-	if (value.Match("false"))
-		return;
+	// Retain the old behavior for recognized fields whose value is false, but
+	// let unrecognized false-valued extension fields reach the property store.
+	const bool enabled = !value.Match("false");
 
 	// TODO hexen flags
 
 	// TODO strife flags
 
 	if (field.Match("v1"))
-		LD->start = value.DecodeInt();
+	{
+		if (enabled) LD->start = value.DecodeInt();
+	}
 	else if (field.Match("v2"))
-		LD->end = value.DecodeInt();
+	{
+		if (enabled) LD->end = value.DecodeInt();
+	}
 	else if (field.Match("sidefront"))
-		LD->right = value.DecodeInt();
+	{
+		if (enabled) LD->right = value.DecodeInt();
+	}
 	else if (field.Match("sideback"))
-		LD->left = value.DecodeInt();
+	{
+		if (enabled) LD->left = value.DecodeInt();
+	}
 	else if (field.Match("special"))
-		LD->type = value.DecodeInt();
+	{
+		if (enabled) LD->type = value.DecodeInt();
+	}
 
 	else if (field.Match("arg0"))
-		LD->arg1 = value.DecodeInt();
+	{
+		if (enabled) LD->arg1 = value.DecodeInt();
+	}
 	else if (field.Match("arg1"))
-		LD->arg2 = value.DecodeInt();
+	{
+		if (enabled) LD->arg2 = value.DecodeInt();
+	}
 	else if (field.Match("arg2"))
-		LD->arg3 = value.DecodeInt();
+	{
+		if (enabled) LD->arg3 = value.DecodeInt();
+	}
 	else if (field.Match("arg3"))
-		LD->arg4 = value.DecodeInt();
+	{
+		if (enabled) LD->arg4 = value.DecodeInt();
+	}
 	else if (field.Match("arg4"))
-		LD->arg5 = value.DecodeInt();
+	{
+		if (enabled) LD->arg5 = value.DecodeInt();
+	}
 
 	else if (field.Match("id"))
-		LD->lineid = value.DecodeInt();
+	{
+		if (enabled) LD->lineid = value.DecodeInt();
+	}
 
 	else if (field.Match("blocking"))
-		LD->flags |= MLF_Blocking;
+	{
+		if (enabled) LD->flags |= MLF_Blocking;
+	}
 	else if (field.Match("blockmonsters"))
-		LD->flags |= MLF_BlockMonsters;
+	{
+		if (enabled) LD->flags |= MLF_BlockMonsters;
+	}
 	else if (field.Match("twosided"))
-		LD->flags |= MLF_TwoSided;
+	{
+		if (enabled) LD->flags |= MLF_TwoSided;
+	}
 	else if (field.Match("dontpegtop"))
-		LD->flags |= MLF_UpperUnpegged;
+	{
+		if (enabled) LD->flags |= MLF_UpperUnpegged;
+	}
 	else if (field.Match("dontpegbottom"))
-		LD->flags |= MLF_LowerUnpegged;
+	{
+		if (enabled) LD->flags |= MLF_LowerUnpegged;
+	}
 	else if (field.Match("secret"))
-		LD->flags |= MLF_Secret;
+	{
+		if (enabled) LD->flags |= MLF_Secret;
+	}
 	else if (field.Match("blocksound"))
-		LD->flags |= MLF_SoundBlock;
+	{
+		if (enabled) LD->flags |= MLF_SoundBlock;
+	}
 	else if (field.Match("dontdraw"))
-		LD->flags |= MLF_DontDraw;
+	{
+		if (enabled) LD->flags |= MLF_DontDraw;
+	}
 	else if (field.Match("mapped"))
-		LD->flags |= MLF_Mapped;
+	{
+		if (enabled) LD->flags |= MLF_Mapped;
+	}
 
 	else if (field.Match("passuse"))
-		LD->flags |= MLF_Boom_PassThru;
+	{
+		if (enabled) LD->flags |= MLF_Boom_PassThru;
+	}
 
 	else if (field.Match("playercross"))
-		LD->udmfFlags |= MLF_UDMF_playercross;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_playercross;
+	}
 	else if (field.Match("playeruse"))
-		LD->udmfFlags |= MLF_UDMF_playeruse;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_playeruse;
+	}
 	else if (field.Match("monstercross"))
-		LD->udmfFlags |= MLF_UDMF_monstercross;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_monstercross;
+	}
 	else if (field.Match("monsteruse"))
-		LD->udmfFlags |= MLF_UDMF_monsteruse;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_monsteruse;
+	}
 	else if (field.Match("impact"))
-		LD->udmfFlags |= MLF_UDMF_impact;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_impact;
+	}
 	else if (field.Match("playerpush"))
-		LD->udmfFlags |= MLF_UDMF_playerpush;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_playerpush;
+	}
 	else if (field.Match("monsterpush"))
-		LD->udmfFlags |= MLF_UDMF_monsterpush;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_monsterpush;
+	}
 	else if (field.Match("missilecross"))
-		LD->udmfFlags |= MLF_UDMF_missilecross;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_missilecross;
+	}
 	else if (field.Match("repeatspecial"))
-		LD->udmfFlags |= MLF_UDMF_repeatspecial;
+	{
+		if (enabled) LD->udmfFlags |= MLF_UDMF_repeatspecial;
+	}
 
 	else
-	{
-		gLog.debugPrintf("linedef #%d: unknown field '%s'\n", doc.numVertices() -1, field.c_str());
-	}
+		return false;
+
+	return true;
 }
 
-static void UDMF_ParseSidedefField(const Document &doc, SideDef *SD, const Udmf_Token& field, const Udmf_Token& value)
+static bool UDMF_ParseSidedefField(SideDef *SD, const Udmf_Token& field,
+		const Udmf_Token& value)
 {
 	// Note: sector numbers are validated later on
 
@@ -524,12 +586,13 @@ static void UDMF_ParseSidedefField(const Document &doc, SideDef *SD, const Udmf_
 	else if (field.Match("offsety"))
 		SD->y_offset = value.DecodeInt();
 	else
-	{
-		gLog.debugPrintf("sidedef #%d: unknown field '%s'\n", doc.numVertices() -1, field.c_str());
-	}
+		return false;
+
+	return true;
 }
 
-static void UDMF_ParseSectorField(const Document &doc, Sector *S, const Udmf_Token& field, const Udmf_Token& value)
+static bool UDMF_ParseSectorField(Sector *S, const Udmf_Token& field,
+		const Udmf_Token& value)
 {
 	if (field.Match("heightfloor"))
 		S->floorh = value.DecodeInt();
@@ -546,9 +609,16 @@ static void UDMF_ParseSectorField(const Document &doc, Sector *S, const Udmf_Tok
 	else if (field.Match("id"))
 		S->tag = value.DecodeInt();
 	else
-	{
-		gLog.debugPrintf("sector #%d: unknown field '%s'\n", doc.numVertices() -1, field.c_str());
-	}
+		return false;
+
+	return true;
+}
+
+static void UDMF_PreserveProperty(UdmfProperties &properties,
+		const Udmf_Token &field, const Udmf_Token &value)
+{
+	if (field.IsIdentifier())
+		properties.push_back({field.c_str(), value.c_str()});
 }
 
 static void UDMF_ParseObject(Document &doc, Udmf_Parser& parser, const Udmf_Token& name)
@@ -642,14 +712,26 @@ static void UDMF_ParseObject(Document &doc, Udmf_Parser& parser, const Udmf_Toke
 		if (new_V)
 			UDMF_ParseVertexField(doc, new_V, tok, value);
 
-		if (new_LD)
-			UDMF_ParseLinedefField(doc, new_LD, tok, value);
+		if (new_LD && !UDMF_ParseLinedefField(new_LD, tok, value))
+		{
+			UDMF_PreserveProperty(new_LD->udmf_properties, tok, value);
+			gLog.debugPrintf("linedef #%d: preserving unknown field '%s'\n",
+					doc.numLinedefs() - 1, tok.c_str());
+		}
 
-		if (new_SD)
-			UDMF_ParseSidedefField(doc, new_SD, tok, value);
+		if (new_SD && !UDMF_ParseSidedefField(new_SD, tok, value))
+		{
+			UDMF_PreserveProperty(new_SD->udmf_properties, tok, value);
+			gLog.debugPrintf("sidedef #%d: preserving unknown field '%s'\n",
+					doc.numSidedefs() - 1, tok.c_str());
+		}
 
-		if (new_S)
-			UDMF_ParseSectorField(doc, new_S, tok, value);
+		if (new_S && !UDMF_ParseSectorField(new_S, tok, value))
+		{
+			UDMF_PreserveProperty(new_S->udmf_properties, tok, value);
+			gLog.debugPrintf("sector #%d: preserving unknown field '%s'\n",
+					doc.numSectors() - 1, tok.c_str());
+		}
 	}
 }
 
@@ -735,14 +817,21 @@ static void UDMF_WriteInfo(const LoadingData &loading, Lump_c *lump)
 	lump->Printf("namespace = \"%s\";\n\n", loading.udmfNamespace.c_str());
 }
 
-static void UDMF_WriteThings(const Instance &inst, Lump_c *lump)
+static void UDMF_WriteProperties(const UdmfProperties &properties, Lump_c *lump)
 {
-	for (int i = 0 ; i < inst.level.numThings() ; i++)
+	for (const UdmfProperty &property : properties)
+		lump->Printf("%s = %s;\n", property.name.c_str(), property.value.c_str());
+}
+
+static void UDMF_WriteThings(const Document &document,
+		const ConfigData &config, Lump_c *lump)
+{
+	for (int i = 0 ; i < document.numThings() ; i++)
 	{
 		lump->Printf("thing // %d\n", i);
 		lump->Printf("{\n");
 
-		const auto th = inst.level.things[i];
+		const auto th = document.things[i];
 
 		lump->Printf("x = %.16g;\n", th->x());
 		lump->Printf("y = %.16g;\n", th->y());
@@ -766,7 +855,7 @@ static void UDMF_WriteThings(const Instance &inst, Lump_c *lump)
 
 		WrFlag(lump, th->options, "ambush", MTF_Ambush);
 
-		if (inst.conf.features.friend_flag)
+		if (config.features.friend_flag)
 			WrFlag(lump, th->options, "friend", MTF_Friend);
 
 		// TODO Hexen flags
@@ -795,14 +884,15 @@ static void UDMF_WriteVertices(const Document &doc, Lump_c *lump)
 	}
 }
 
-static void UDMF_WriteLineDefs(const Instance &inst, Lump_c *lump)
+static void UDMF_WriteLineDefs(const Document &document,
+		const ConfigData &config, Lump_c *lump)
 {
-	for (int i = 0 ; i < inst.level.numLinedefs(); i++)
+	for (int i = 0 ; i < document.numLinedefs(); i++)
 	{
 		lump->Printf("linedef // %d\n", i);
 		lump->Printf("{\n");
 
-		const auto ld = inst.level.linedefs[i];
+		const auto ld = document.linedefs[i];
 
 		lump->Printf("v1 = %d;\n", ld->start);
 		lump->Printf("v2 = %d;\n", ld->end);
@@ -850,17 +940,17 @@ static void UDMF_WriteLineDefs(const Instance &inst, Lump_c *lump)
 		WrFlag(lump, ld->udmfFlags, "missilecross",  MLF_UDMF_missilecross);
 		WrFlag(lump, ld->udmfFlags, "repeatspecial", MLF_UDMF_repeatspecial);
 
-		if (inst.conf.features.pass_through)
+		if (config.features.pass_through)
 			WrFlag(lump, ld->flags, "passuse", MLF_Boom_PassThru);
 
-		if (inst.conf.features.midtex_3d)
+		if (config.features.midtex_3d)
 			WrFlag(lump, ld->flags, "midtex3d", MLF_Eternity_3DMidTex);
 
 		// TODO : hexen stuff (SPAC flags, etc)
 
 		// TODO : strife stuff
 
-		// TODO : zdoom stuff
+		UDMF_WriteProperties(ld->udmf_properties, lump);
 
 		lump->Printf("}\n\n");
 	}
@@ -891,6 +981,8 @@ static void UDMF_WriteSideDefs(const Document &doc, Lump_c *lump)
 		if (side->MidTex() != "-")
 			lump->Printf("texturemiddle = \"%s\";\n", NormalizeTex(side->MidTex()).c_str());
 
+		UDMF_WriteProperties(side->udmf_properties, lump);
+
 		lump->Printf("}\n\n");
 	}
 }
@@ -918,20 +1010,23 @@ static void UDMF_WriteSectors(const Document &doc, Lump_c *lump)
 		if (sec->tag != 0)
 			lump->Printf("id = %d;\n", sec->tag);
 
+		UDMF_WriteProperties(sec->udmf_properties, lump);
+
 		lump->Printf("}\n\n");
 	}
 }
 
-void Instance::UDMF_SaveLevel(const LoadingData& loading, Wad_file& wad) const
+void Instance::UDMF_SaveLevel(const LoadingData& loading, Wad_file& wad,
+		const Document &document) const
 {
 	Lump_c &lump = wad.AddLump("TEXTMAP");
 
 	UDMF_WriteInfo(loading, &lump);
-	UDMF_WriteThings(*this, &lump);
-	UDMF_WriteVertices(level, &lump);
-	UDMF_WriteLineDefs(*this, &lump);
-	UDMF_WriteSideDefs(level, &lump);
-	UDMF_WriteSectors(level, &lump);
+	UDMF_WriteThings(document, conf, &lump);
+	UDMF_WriteVertices(document, &lump);
+	UDMF_WriteLineDefs(document, conf, &lump);
+	UDMF_WriteSideDefs(document, &lump);
+	UDMF_WriteSectors(document, &lump);
 
 	wad.AddLump("ENDMAP");
 }

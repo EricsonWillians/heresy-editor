@@ -215,6 +215,12 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match project version ${project_version:-unknown}." >&2
             exit 1
           fi
+          release_notes="changelogs/${release_version}.md"
+          if [[ ! -f "$release_notes" ]] || \
+              ! grep -Fq "# Heresy Editor ${release_version}" "$release_notes"; then
+            echo "Missing or invalid release notes: $release_notes" >&2
+            exit 1
+          fi
 
       - name: Download packaged builds
         uses: actions/download-artifact@v8.0.1
@@ -228,6 +234,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           release_version="${GITHUB_REF_NAME#v}"
+          release_notes="changelogs/${release_version}.md"
           mapfile -d '' release_assets < <(
             find release-assets -maxdepth 1 -type f -print0 | sort -z
           )
@@ -257,8 +264,13 @@ jobs:
             )
           done
 
-          release_notes="Cross-platform release builds for Heresy Editor ${release_version}. Each package includes a matching SHA-256 checksum. The macOS builds are ad-hoc signed but are not Apple-notarized."
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Heresy Editor ${release_version}" \
+              --notes-file "$release_notes" \
+              --latest
             gh release upload "$GITHUB_REF_NAME" "${release_assets[@]}" \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
@@ -266,7 +278,6 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --title "Heresy Editor ${release_version}" \
-              --notes "$release_notes" \
-              --generate-notes \
+              --notes-file "$release_notes" \
               --latest
           fi

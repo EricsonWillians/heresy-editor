@@ -38,10 +38,13 @@ map slot.  File -> Fresh Map can add an arbitrary map, while File -> Create Next
 Map follows the configured campaign order.  Direct WAD and PK3 opening remains
 available independently of the project command.
 
-The current editor is deliberately single-document: switching maps asks the
-user to save or discard the current document.  There is no campaign navigator,
-multi-document dirty-state manager, autosave recovery, or Save All operation
-yet.
+The active document is backed by a bounded cache of seven inactive map
+documents.  Switching within a project therefore retains undo history and
+unsaved work for at most eight resident maps.  Clean least-recently-used maps
+can be reloaded from the package; dirty maps are never automatically evicted.
+Save Project and Save All serialize every dirty resident document and project
+metadata into one package transaction.  Save Map remains the focused command
+for the active document.
 
 Completed project foundation
 ----------------------------
@@ -55,9 +58,9 @@ The first two slices adapt the established WAD path rather than replacing it:
    changed by the project.
 3. Heresy project fields carry a metadata version.  Ordinary packages without
    those fields continue to open as implicit projects.
-4. File -> Create Next Map saves the current map, creates the next configured
-   slot when it is missing, and opens it.  If that slot already exists, the
-   command opens it without overwriting it.
+4. File -> Create Next Map retains the current document, creates the next
+   configured slot when it is missing, and opens it.  If that slot already
+   exists, the command opens it without overwriting it.
 5. WAD writes preserve unrelated lumps and maps.  PK3 writes target only the
    selected embedded map and metadata entries while byte-preserving unrelated
    archive records.  Both backends validate a same-directory temporary package
@@ -68,19 +71,22 @@ Creating and reopening a WAD or PK3 project
 
 1. Choose File -> New Project.
 2. Select WAD package or PK3 package, then select the game IWAD, source-port
-   compatibility profile, map format, and optional resource files.  Keep Full
-   IWAD replacement selected for a normal campaign.
+   compatibility profile, map format, and optional resource files.  Choose a
+   full-IWAD campaign, a single-map campaign, or enter a custom ordered list of
+   1-8 character map slots.
 3. Pick a new `.wad` or `.pk3` destination.  Heresy Editor refuses to overwrite
    an existing destination or a known IWAD.
 4. The editor creates and opens the first canonical map (for Doom II this is
    `MAP01`).  In a PK3 it is stored as `maps/MAP01.wad`.
-5. Edit normally and choose File -> Create Next Map.  The current map is saved
-   before the next slot is created (for Doom II this is `MAP02`).
-6. Save with File -> Save Map and close the editor.
-7. Reopen the `.wad` or `.pk3` with File -> Open Map, the recent-files menu, or the
-   command line.  The game/profile settings and campaign slot order are read
-   from the package, and every saved map remains selectable through Open Map or
-   the existing next/previous-map commands.
+5. Edit normally and choose File -> Create Next Map.  The current map remains
+   resident while the next slot is created (for Doom II this is `MAP02`).
+6. Save the current map with File -> Save Map, or atomically save every dirty
+   resident map with File -> Save Project or File -> Save All, then close the
+   editor.
+7. Reopen the `.wad` or `.pk3` with File -> Open Map, File -> Recent Projects,
+   or the command line.  The game/profile settings and campaign slot order are
+   read from the package.  An adjacent `.heresy` session restores the last map,
+   navigator selection, and a portable IWAD location hint.
 
 Staged implementation plan
 --------------------------
@@ -97,35 +103,104 @@ projection, recent-file loading, and command-line loading all use the backend.
 Automated tests compare the raw local record of an unknown compressed entry
 before and after a targeted update.
 
-Stage 3 should add the Campaign Navigator over the project module.  It should
-show configured, existing, current, dirty, and missing states, with Open,
-Create, Duplicate, Rename, and Delete actions.  This stage should also move
-from the current single-document state to a bounded map-document cache.
+Stage 3 is complete: File -> Campaign Navigator presents configured and
+additional maps with existing, current, dirty, and missing states.  Open,
+Create, Duplicate, Rename, and Delete actions use the established package
+commands.  One active document and a seven-entry least-recently-used cache
+retain independent undo/redo and dirty state.  Clean documents may be evicted
+and reloaded, while dirty documents are never automatically discarded.
 
-Stage 4 should add Save Project, Save All, per-map autosave, rotating backups,
-startup recovery, and explicit project-level dirty state.  All package backends
-should write a temporary package, validate it, and atomically replace the
-destination.
+Stage 4 is complete: Save Project and Save All commit every dirty resident map
+and explicit project-level metadata through one package write.  Both WAD and
+PK3 backends write a same-directory temporary package, parse and validate it,
+then atomically replace the destination.  Dirty flags clear only after that
+commit succeeds; a failed write reloads the preserved original package.
 
-Stage 5 should add sidecar/session metadata for editor-only state, portable IWAD
-resolution hints, custom campaign layouts, recent-project entries, and restore
-of the last active map and navigator selection.
+Per-map autosave writes outside the project package and skips node building.
+It retains three validated recovery generations, records the package timestamp,
+and falls back to an older generation if the newest one is damaged.  Startup
+and newly opened projects offer Recover, Later, and Discard choices, including
+a warning when the package changed after the snapshot.  Recovered maps stay
+dirty until Save Project commits them.  The interval is configurable in
+Preferences (two minutes by default, zero to disable).  Existing configurable
+package backups continue to rotate independently before interactive saves.
+
+Stage 5 is complete: each explicit project has a versioned adjacent
+`<package>.heresy` session sidecar for editor-only state.  It restores the last
+active map and Campaign Navigator selection and stores the IWAD game, basename,
+and package-relative location without serializing an absolute IWAD path.  IWAD
+resolution tries that portable relative hint, a sibling IWAD, remembered IWADs,
+and the normal cross-platform/Steam discovery paths.  The sidecar is parsed
+defensively and written through a validated same-directory atomic replacement.
+
+Stage 6 is complete: BiasedDoom has a dedicated source-port profile derived
+from the shared ZDoom definitions.  Test in Game keeps a valid remembered
+engine path, then performs ordered, non-recursive discovery through an explicit
+environment override, `PATH`, portable installations, local CMake builds, and
+conventional Linux, Windows, and macOS locations.  Invalid candidates are
+skipped and the manual picker remains the final fallback.  Profile inheritance,
+discovery priority, invalid-path handling, and launch arguments have automated
+regression coverage.
+
+Stage 7 is complete: the BiasedDoom 4.15.7 source was compared with its exact
+GZDoom merge base using a reproducible audit.  It adds no DoomEdNums, action
+specials, or UDMF namespace, and its procedural generator uses stock Doom/Doom
+II things plus existing ZDoom specials.  Regression coverage loads the real
+Doom II and BiasedDoom definitions and verifies every generated identifier.
+The audit separately classifies renderer, Python, glTF, and MAPINFO extensions
+as resource/runtime metadata and records the established ZDoom UDMF properties
+that the editor should preserve in the next compatibility stage.
+
+Stage 8 is complete: unrecognized UDMF properties on linedefs, sidedefs, and
+sectors are retained as validated name/value tokens and written back with the
+objects they belong to.  This preserves BiasedDoom's generated light, fade,
+damage, texture-scale, and lock metadata during ordinary editing without
+teaching the geometry editor renderer-specific semantics.  Round-trip tests
+cover every audited generator field, editing recognized fields in the same
+objects, and a second reload.  Separate byte comparisons prove the added state
+does not affect classic Doom or Hexen binary serialization.
+
+Stage 9 is complete: parameterized integration coverage sends dirty Doom,
+Hexen, and UDMF documents through Tools / Test in Game.  Each case confirms the
+save prompt, format-specific serialization, internal node building, read-only
+IWAD and ordered resource/project arguments, map warp, process launch, and
+cleared dirty state.  The UDMF case additionally verifies that extended
+BiasedDoom-compatible properties reach the exact TEXTMAP passed to the engine.
+
+Stage 10 is complete: a machine-readable compatibility contract pins the
+audited BiasedDoom release, source commit, and exact GZDoom merge base.  A
+single verifier checks the current published release, tag identity, profile
+and inventory annotations, and map-facing source audit using either a local
+checkout or a minimal temporary fetch.  GitHub Actions runs that contract
+weekly, on relevant pull requests, and on demand so release drift cannot pass
+silently.
+
+Full-IWAD, single-map, and custom ordered campaign layouts are available from
+New Project and Manage Project.  Custom slots are normalized, deduplicated, and
+validated before becoming authoritative package metadata.  Explicit WAD and
+PK3 projects have a separate recent-project history keyed by full path, so
+same-named projects in different directories do not collide.  Startup prefers
+the latest recent project and restores its saved session when possible.
 
 Known limitations of the current foundation
 -------------------------------------------
 
 * New Project is a compact project-settings dialog followed by a destination,
   not yet a paged wizard with a final summary.
-* Campaign slots come from maps present in the selected IWAD.  Custom slot
-  lists and engine-specific overrides are not exposed yet.
-* Only one map document is resident, so map changes must be saved or discarded
-  before navigation.  Save All is not needed until multiple documents exist.
-* The full Campaign Navigator UI is not included.  Open Map, next/previous map,
-  and Create Next Map provide the first sequential workflow.
+* Custom campaign layouts are explicit ordered map-slot lists.  They do not yet
+  model engine-specific episode graphs, secret exits, or display titles.
+* Save Map intentionally writes only the active document.  Use Save Project or
+  Save All to commit cached dirty maps in the same atomic package transaction.
+* The cache is intentionally bounded at eight total resident documents.  If
+  all eight contain unsaved changes, another map cannot open until one is
+  saved; clean documents are evicted automatically as needed.
 * WAD metadata remains embedded in `__EUREKA` for compatibility.  PK3 metadata
-  uses `heresy/project.txt`; a separate editor-only session sidecar is planned.
-* Autosave recovery and configurable rotating project backups are not part of
-  this slice; the existing WAD backup behavior remains active.
+  uses `heresy/project.txt`.  The adjacent `.heresy` sidecar contains only
+  editor session state and portable IWAD hints; it has no effect on gameplay.
+  Existing per-map viewport state remains in the checksum-keyed editor cache.
+* Recovery snapshots contain unsaved project settings and dirty resident maps,
+  not clean maps that can already be reloaded from the project package.  The
+  document cache remains bounded at eight total maps.
 * PK3 writing supports classic single-disk ZIP archives with STORE and DEFLATE
   managed entries.  ZIP64, multi-disk archives, and encrypted map entries are
   refused explicitly.  Unrelated entries using other compression methods are

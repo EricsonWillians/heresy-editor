@@ -1437,6 +1437,10 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_ManageProject
 	},
 
+	{	"CampaignNavigator",  "File",
+		&Instance::CMD_CampaignNavigator
+	},
+
 	{	"OpenMap",  "File",
 		&Instance::CMD_OpenMap
 	},
@@ -1455,6 +1459,14 @@ static editor_command_t  command_table[] =
 
 	{	"SaveMap",  "File",
 		&Instance::CMD_SaveMap
+	},
+
+	{	"SaveProject",  "File",
+		&Instance::CMD_SaveProject
+	},
+
+	{	"SaveAll",  "File",
+		&Instance::CMD_SaveAll
 	},
 
 	{	"ExportMap",  "File",

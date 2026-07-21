@@ -35,6 +35,7 @@
 #include "ui_window.h"
 
 #include <filesystem>
+#include <limits>
 namespace fs = std::filesystem;
 
 // list of known iwads (mapping GAME name --> PATH)
@@ -217,6 +218,70 @@ const RecentMap &RecentFiles_c::Lookup(int index) const
 	return list[index];
 }
 
+
+RecentProjects_c::Deque::iterator RecentProjects_c::find(const fs::path &file)
+{
+	std::error_code absoluteError;
+	const fs::path absolute = fs::absolute(file, absoluteError).lexically_normal();
+	for (auto it = list.begin(); it != list.end(); ++it)
+	{
+		std::error_code equivalentError;
+		if (fs::equivalent(file, it->file, equivalentError) && !equivalentError)
+			return it;
+
+		std::error_code otherError;
+		const fs::path other = fs::absolute(it->file, otherError).lexically_normal();
+		if (absoluteError || otherError)
+			continue;
+#ifdef WIN32
+		if (SString(absolute.u8string()).noCaseEqual(SString(other.u8string())))
+			return it;
+#else
+		if (absolute == other)
+			return it;
+#endif
+	}
+	return list.end();
+}
+
+
+void RecentProjects_c::insert(const fs::path &file, const SString &map)
+{
+	auto existing = find(file);
+	if (existing != list.end())
+		list.erase(existing);
+	if (list.size() >= MAX_RECENT)
+		list.pop_back();
+	list.push_front({GetAbsolutePath(file), map.asUpper()});
+}
+
+
+void RecentProjects_c::Write(std::ostream &stream) const
+{
+	for (auto it = list.rbegin(); it != list.rend(); ++it)
+		stream << "recent_project " << it->map.spaceEscape() << " " <<
+				escape(it->file) << std::endl;
+}
+
+
+SString RecentProjects_c::Format(int index) const
+{
+	SYS_ASSERT(index >= 0 && index < static_cast<int>(list.size()));
+	const fs::path &path = list[index].file;
+	const SString file = path.filename().u8string();
+	const SString parent = path.parent_path().filename().u8string();
+	return SString::printf("%s%s%d:  %-.30s  —  %-.18s",
+			index < 9 ? "  " : "", index < 9 ? "&" : "", index + 1,
+			file.c_str(), parent.c_str());
+}
+
+
+const RecentMap &RecentProjects_c::Lookup(int index) const
+{
+	SYS_ASSERT(index >= 0 && index < static_cast<int>(list.size()));
+	return list[index];
+}
+
 namespace global
 {
 RecentKnowledge recent;
@@ -248,10 +313,25 @@ void RecentKnowledge::parseMiscConfig(std::istream &is)
 				gLog.printf("Expected WAD path as second arg in 'recent' in recents config\n");
 				continue;
 			}
-			if(Wad_file::Validate(path))
+			if(M_ValidateEditablePackage(path))
 				files.insert(path, map);
 			else
 				gLog.printf("  no longer exists: %s\n", reinterpret_cast<const char *>(path.u8string().c_str()));
+		}
+		else if(keyword == "recent_project")
+		{
+			SString map;
+			fs::path path;
+			if (!parse.getNext(map) || !parse.getNext(path))
+			{
+				gLog.printf("Expected map and path after 'recent_project' in recents config\n");
+				continue;
+			}
+			if (M_ValidateEditablePackage(path))
+				projects.insert(path, map);
+			else
+				gLog.printf("  project no longer exists: %s\n",
+						reinterpret_cast<const char *>(path.u8string().c_str()));
 		}
 		else if(keyword == "known_iwad")
 		{
@@ -323,6 +403,7 @@ void RecentKnowledge::load(const fs::path &home_dir, const fs::path &old_home_di
 	gLog.printf("Reading recent list from: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
 
 	files.clear();
+	projects.clear();
 	known_iwads.clear();
 	port_paths.clear();
 
@@ -341,9 +422,10 @@ void RecentKnowledge::save(const fs::path &home_dir) const
 	}
 
 	gLog.printf("Writing recent list to: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
-	os << "# Eureka miscellaneous stuff" << std::endl;
+	os << "# Heresy Editor miscellaneous settings" << std::endl;
 
 	files.Write(os);
+	projects.Write(os);
 
 	writeKnownIWADs(os);
 
@@ -366,6 +448,23 @@ void M_OpenRecentFromMenu(void *priv_data)
 	}
 }
 
+
+void M_OpenRecentProjectFromMenu(void *priv_data)
+{
+	SYS_ASSERT(priv_data);
+	RecentMap *data = static_cast<RecentMap *>(priv_data);
+	try
+	{
+		OpenFileMap(data->file, data->map);
+	}
+	catch (const std::runtime_error &error)
+	{
+		DLG_ShowError(false, "Could not open project %s: %s",
+				reinterpret_cast<const char *>(data->file.u8string().c_str()),
+				error.what());
+	}
+}
+
 void RecentKnowledge::addRecent(const fs::path &filename, const SString &map_name, const fs::path &home_dir)
 {
 	files.insert(GetAbsolutePath(filename), map_name);
@@ -374,12 +473,26 @@ void RecentKnowledge::addRecent(const fs::path &filename, const SString &map_nam
 }
 
 
+void RecentKnowledge::addRecentProject(const fs::path &filename,
+		const SString &map_name, const fs::path &home_dir)
+{
+	projects.insert(filename, map_name);
+	if (!home_dir.empty())
+		save(home_dir);
+}
+
+
 bool Instance::M_TryOpenMostRecent()
 {
-	if (global::recent.getFiles().getSize() == 0)
+	const RecentMap *selected = nullptr;
+	if (global::recent.getProjects().getSize() > 0)
+		selected = &global::recent.getProjects().Lookup(0);
+	else if (global::recent.getFiles().getSize() > 0)
+		selected = &global::recent.getFiles().Lookup(0);
+	if (!selected)
 		return false;
 
-	RecentMap recentMap = global::recent.getFiles().Lookup(0);
+	RecentMap recentMap = *selected;
 
 	// M_LoadRecent has already validated the filename, so this should
 	// normally work.
@@ -690,7 +803,7 @@ bool LoadingData::parseEurekaLump(const fs::path &home_dir, const fs::path &old_
 }
 
 
-void LoadingData::writeEurekaLump(Wad_file &wad) const
+void LoadingData::writeEurekaLump(Wad_file &wad, bool absoluteResources) const
 {
 	gLog.printf("Writing '%s' lump\n", EUREKA_LUMP);
 
@@ -718,9 +831,10 @@ void LoadingData::writeEurekaLump(Wad_file &wad) const
 	for (const fs::path &resource : resourceList)
 	{
 		fs::path absoluteResourcePath = fs::absolute(resource);
-		fs::path relative = fs::proximate(absoluteResourcePath, pwadPath);
+		fs::path storedPath = absoluteResources ? absoluteResourcePath :
+				fs::proximate(absoluteResourcePath, pwadPath);
 
-		lump.Printf("resource %s\n", escape(relative).c_str());
+		lump.Printf("resource %s\n", escape(storedPath).c_str());
 	}
 }
 
@@ -733,6 +847,7 @@ void LoadingData::writeEurekaLump(Wad_file &wad) const
 // config variables
 int config::backup_max_files = 30;
 int config::backup_max_space = 60;  // MB
+int config::autosave_interval = 2;  // minutes; zero disables recovery snapshots
 
 
 struct backup_scan_data_t
@@ -785,7 +900,7 @@ static void Backup_Prune(const fs::path &dir_name, int b_low, int b_high,
 	if (backup_num > config::backup_max_files)
 		backup_num = config::backup_max_files;
 
-	for ( ; b_low <= b_high - backup_num + 1 ; b_low++)
+	for ( ; b_low <= b_high - backup_num ; b_low++)
 	{
 		FileDelete(Backup_Name(dir_name, b_low, extension));
 	}
@@ -839,7 +954,7 @@ void M_BackupWad(const Wad_file *wad)
 		}
 		catch(const std::runtime_error &e)
 		{
-			gLog.printf("Failed copying directly %s to %s (%s). Trying to re-save the WAD.\n", reinterpret_cast<const char *>(wad->PathName().u8string().c_str()), reinterpret_cast<const char *>(dest_name.u8string().c_str()), e.what());
+			gLog.printf("Failed copying directly %s to %s (%s). Trying to re-save the package.\n", reinterpret_cast<const char *>(wad->PathName().u8string().c_str()), reinterpret_cast<const char *>(dest_name.u8string().c_str()), e.what());
 		}
 	}
 	if (!copiedReadOnly && ! wad->Backup(dest_name))
@@ -849,15 +964,21 @@ void M_BackupWad(const Wad_file *wad)
 		return;
 	}
 
-	// Now do the pruning:
-	if (b_low < b_high)
-	{
-		int wad_size = wad->TotalSize();
+	// Include the copy just written in the bounds and use the real package size
+	// when possible. A PK3's projected WAD size can differ substantially from
+	// its compressed archive size.
+	const int new_high = b_high + 1;
+	if (b_low > new_high)
+		b_low = new_high;
+	int package_size = wad->TotalSize();
+	std::error_code sizeError;
+	const uintmax_t fileSize = fs::file_size(wad->PathName(), sizeError);
+	if (!sizeError)
+		package_size = static_cast<int>(std::min<uintmax_t>(fileSize,
+				std::numeric_limits<int>::max()));
+	Backup_Prune(dir_name, b_low, new_high, package_size, extension);
 
-		Backup_Prune(dir_name, b_low, b_high, wad_size, extension);
-	}
-
-	gLog.printf("Backed up wad to: %s\n", reinterpret_cast<const char *>(dest_name.u8string().c_str()));
+	gLog.printf("Backed up package to: %s\n", reinterpret_cast<const char *>(dest_name.u8string().c_str()));
 }
 
 bool RecentKnowledge::hasIwadByPath(const fs::path &path) const

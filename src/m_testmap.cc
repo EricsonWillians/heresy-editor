@@ -32,6 +32,10 @@
 #include "ui_menu.h"
 #include "ui_window.h"
 
+#include <cctype>
+#include <set>
+#include <system_error>
+
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -117,6 +121,265 @@ static bool isMacOSAppBundle(const fs::path &path)
 #else
 	return false;
 #endif
+}
+
+namespace
+{
+
+#ifdef WIN32
+constexpr char PathListSeparator = ';';
+#else
+constexpr char PathListSeparator = ':';
+#endif
+
+std::string EnvironmentValue(const char *name)
+{
+	const char *value = UTF8_getenv(name);
+	return value ? std::string(value) : std::string();
+}
+
+fs::path UTF8Path(const std::string &value)
+{
+	return fs::path(reinterpret_cast<const char8_t *>(value.c_str()));
+}
+
+std::string PathText(const fs::path &path)
+{
+	const std::u8string text = path.generic_u8string();
+	return std::string(reinterpret_cast<const char *>(text.c_str()), text.size());
+}
+
+std::string PathKey(const fs::path &path)
+{
+	std::error_code error;
+	fs::path normalized = fs::weakly_canonical(path, error);
+	if(error)
+	{
+		error.clear();
+		normalized = fs::absolute(path, error);
+		if(error)
+			normalized = path;
+	}
+
+	std::string key = PathText(normalized.lexically_normal());
+#ifdef WIN32
+	std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch)
+	{
+		return static_cast<char>(std::tolower(ch));
+	});
+#endif
+	return key;
+}
+
+fs::path AbsolutePath(const fs::path &path)
+{
+	std::error_code error;
+	const fs::path absolute = fs::absolute(path, error);
+	return error ? path.lexically_normal() : absolute.lexically_normal();
+}
+
+void AppendUniquePath(std::vector<fs::path> &paths, std::set<std::string> &keys,
+		const fs::path &path)
+{
+	if(path.empty())
+		return;
+	if(keys.insert(PathKey(path)).second)
+		paths.push_back(path);
+}
+
+std::vector<fs::path> ParsePathList(const std::string &value, char separator)
+{
+	std::vector<fs::path> paths;
+	size_t start = 0;
+	while(start <= value.size())
+	{
+		const size_t end = value.find(separator, start);
+		const std::string item = value.substr(start,
+				end == std::string::npos ? std::string::npos : end - start);
+		if(!item.empty())
+			paths.push_back(UTF8Path(item));
+		if(end == std::string::npos)
+			break;
+		start = end + 1;
+	}
+	return paths;
+}
+
+std::vector<fs::path> PortExecutableNames(const SString &port)
+{
+	if(!port.noCaseEqual("biaseddoom"))
+		return {};
+#ifdef WIN32
+	return {"biaseddoom.exe"};
+#else
+	return {"biaseddoom"};
+#endif
+}
+
+bool IsExecutableCandidate(const fs::path &path)
+{
+	if(path.empty())
+		return false;
+
+	std::error_code error;
+	if(fs::is_regular_file(path, error) && !error)
+	{
+#ifndef WIN32
+		return access(path.c_str(), X_OK) == 0;
+#else
+		return true;
+#endif
+	}
+
+#ifdef __APPLE__
+	error.clear();
+	if(path.extension() == ".app" && fs::is_directory(path, error) && !error)
+		return isMacOSAppBundle(path);
+#endif
+	return false;
+}
+
+void AppendBuildCandidates(std::vector<fs::path> &candidates,
+		std::set<std::string> &keys, const fs::path &sourceRoot,
+		const std::vector<fs::path> &executableNames)
+{
+	if(sourceRoot.empty())
+		return;
+	for(const fs::path &configuration :
+			{fs::path(), fs::path("Release"), fs::path("RelWithDebInfo"), fs::path("Debug")})
+	{
+		for(const fs::path &name : executableNames)
+			AppendUniquePath(candidates, keys, sourceRoot / "build" / configuration / name);
+	}
+}
+
+} // namespace
+
+PortExecutableSearchLocations M_SystemPortExecutableSearchLocations()
+{
+	PortExecutableSearchLocations locations;
+	locations.configuredPath = UTF8Path(EnvironmentValue("BIASEDDOOM_EXE"));
+
+	std::set<std::string> searchKeys;
+	for(const fs::path &directory : ParsePathList(EnvironmentValue("PATH"), PathListSeparator))
+		AppendUniquePath(locations.searchDirectories, searchKeys, directory);
+
+	std::set<std::string> fallbackKeys;
+	const std::vector<fs::path> names = PortExecutableNames("biaseddoom");
+	const fs::path installDirectory = global::install_dir.empty() ? fs::path() :
+			AbsolutePath(global::install_dir);
+	auto appendDirectory = [&](const fs::path &directory)
+	{
+		if(directory.empty())
+			return;
+		for(const fs::path &name : names)
+			AppendUniquePath(locations.fallbackCandidates, fallbackKeys, directory / name);
+	};
+
+	// Portable bundles may place the engine beside the editor data, while a
+	// system installation normally places both executables in the same prefix.
+	appendDirectory(installDirectory);
+	if(installDirectory.filename() == "heresy" || installDirectory.filename() == "eureka")
+		appendDirectory(installDirectory.parent_path().parent_path() / "bin");
+
+	std::string userHomeText = EnvironmentValue("HOME");
+#ifdef WIN32
+	if(userHomeText.empty())
+		userHomeText = EnvironmentValue("USERPROFILE");
+#endif
+	const fs::path userHome = UTF8Path(userHomeText);
+
+	// Common source-tree layouts are checked directly.  No directory recursion
+	// is needed, including for multi-configuration CMake generators.
+	if(!userHome.empty())
+	{
+		AppendBuildCandidates(locations.fallbackCandidates, fallbackKeys,
+				userHome / "workspace" / "BiasedDoom", names);
+		AppendBuildCandidates(locations.fallbackCandidates, fallbackKeys,
+				userHome / "BiasedDoom", names);
+	}
+	if(!installDirectory.empty())
+	{
+		AppendBuildCandidates(locations.fallbackCandidates, fallbackKeys,
+				installDirectory.parent_path() / "BiasedDoom", names);
+	}
+
+#ifdef WIN32
+	for(const char *variable : {"LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"})
+	{
+		const fs::path root = UTF8Path(EnvironmentValue(variable));
+		if(root.empty())
+			continue;
+		appendDirectory(root / (std::string(variable) == "LOCALAPPDATA" ?
+				fs::path("Programs") / "BiasedDoom" : fs::path("BiasedDoom")));
+	}
+#elif defined(__APPLE__)
+	AppendUniquePath(locations.fallbackCandidates, fallbackKeys,
+			userHome / "Applications" / "BiasedDoom.app");
+	AppendUniquePath(locations.fallbackCandidates, fallbackKeys,
+			"/Applications/BiasedDoom.app");
+	appendDirectory("/usr/local/bin");
+	appendDirectory("/opt/homebrew/bin");
+#else
+	appendDirectory(userHome / ".local" / "bin");
+	appendDirectory("/usr/local/bin");
+	appendDirectory("/usr/bin");
+	appendDirectory("/opt/BiasedDoom");
+	AppendUniquePath(locations.fallbackCandidates, fallbackKeys,
+			userHome / "Applications" / "BiasedDoom.AppImage");
+	AppendUniquePath(locations.fallbackCandidates, fallbackKeys,
+			userHome / "Applications" / "biaseddoom.AppImage");
+#endif
+
+	return locations;
+}
+
+std::optional<fs::path> M_FindPortExecutable(const SString &port,
+		const PortExecutableSearchLocations &locations)
+{
+	const std::vector<fs::path> names = PortExecutableNames(port);
+	if(names.empty())
+		return std::nullopt;
+
+	std::set<std::string> checked;
+	auto check = [&](const fs::path &candidate) -> std::optional<fs::path>
+	{
+		if(candidate.empty() || !checked.insert(PathKey(candidate)).second)
+			return std::nullopt;
+		if(IsExecutableCandidate(candidate))
+			return AbsolutePath(candidate);
+		return std::nullopt;
+	};
+
+	if(const std::optional<fs::path> found = check(locations.configuredPath))
+		return found;
+	for(const fs::path &directory : locations.searchDirectories)
+	{
+		for(const fs::path &name : names)
+		{
+			if(const std::optional<fs::path> found = check(directory / name))
+				return found;
+		}
+	}
+	for(const fs::path &candidate : locations.fallbackCandidates)
+	{
+		if(const std::optional<fs::path> found = check(candidate))
+			return found;
+	}
+	return std::nullopt;
+}
+
+static bool M_IsPortPathValid(const fs::path &path)
+{
+	if(path.u8string().length() < 2)
+		return false;
+
+	return FileExists(path) || isMacOSAppBundle(path);
+}
+
+static std::optional<fs::path> M_AutoFindPortPath(const SString &port)
+{
+	return M_FindPortExecutable(port, M_SystemPortExecutableSearchLocations());
 }
 
 class UI_PortPathDialog : public UI_Escapable_Window
@@ -313,6 +576,8 @@ bool Instance::M_PortSetupDialog(const SString &port, const SString &game, const
 		name_buf = "vanilla " + game.asTitle();
 	else if (port.noCaseEqual("mbf"))	// temp hack for aesthetics
 		name_buf = "MBF";
+	else if (port.noCaseEqual("biaseddoom"))
+		name_buf = "BiasedDoom";
 	else
 		name_buf = port.asTitle();
 
@@ -321,8 +586,10 @@ bool Instance::M_PortSetupDialog(const SString &port, const SString &game, const
 	// populate the EXE name from existing info, if exists
 	const fs::path *info = global::recent.queryPortPath(QueryName(port, game));
 
-	if (info && !info->empty())
+	if (info && M_IsPortPathValid(*info))
 		dialog.SetEXE(*info);
+	else if(const std::optional<fs::path> discovered = M_AutoFindPortPath(port))
+		dialog.SetEXE(*discovered);
 
 	if (commandLine)
 		dialog.SetCommandLine(*commandLine);
@@ -342,7 +609,14 @@ bool Instance::M_PortSetupDialog(const SString &port, const SString &game, const
 		global::recent.save(global::home_dir);
 
 		if (commandLine)
-			loaded.testingCommandLine = dialog.getCommandLine();
+		{
+			const SString updatedCommandLine = dialog.getCommandLine();
+			if (updatedCommandLine != loaded.testingCommandLine)
+			{
+				loaded.testingCommandLine = updatedCommandLine;
+				Project_MarkMetadataDirty();
+			}
+		}
 	}
 
 	return ok;
@@ -576,17 +850,6 @@ void Instance::CMD_ChangeTestSettings()
 	}
 }
 
-static bool M_IsPortPathValid(const fs::path &path)
-{
-	if(path.u8string().length() < 2)
-		return false;
-
-	if (! FileExists(path) && !isMacOSAppBundle(path))
-		return false;
-
-	return true;
-}
-
 void Instance::CMD_TestMap()
 {
 	try
@@ -611,8 +874,22 @@ void Instance::CMD_TestMap()
 
 		if (!info || !M_IsPortPathValid(*info))
 		{
-			if (!M_PortSetupDialog(loaded.portName, loaded.gameName, loaded.testingCommandLine))
+			if(const std::optional<fs::path> discovered = M_AutoFindPortPath(loaded.portName))
+			{
+				gLog.printf("Automatically found %s executable: %s\n",
+						loaded.portName.c_str(),
+						reinterpret_cast<const char *>(discovered->u8string().c_str()));
+				global::recent.setPortPath(QueryName(loaded.portName, loaded.gameName), *discovered);
+				if(!global::home_dir.empty())
+					global::recent.save(global::home_dir);
+				if(main_win)
+					testmap::updateMenuName(main_win->menu_bar, loaded);
+			}
+			else if (!M_PortSetupDialog(loaded.portName, loaded.gameName,
+					loaded.testingCommandLine))
+			{
 				return;
+			}
 
 			info = global::recent.queryPortPath(QueryName(loaded.portName, loaded.gameName));
 		}

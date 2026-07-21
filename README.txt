@@ -6,7 +6,7 @@ INTRODUCTION
 
 Heresy Editor is a map editor for the classic DOOM games and related games
 such as Heretic, Hexen and Strife.  This fork is being developed as a mapping
-companion for BiasedDoom while retaining the established Eureka Editor editing
+companion for BiasedDoom while retaining the established upstream editing
 workflow.  The supported operating systems are Linux (and other Unix-likes),
 Windows and macOS.
 
@@ -34,6 +34,11 @@ FEATURES
 -  Key binding system
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
+-  Campaign Navigator with safe multi-map working state
+-  Full-IWAD, single-map, and custom ordered campaign layouts
+-  Atomic Save Project / Save All for WAD and PK3 projects
+-  Per-map autosave with validated, rotating startup recovery
+-  Portable project sessions with recent-project and IWAD restoration
 
 
 SUPPORTED GAMES
@@ -55,12 +60,21 @@ GZDoom and keeps the standard IWAD, WAD, PK3, ZDoom map-format and command-line
 workflows that Heresy Editor relies on.  Heresy Editor creates direct WAD
 projects and BiasedDoom/GZDoom-style PK3 projects using `maps/<slot>.wad`.
 
-For current projects, select "zdoom" as the source port.  That profile supports
-Doom, Hexen and UDMF map formats and supplies the closest available definitions
-for BiasedDoom.  When using Tools / Test in Game for the first time, choose the
-BiasedDoom executable.  In this workspace it is typically found at:
+Select "biaseddoom" as the source port.  Its profile derives from the ZDoom
+definitions and supports Doom, Hexen and UDMF map formats, all five compatible
+games, ZDoom action specials, and dynamic lights without duplicating the shared
+definitions.
+
+Tools / Test in Game automatically finds the BiasedDoom executable when a
+remembered path is unavailable.  The search checks `BIASEDDOOM_EXE`, the
+process `PATH`, portable editor locations, common CMake build layouts, and
+platform installation locations in that order.  A typical local build is:
 
    ~/workspace/BiasedDoom/build/biaseddoom
+
+Windows builds use `biaseddoom.exe`; macOS application bundles and Linux
+AppImages are also recognized.  If no candidate is valid, the existing engine
+picker remains available and remembers the selected path.
 
 Heresy Editor will pass the selected IWAD, resource WADs or PK3s, edited project
 package, and map name to BiasedDoom.  BiasedDoom-specific actors and features
@@ -99,7 +113,39 @@ directory names remain compatibility identifiers so existing settings continue
 to work.
 
 You can open a WAD or PK3 project using File/Open Map, or create one with
-File/New Project.
+File/New Project.  New Project and Manage Project support a full IWAD campaign,
+a single-map campaign, or a validated custom map order.  File/Create Next Map
+and Campaign Navigator follow that stored order.
+
+Explicit projects also use an adjacent `<package>.heresy` session file.  It
+restores the last active map and Campaign Navigator selection and records only
+portable IWAD hints: the game, IWAD filename, and a path relative to the
+project package.  It does not contain an absolute IWAD path or gameplay data.
+Keep it beside the WAD or PK3 when moving a project; Heresy Editor validates it,
+ignores damaged or incompatible sessions, and rewrites it atomically.
+
+File/Recent Projects is separate from File/Recent Files, so projects with the
+same filename in different folders remain distinct.  Automatic recent loading
+prefers the latest explicit project and restores its last map when available.
+
+File/Campaign Navigator shows configured and additional maps together with
+their current, dirty, or missing state.  It can open, create, duplicate,
+rename, and delete maps.  Navigation retains up to eight resident map
+documents (one active and seven cached), never evicting unsaved work.
+
+File/Save Map saves only the active map.  File/Save Project saves every dirty
+resident map and the project settings in one validated, atomic package update.
+File/Save All currently performs the same application-wide operation because
+Heresy Editor has one project window.
+
+While a project has unsaved maps or settings, Heresy Editor writes a separate
+recovery snapshot at the interval configured under Preferences / General (two
+minutes by default; zero disables it).  Each dirty map is stored separately,
+three validated generations are retained, and node building is skipped so the
+editor remains responsive.  Recovery data never modifies the project package.
+When that package is opened again, the editor offers to recover, keep for
+later, or discard the snapshot, and warns if the package changed in the
+meantime.  Use Save Project after recovery to commit the restored work.
 
 You can also specify the WAD or PK3 package to edit on the command line, either
 on its own or with the -file option:

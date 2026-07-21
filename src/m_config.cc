@@ -176,9 +176,17 @@ const opt_desc_t options[] =
 	{	"begin_maximized",
 		0,
 		OptFlag_preference,
-		"Maximize the window when Eureka starts",
+		"Maximize the window when Heresy Editor starts",
 		NULL,
 		&config::begin_maximized
+	},
+
+	{	"autosave_interval",
+		0,
+		OptFlag_preference,
+		"Minutes between project recovery snapshots (zero disables)",
+		NULL,
+		&config::autosave_interval
 	},
 
 	{	"backup_max_files",
@@ -1106,7 +1114,7 @@ int M_WriteConfigFile(const fs::path &path, const opt_desc_t *options)
 		gLog.printf("--> %s\n", GetErrorMessage(errno).c_str());
 		return -1;
 	}
-	os << "# Eureka configuration (local)\n";
+	os << "# Heresy Editor configuration (local)\n";
 
 	const opt_desc_t *o;
 

@@ -75,6 +75,7 @@ add_executable(
     lib_tga_test.cpp
     lib_util_test.cpp
     m_bitvec_test.cpp
+    m_document_cache_test.cpp
     m_events_test.cpp
     m_files_test.cpp
     m_game_test.cpp
@@ -83,10 +84,14 @@ add_executable(
     m_parse_test.cpp
     m_package_test.cpp
     m_project_test.cpp
+    m_project_save_test.cpp
+    m_recovery_test.cpp
+    m_session_test.cpp
     m_select_test.cpp
     m_streams_test.cpp
     m_zip_test.cpp
     m_testmap_test.cpp
+    m_udmf_test.cpp
     main_test.cpp
     r_grid_test.cpp
 	SafeOutFileTest.cpp
@@ -110,7 +115,8 @@ if(APPLE)
     target_include_directories(test_general PRIVATE ${CMAKE_SOURCE_DIR}/osx/EurekaApp)
     target_compile_definitions(test_general PRIVATE GL_SILENCE_DEPRECATION)
 endif()
-target_compile_definitions(test_general PUBLIC NO_OPENGL)
+target_compile_definitions(test_general PUBLIC NO_OPENGL
+    PRIVATE HERESY_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_general PRIVATE ${fltk_libs})
 if(UNIX AND NOT APPLE)
     find_package(ZLIB REQUIRED)
