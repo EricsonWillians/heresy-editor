@@ -20,6 +20,7 @@
 #define SECTOR_H_
 
 #include "m_strings.h"
+#include "UdmfProperty.h"
 
 struct ConfigData;
 
@@ -32,6 +33,9 @@ struct Sector
 	int light = 0;
 	int type = 0;
 	int tag = 0;
+
+	// Unrecognized UDMF extension fields, retained verbatim across saves.
+	UdmfProperties udmf_properties;
 
 	enum IntAddress
 	{

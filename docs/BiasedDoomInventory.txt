@@ -68,18 +68,20 @@ These features can be packaged beside maps and passed to BiasedDoom without
 inventing map-geometry definitions.  A future resource-metadata editor may
 surface them independently.
 
-Round-trip work identified
---------------------------
+Round-trip preservation
+-----------------------
 
-Although the generated map uses established ZDoom UDMF fields, Heresy Editor
-does not yet preserve every non-core field if such a map is exported and then
-edited.  The relevant generator output includes:
+Heresy Editor preserves unrecognized linedef, sidedef, and sector properties
+as validated UDMF tokens when loading and saving a UDMF map.  This includes the
+relevant generator output:
 
 * sector `lightcolor`, `fadecolor`, `damageamount`, `damageinterval`,
   `damagetype`, `leakiness`, and `damageterraineffect`;
 * sidedef `scaley_top`, `scalex_mid`, and `scaley_mid`; and
 * linedef `locknumber`.
 
-This is a UDMF property-preservation task, not evidence of new BiasedDoom
-identifiers.  The next compatibility stage should preserve these established
-ZDoom fields without changing classic Doom or Hexen serialization.
+These values remain attached to their map objects during ordinary edits,
+clipboard operations, line splits, saves, and reloads.  Doom and Hexen binary
+serializers ignore the UDMF-only property store, with regression coverage
+proving their output is unchanged.  This is property preservation, not
+evidence of new BiasedDoom identifiers.

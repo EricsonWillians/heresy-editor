@@ -20,6 +20,7 @@
 #define SIDEDEF_H_
 
 #include "m_strings.h"
+#include "UdmfProperty.h"
 
 struct Sector;
 struct ConfigData;
@@ -33,6 +34,9 @@ struct SideDef
 	StringID mid_tex;
 	StringID lower_tex;
 	int sector = 0;
+
+	// Unrecognized UDMF extension fields, retained verbatim across saves.
+	UdmfProperties udmf_properties;
 
 	enum IntAddress
 	{
