@@ -44,6 +44,11 @@ static void file_do_manage_project(Fl_Widget *w, void * data)
 	static_cast<Instance *>(data)->ExecuteCommand("ManageProject");
 }
 
+static void file_do_campaign_navigator(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("CampaignNavigator");
+}
+
 static void file_do_open(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("OpenMap");
@@ -446,6 +451,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 {
 	{file_do_new_project, {"NewProject"} },
 	{file_do_manage_project, {"ManageProject"} },
+	{file_do_campaign_navigator, {"CampaignNavigator"} },
 	{file_do_open, {"OpenMap"} },
 	{file_do_save, {"SaveMap"} },
 	{file_do_export, {"ExportMap"} },
@@ -538,6 +544,7 @@ static Fl_Menu_Item menu_items[] =
 
 		{ "&New Project   ",   0, FCAL file_do_new_project },
 		{ "&Manage Project  ", 0, FCAL file_do_manage_project },
+		{ "Campaign Na&vigator", 0, FCAL file_do_campaign_navigator },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 

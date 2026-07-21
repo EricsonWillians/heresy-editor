@@ -6,6 +6,7 @@
 
 #include "w_wad.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 namespace
@@ -155,4 +156,69 @@ std::optional<SString> M_NextProjectMap(const ProjectMetadata &project,
 	}
 
 	return {};
+}
+
+std::vector<CampaignMapStatus> M_CampaignMapStatuses(
+		const ProjectMetadata &project, const Wad_file &package,
+		const SString &currentMap, const std::vector<SString> &dirtyMaps)
+{
+	auto isDirty = [&dirtyMaps](const SString &name)
+	{
+		return std::any_of(dirtyMaps.begin(), dirtyMaps.end(),
+				[&name](const SString &dirty)
+				{
+					return dirty.noCaseEqual(name);
+				});
+	};
+
+	std::vector<CampaignMapStatus> result;
+	for (const SString &slot : project.mapSlots)
+	{
+		const bool duplicate = std::any_of(result.begin(), result.end(),
+				[&slot](const CampaignMapStatus &status)
+				{
+					return status.name.noCaseEqual(slot);
+				});
+		if (duplicate)
+			continue;
+
+		CampaignMapStatus status;
+		status.name = slot.asUpper();
+		status.configured = true;
+		status.exists = package.LevelFind(slot) >= 0;
+		status.current = slot.noCaseEqual(currentMap);
+		status.dirty = isDirty(slot);
+		result.push_back(std::move(status));
+	}
+
+	std::vector<SString> extras;
+	for (int level = 0; level < package.LevelCount(); ++level)
+	{
+		const SString &name = package.LevelName(level);
+		const bool configured = std::any_of(result.begin(), result.end(),
+				[&name](const CampaignMapStatus &status)
+				{
+					return status.name.noCaseEqual(name);
+				});
+		const bool alreadyAdditional = std::any_of(extras.begin(), extras.end(),
+				[&name](const SString &extra)
+				{
+					return extra.noCaseEqual(name);
+				});
+		if (!configured && !alreadyAdditional)
+			extras.push_back(name);
+	}
+	std::sort(extras.begin(), extras.end());
+
+	for (const SString &name : extras)
+	{
+		CampaignMapStatus status;
+		status.name = name.asUpper();
+		status.exists = true;
+		status.current = name.noCaseEqual(currentMap);
+		status.dirty = isDirty(name);
+		result.push_back(std::move(status));
+	}
+
+	return result;
 }

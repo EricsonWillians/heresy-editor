@@ -119,6 +119,16 @@ public:
 	{
 		mSavedStack = mUndoHistory;
 	}
+	SString undoMenuName() const
+	{
+		return mUndoHistory.empty() ? SString() :
+				mUndoHistory.back().getMenuName();
+	}
+	SString redoMenuName() const
+	{
+		return mRedoFuture.empty() ? SString() :
+				mRedoFuture.top().getMenuName();
+	}
 
 	
 	Basis &operator = (Basis &&other) noexcept

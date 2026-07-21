@@ -888,7 +888,7 @@ void Main_Loop()
 
 		if (global::want_quit)
 		{
-			if (gInstance->level.Main_ConfirmQuit("quit"))
+			if (gInstance->Project_ConfirmClose("quit"))
 				break;
 
 			global::want_quit = false;

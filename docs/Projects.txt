@@ -38,10 +38,11 @@ map slot.  File -> Fresh Map can add an arbitrary map, while File -> Create Next
 Map follows the configured campaign order.  Direct WAD and PK3 opening remains
 available independently of the project command.
 
-The current editor is deliberately single-document: switching maps asks the
-user to save or discard the current document.  There is no campaign navigator,
-multi-document dirty-state manager, autosave recovery, or Save All operation
-yet.
+The active document is backed by a bounded cache of seven inactive map
+documents.  Switching within a project therefore retains undo history and
+unsaved work for at most eight resident maps.  Clean least-recently-used maps
+can be reloaded from the package; dirty maps are never automatically evicted.
+Save All and autosave recovery are not included yet.
 
 Completed project foundation
 ----------------------------
@@ -55,9 +56,9 @@ The first two slices adapt the established WAD path rather than replacing it:
    changed by the project.
 3. Heresy project fields carry a metadata version.  Ordinary packages without
    those fields continue to open as implicit projects.
-4. File -> Create Next Map saves the current map, creates the next configured
-   slot when it is missing, and opens it.  If that slot already exists, the
-   command opens it without overwriting it.
+4. File -> Create Next Map retains the current document, creates the next
+   configured slot when it is missing, and opens it.  If that slot already
+   exists, the command opens it without overwriting it.
 5. WAD writes preserve unrelated lumps and maps.  PK3 writes target only the
    selected embedded map and metadata entries while byte-preserving unrelated
    archive records.  Both backends validate a same-directory temporary package
@@ -74,8 +75,8 @@ Creating and reopening a WAD or PK3 project
    an existing destination or a known IWAD.
 4. The editor creates and opens the first canonical map (for Doom II this is
    `MAP01`).  In a PK3 it is stored as `maps/MAP01.wad`.
-5. Edit normally and choose File -> Create Next Map.  The current map is saved
-   before the next slot is created (for Doom II this is `MAP02`).
+5. Edit normally and choose File -> Create Next Map.  The current map remains
+   resident while the next slot is created (for Doom II this is `MAP02`).
 6. Save with File -> Save Map and close the editor.
 7. Reopen the `.wad` or `.pk3` with File -> Open Map, the recent-files menu, or the
    command line.  The game/profile settings and campaign slot order are read
@@ -97,10 +98,12 @@ projection, recent-file loading, and command-line loading all use the backend.
 Automated tests compare the raw local record of an unknown compressed entry
 before and after a targeted update.
 
-Stage 3 should add the Campaign Navigator over the project module.  It should
-show configured, existing, current, dirty, and missing states, with Open,
-Create, Duplicate, Rename, and Delete actions.  This stage should also move
-from the current single-document state to a bounded map-document cache.
+Stage 3 is complete: File -> Campaign Navigator presents configured and
+additional maps with existing, current, dirty, and missing states.  Open,
+Create, Duplicate, Rename, and Delete actions use the established package
+commands.  One active document and a seven-entry least-recently-used cache
+retain independent undo/redo and dirty state.  Clean documents may be evicted
+and reloaded, while dirty documents are never automatically discarded.
 
 Stage 4 should add Save Project, Save All, per-map autosave, rotating backups,
 startup recovery, and explicit project-level dirty state.  All package backends
@@ -118,10 +121,11 @@ Known limitations of the current foundation
   not yet a paged wizard with a final summary.
 * Campaign slots come from maps present in the selected IWAD.  Custom slot
   lists and engine-specific overrides are not exposed yet.
-* Only one map document is resident, so map changes must be saved or discarded
-  before navigation.  Save All is not needed until multiple documents exist.
-* The full Campaign Navigator UI is not included.  Open Map, next/previous map,
-  and Create Next Map provide the first sequential workflow.
+* Save Map writes only the active document.  Cached dirty maps must be reopened
+  and saved individually until Stage 4 adds Save All and recovery.
+* The cache is intentionally bounded at eight total resident documents.  If
+  all eight contain unsaved changes, another map cannot open until one is
+  saved; clean documents are evicted automatically as needed.
 * WAD metadata remains embedded in `__EUREKA` for compatibility.  PK3 metadata
   uses `heresy/project.txt`; a separate editor-only session sidecar is planned.
 * Autosave recovery and configurable rotating project backups are not part of

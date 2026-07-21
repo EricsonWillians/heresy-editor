@@ -58,6 +58,20 @@ struct ProjectMetadata
 	std::vector<std::pair<SString, SString>> serializedFields() const;
 };
 
+struct CampaignMapStatus
+{
+	SString name;
+	bool configured = false;
+	bool exists = false;
+	bool current = false;
+	bool dirty = false;
+
+	bool missing() const noexcept
+	{
+		return configured && !exists;
+	}
+};
+
 std::vector<SString> M_ProjectMapSlots(const Wad_file &iwad);
 
 void M_RefreshProjectMapSlots(ProjectMetadata &project, const Wad_file &iwad);
@@ -73,5 +87,9 @@ inline ProjectMetadata M_NewWadProjectMetadata(const fs::path &packagePath,
 
 std::optional<SString> M_NextProjectMap(const ProjectMetadata &project,
 		const SString &currentMap);
+
+std::vector<CampaignMapStatus> M_CampaignMapStatuses(
+		const ProjectMetadata &project, const Wad_file &package,
+		const SString &currentMap, const std::vector<SString> &dirtyMaps);
 
 #endif // HERESY_M_PROJECT_H

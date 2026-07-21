@@ -23,6 +23,7 @@
 #include "Document.h"
 #include "e_main.h"
 #include "im_img.h"
+#include "m_document_cache.h"
 #include "m_game.h"
 #include "m_loadsave.h"
 #include "m_nodes.h"
@@ -86,6 +87,7 @@ public:
 	void CMD_Clipboard_Paste();
 	void CMD_CopyAndPaste();
 	void CMD_CopyMap();
+	void CMD_CampaignNavigator();
 	void CMD_CreateNextMap();
 	void CMD_CopyProperties();
 	void CMD_DefaultProps();
@@ -389,6 +391,16 @@ public:
 			main_win->info_bar->UpdateRatio();
 	}
 
+	bool Project_ConfirmClose(const char *action) const;
+	bool Project_SwitchMap(const std::shared_ptr<Wad_file> &package,
+			const SString &mapName);
+	bool Project_CreateMap(const SString &mapName);
+	std::vector<SString> Project_DirtyMapNames() const;
+	void Project_ClearDocumentCache() noexcept
+	{
+		documentCache.clear();
+	}
+
 private:
 	// New private methods
 	void navigationScroll(float *editNav, nav_release_func_t func);
@@ -467,6 +479,7 @@ private:
 
 public:	// will be private when we encapsulate everything
 	Document level{*this};	// level data proper
+	MapDocumentCache documentCache;
 
 	UI_MainWindow *main_win = nullptr;
 	Editor_State_t edit = {};
