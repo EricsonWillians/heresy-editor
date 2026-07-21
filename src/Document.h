@@ -103,6 +103,7 @@ public:
 
 	bool hasChanges() const noexcept { return mMadeChanges; }
 	void markSaved() { mMadeChanges = false; basis.setSavedStack(); }
+	void markRecovered() noexcept { mMadeChanges = true; }
 
 private:
 	void setMadeChanges(bool val) { mMadeChanges = val; }

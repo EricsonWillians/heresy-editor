@@ -63,6 +63,8 @@ UI_CampaignNavigator::UI_CampaignNavigator(Instance &instance) :
 				static_cast<int>(instance_.loaded.project.mapSlots.size()),
 				instance_.loaded.project.mapSlots.size() == 1 ? "" : "s");
 	}
+	if (instance_.Project_HasChanges())
+		heading += " — modified";
 	Fl_Box *title = new Fl_Box(20, 15, 560, 30);
 	title->copy_label(heading.c_str());
 	title->labelfont(FL_HELVETICA_BOLD);

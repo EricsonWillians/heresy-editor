@@ -35,6 +35,8 @@ FEATURES
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
 -  Campaign Navigator with safe multi-map working state
+-  Atomic Save Project / Save All for WAD and PK3 projects
+-  Per-map autosave with validated, rotating startup recovery
 
 
 SUPPORTED GAMES
@@ -106,6 +108,20 @@ File/Campaign Navigator shows configured and additional maps together with
 their current, dirty, or missing state.  It can open, create, duplicate,
 rename, and delete maps.  Navigation retains up to eight resident map
 documents (one active and seven cached), never evicting unsaved work.
+
+File/Save Map saves only the active map.  File/Save Project saves every dirty
+resident map and the project settings in one validated, atomic package update.
+File/Save All currently performs the same application-wide operation because
+Heresy Editor has one project window.
+
+While a project has unsaved maps or settings, Heresy Editor writes a separate
+recovery snapshot at the interval configured under Preferences / General (two
+minutes by default; zero disables it).  Each dirty map is stored separately,
+three validated generations are retained, and node building is skipped so the
+editor remains responsive.  Recovery data never modifies the project package.
+When that package is opened again, the editor offers to recover, keep for
+later, or discard the snapshot, and warns if the package changed in the
+meantime.  Use Save Project after recovery to commit the restored work.
 
 You can also specify the WAD or PK3 package to edit on the command line, either
 on its own or with the -file option:

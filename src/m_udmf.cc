@@ -735,14 +735,15 @@ static void UDMF_WriteInfo(const LoadingData &loading, Lump_c *lump)
 	lump->Printf("namespace = \"%s\";\n\n", loading.udmfNamespace.c_str());
 }
 
-static void UDMF_WriteThings(const Instance &inst, Lump_c *lump)
+static void UDMF_WriteThings(const Document &document,
+		const ConfigData &config, Lump_c *lump)
 {
-	for (int i = 0 ; i < inst.level.numThings() ; i++)
+	for (int i = 0 ; i < document.numThings() ; i++)
 	{
 		lump->Printf("thing // %d\n", i);
 		lump->Printf("{\n");
 
-		const auto th = inst.level.things[i];
+		const auto th = document.things[i];
 
 		lump->Printf("x = %.16g;\n", th->x());
 		lump->Printf("y = %.16g;\n", th->y());
@@ -766,7 +767,7 @@ static void UDMF_WriteThings(const Instance &inst, Lump_c *lump)
 
 		WrFlag(lump, th->options, "ambush", MTF_Ambush);
 
-		if (inst.conf.features.friend_flag)
+		if (config.features.friend_flag)
 			WrFlag(lump, th->options, "friend", MTF_Friend);
 
 		// TODO Hexen flags
@@ -795,14 +796,15 @@ static void UDMF_WriteVertices(const Document &doc, Lump_c *lump)
 	}
 }
 
-static void UDMF_WriteLineDefs(const Instance &inst, Lump_c *lump)
+static void UDMF_WriteLineDefs(const Document &document,
+		const ConfigData &config, Lump_c *lump)
 {
-	for (int i = 0 ; i < inst.level.numLinedefs(); i++)
+	for (int i = 0 ; i < document.numLinedefs(); i++)
 	{
 		lump->Printf("linedef // %d\n", i);
 		lump->Printf("{\n");
 
-		const auto ld = inst.level.linedefs[i];
+		const auto ld = document.linedefs[i];
 
 		lump->Printf("v1 = %d;\n", ld->start);
 		lump->Printf("v2 = %d;\n", ld->end);
@@ -850,10 +852,10 @@ static void UDMF_WriteLineDefs(const Instance &inst, Lump_c *lump)
 		WrFlag(lump, ld->udmfFlags, "missilecross",  MLF_UDMF_missilecross);
 		WrFlag(lump, ld->udmfFlags, "repeatspecial", MLF_UDMF_repeatspecial);
 
-		if (inst.conf.features.pass_through)
+		if (config.features.pass_through)
 			WrFlag(lump, ld->flags, "passuse", MLF_Boom_PassThru);
 
-		if (inst.conf.features.midtex_3d)
+		if (config.features.midtex_3d)
 			WrFlag(lump, ld->flags, "midtex3d", MLF_Eternity_3DMidTex);
 
 		// TODO : hexen stuff (SPAC flags, etc)
@@ -922,16 +924,17 @@ static void UDMF_WriteSectors(const Document &doc, Lump_c *lump)
 	}
 }
 
-void Instance::UDMF_SaveLevel(const LoadingData& loading, Wad_file& wad) const
+void Instance::UDMF_SaveLevel(const LoadingData& loading, Wad_file& wad,
+		const Document &document) const
 {
 	Lump_c &lump = wad.AddLump("TEXTMAP");
 
 	UDMF_WriteInfo(loading, &lump);
-	UDMF_WriteThings(*this, &lump);
-	UDMF_WriteVertices(level, &lump);
-	UDMF_WriteLineDefs(*this, &lump);
-	UDMF_WriteSideDefs(level, &lump);
-	UDMF_WriteSectors(level, &lump);
+	UDMF_WriteThings(document, conf, &lump);
+	UDMF_WriteVertices(document, &lump);
+	UDMF_WriteLineDefs(document, conf, &lump);
+	UDMF_WriteSideDefs(document, &lump);
+	UDMF_WriteSectors(document, &lump);
 
 	wad.AddLump("ENDMAP");
 }

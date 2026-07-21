@@ -342,7 +342,14 @@ bool Instance::M_PortSetupDialog(const SString &port, const SString &game, const
 		global::recent.save(global::home_dir);
 
 		if (commandLine)
-			loaded.testingCommandLine = dialog.getCommandLine();
+		{
+			const SString updatedCommandLine = dialog.getCommandLine();
+			if (updatedCommandLine != loaded.testingCommandLine)
+			{
+				loaded.testingCommandLine = updatedCommandLine;
+				Project_MarkMetadataDirty();
+			}
+		}
 	}
 
 	return ok;

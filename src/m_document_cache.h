@@ -52,6 +52,8 @@ public:
 	size_t dirtyCount() const noexcept;
 	std::vector<SString> dirtyMapNames() const;
 	std::vector<SString> mapNames() const;
+	std::vector<CachedMapDocument *> dirtyDocuments() noexcept;
+	std::vector<const CachedMapDocument *> dirtyDocuments() const noexcept;
 
 	void erase(const SString &mapName) noexcept;
 	void rename(const SString &oldName, const SString &newName) noexcept;

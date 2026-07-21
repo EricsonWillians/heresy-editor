@@ -1244,13 +1244,13 @@ void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
 #ifdef __APPLE__
-		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nHeresy Editor defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 #endif
 	}
 	else
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_FILE);
-		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nHeresy Editor defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 	}
 	chooser.directory(reinterpret_cast<const char *>(that->inst.Main_FileOpFolder().u8string().c_str()));
 

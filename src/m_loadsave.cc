@@ -38,6 +38,7 @@
 #include "m_config.h"
 #include "m_files.h"
 #include "m_package.h"
+#include "m_recovery.h"
 #include "m_loadsave.h"
 #include "m_testmap.h"
 #include "r_subdiv.h"
@@ -54,6 +55,8 @@
 #include "ui_menu.h"
 
 #include <memory>
+#include <ctime>
+#include <set>
 
 static const char overwrite_message[] =
 	"The %s PWAD already contains this map.  "
@@ -188,6 +191,7 @@ void Instance::Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexc
 	Fl::wait(0.1);
 	Main_LoadResources(loading);
 	documentCache.updateLoadingContext(loaded);
+	Project_MarkMetadataDirty();
 	Fl::wait(0.1);
 }
 
@@ -217,6 +221,9 @@ void Instance::CMD_NewProject()
 	ConfigData backupConfig = conf;
 	LoadingData backupLoading = loaded;
 	WadData backupWadData = wad;
+	const bool discardOldRecovery = Project_HasChanges() && !recoveryDeferred_;
+	const fs::path oldPackagePath = wad.master.editWad() ?
+			wad.master.editWad()->PathName() : fs::path{};
 	std::optional<Document> backupDoc;
 	try
 	{
@@ -289,12 +296,15 @@ void Instance::CMD_NewProject()
 			testmap::updateMenuName(main_win->menu_bar, loaded);
 
 		this->wad = std::move(newres.waddata);
-		Project_ClearDocumentCache();
 
 		SaveLevel(loaded, map_name, *wad, false);
 		this->wad.master.ReplaceEditWad(wad);
+		Project_ClearDocumentCache();
 		ConfirmLevelSaveSuccess(loaded, *wad);
 		UpdateViewOnResources();
+		if (discardOldRecovery && !oldPackagePath.empty())
+			RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
+		Project_ResetAutosaveTimer();
 
 		RedrawMap();
 	}
@@ -964,7 +974,7 @@ std::vector<SString> Instance::Project_DirtyMapNames() const
 bool Instance::Project_ConfirmClose(const char *action) const
 {
 	const std::vector<SString> dirtyMaps = Project_DirtyMapNames();
-	if (dirtyMaps.empty())
+	if (dirtyMaps.empty() && !projectMetadataDirty_)
 		return true;
 
 	SString secondButton = SString::printf("&%s", action);
@@ -976,11 +986,348 @@ bool Instance::Project_ConfirmClose(const char *action) const
 			secondButton.erase(space, SString::npos);
 	}
 
+	if (dirtyMaps.empty())
+	{
+		return DLG_Confirm({ "Cancel", secondButton },
+				"You have unsaved project settings.  Do you really want to %s?",
+				action) == 1;
+	}
+
 	return DLG_Confirm({ "Cancel", secondButton },
-			"You have unsaved changes in %d project map%s.  "
+			"You have unsaved changes in %d project map%s%s.  "
 			"Do you really want to %s?",
 			static_cast<int>(dirtyMaps.size()),
-			dirtyMaps.size() == 1 ? "" : "s", action) == 1;
+			dirtyMaps.size() == 1 ? "" : "s",
+			projectMetadataDirty_ ? " and the project settings" : "", action) == 1;
+}
+
+void Instance::Project_ResetAutosaveTimer() noexcept
+{
+	autosaveInterval_ = std::clamp(config::autosave_interval, 0, 1440);
+	if (autosaveInterval_ <= 0)
+	{
+		autosaveDeadline_ = {};
+		return;
+	}
+	autosaveDeadline_ = std::chrono::steady_clock::now() +
+			std::chrono::minutes(autosaveInterval_);
+}
+
+void Instance::Project_AutosaveTick() noexcept
+{
+	const int configured = std::clamp(config::autosave_interval, 0, 1440);
+	if (configured != autosaveInterval_ || autosaveDeadline_ ==
+			std::chrono::steady_clock::time_point{})
+	{
+		Project_ResetAutosaveTimer();
+		return;
+	}
+	if (configured <= 0 || std::chrono::steady_clock::now() < autosaveDeadline_)
+		return;
+
+	// Schedule the next deadline before doing I/O so an error cannot create a
+	// tight retry loop in the UI thread.
+	Project_ResetAutosaveTimer();
+	if (Project_HasChanges())
+		Project_WriteAutosave(true);
+}
+
+void Instance::Project_DiscardRecovery() noexcept
+{
+	const std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (package && !package->PathName().empty())
+		RecoveryStore(global::cache_dir / "recovery").discard(package->PathName());
+	recoveryDeferred_ = false;
+}
+
+void Instance::Project_SynchronizeRecoveryAfterSave() noexcept
+{
+	if (Project_HasChanges())
+		Project_WriteAutosave();
+	else if (!recoveryDeferred_)
+		Project_DiscardRecovery();
+}
+
+bool Instance::Project_WriteAutosave(bool notify) noexcept
+{
+	const std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package || package->PathName().empty())
+		return false;
+	if (!Project_HasChanges())
+	{
+		if (!recoveryDeferred_)
+			Project_DiscardRecovery();
+		return true;
+	}
+
+	fs::path staging;
+	try
+	{
+		RecoveryStore store(global::cache_dir / "recovery");
+		const std::optional<RecoverySnapshot> previous = recoveryDeferred_ ?
+				store.latest(package->PathName()) : std::nullopt;
+		staging = store.beginSnapshot(package->PathName());
+
+		if (previous && !projectMetadataDirty_)
+		{
+			std::error_code error;
+			fs::copy_file(previous->contextFile, staging / "context.wad",
+					fs::copy_options::none, error);
+			if (error)
+				throw fs::filesystem_error("Could not retain deferred recovery context",
+						previous->contextFile, staging / "context.wad", error);
+		}
+		else
+		{
+			std::shared_ptr<Wad_file> context = Wad_file::Open(
+					staging / "context.wad", WadOpenMode::write);
+			if (!context)
+				ThrowException("Could not create the recovery project context.");
+			loaded.writeEurekaLump(*context, true);
+			context->writeToDisk();
+		}
+
+		std::vector<CachedMapDocument *> cached = documentCache.dirtyDocuments();
+		std::sort(cached.begin(), cached.end(),
+				[](const CachedMapDocument *left, const CachedMapDocument *right)
+				{
+					return left->mapName < right->mapName;
+				});
+
+		std::vector<RecoveryMapFile> maps;
+		std::set<SString> currentMaps;
+		auto writeMap = [this, &staging, &maps](const SString &mapName,
+				const LoadingData &mapContext, const Document &document)
+		{
+			const fs::path fileName = SString::printf("map-%zu.wad", maps.size()).c_str();
+			std::shared_ptr<Wad_file> recoveryWad = Wad_file::Open(
+					staging / fileName, WadOpenMode::write);
+			if (!recoveryWad)
+				ThrowException("Could not create a recovery map package.");
+			LoadingData recoveryLoading = mapContext;
+			StoreDocumentInWad(recoveryLoading, mapName, *recoveryWad, document,
+					true /* autosave never blocks on node building */);
+			recoveryWad->writeToDisk();
+			maps.push_back({ mapName.asUpper(), fileName });
+		};
+
+		for (const CachedMapDocument *entry : cached)
+		{
+			writeMap(entry->mapName, entry->loading, entry->document);
+			currentMaps.insert(entry->mapName.asUpper());
+		}
+		if (level.hasChanges())
+		{
+			writeMap(loaded.levelName, loaded, level);
+			currentMaps.insert(loaded.levelName.asUpper());
+		}
+
+		// "Later" must not make an older recovery generation inaccessible.
+		// Carry its still-unloaded maps forward, while current dirty documents
+		// with the same names take precedence.
+		if (previous)
+		{
+			for (const RecoveryMapFile &map : previous->maps)
+			{
+				if (currentMaps.count(map.mapName.asUpper()) > 0)
+					continue;
+				const fs::path fileName =
+						SString::printf("map-%zu.wad", maps.size()).c_str();
+				std::error_code error;
+				fs::copy_file(map.fileName, staging / fileName,
+						fs::copy_options::none, error);
+				if (error)
+					throw fs::filesystem_error("Could not retain deferred recovery map",
+							map.fileName, staging / fileName, error);
+				maps.push_back({ map.mapName.asUpper(), fileName });
+			}
+		}
+
+		store.commitSnapshot(package->PathName(), staging, loaded.levelName, maps);
+		gLog.printf("Autosaved project recovery: %zu changed map%s\n",
+				maps.size(), maps.size() == 1 ? "" : "s");
+		if (notify)
+			Status_Set("Autosaved project recovery (%zu map%s)", maps.size(),
+					maps.size() == 1 ? "" : "s");
+		return true;
+	}
+	catch (const std::exception &error)
+	{
+		if (!staging.empty())
+		{
+			std::error_code ignored;
+			fs::remove_all(staging, ignored);
+		}
+		gLog.printf("WARNING: could not autosave project recovery: %s\n",
+				error.what());
+		if (notify)
+			Status_Set("Could not autosave recovery; see the log");
+		return false;
+	}
+}
+
+bool Instance::Project_CheckRecovery()
+{
+	const std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package || package->PathName().empty())
+		return false;
+
+	RecoveryStore store(global::cache_dir / "recovery");
+	std::optional<RecoverySnapshot> snapshot;
+	try
+	{
+		snapshot = store.latest(package->PathName());
+	}
+	catch (const std::exception &error)
+	{
+		gLog.printf("WARNING: could not inspect project recovery: %s\n",
+				error.what());
+		return false;
+	}
+	if (!snapshot)
+	{
+		recoveryDeferred_ = false;
+		return false;
+	}
+
+	char timestamp[64] = "an unknown time";
+	const std::time_t created = static_cast<std::time_t>(snapshot->createdAt);
+	if (const std::tm *local = std::localtime(&created))
+		std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", local);
+
+	const int choice = DLG_Confirm({ "&Later", "&Recover", "&Discard" },
+			"Heresy Editor found recovery data from %s containing %d changed "
+			"map%s.%s\n\nRecover it now?",
+			timestamp, static_cast<int>(snapshot->maps.size()),
+			snapshot->maps.size() == 1 ? "" : "s",
+			snapshot->packageChanged ?
+					"\n\nThe project package has changed since that autosave. "
+					"Review recovered maps before saving." : "");
+	if (choice == 0)
+	{
+		recoveryDeferred_ = true;
+		Status_Set("Recovery kept for later; new autosaves will retain it");
+		return false;
+	}
+	if (choice == 2)
+	{
+		Project_DiscardRecovery();
+		Status_Set("Discarded project recovery");
+		return false;
+	}
+	recoveryDeferred_ = true;
+
+	try
+	{
+		std::shared_ptr<Wad_file> contextWad = Wad_file::Open(
+				snapshot->contextFile, WadOpenMode::read);
+		if (!contextWad)
+			ThrowException("Could not open the recovery project context.");
+
+		LoadingData recoveryContext = loaded;
+		if (!recoveryContext.parseEurekaLump(global::home_dir,
+				global::old_linux_home_and_cache_dir, global::install_dir,
+				global::recent, contextWad.get()))
+		{
+			return false;
+		}
+		recoveryContext.levelName = loaded.levelName;
+
+		NewResources recoveryResources = loadResources(recoveryContext, wad);
+		const ConfigData previousConfig = conf;
+		const LoadingData previousLoading = loaded;
+		const WadData previousWads = wad;
+		std::vector<std::pair<SString, NewDocument>> documents;
+		int activeIndex = -1;
+		try
+		{
+			conf = std::move(recoveryResources.config);
+			loaded = std::move(recoveryResources.loading);
+			wad = std::move(recoveryResources.waddata);
+			wad.master.ReplaceEditWad(package);
+
+			for (const RecoveryMapFile &map : snapshot->maps)
+			{
+				std::shared_ptr<Wad_file> mapWad = Wad_file::Open(map.fileName,
+						WadOpenMode::read);
+				if (!mapWad)
+					ThrowException("Could not open recovered map %s.", map.mapName.c_str());
+				int levelNumber = mapWad->LevelFind(map.mapName);
+				if (levelNumber < 0)
+					ThrowException("Recovered map %s is missing.", map.mapName.c_str());
+				NewDocument recovered = openDocument(loaded, *mapWad, levelNumber);
+				recovered.loading.levelName = map.mapName.asUpper();
+				recovered.doc.markRecovered();
+				documents.emplace_back(map.mapName.asUpper(), std::move(recovered));
+			}
+			for (size_t index = 0; index < documents.size(); ++index)
+			{
+				if (documents[index].first.noCaseEqual(snapshot->activeMap))
+				{
+					activeIndex = static_cast<int>(index);
+					break;
+				}
+			}
+			if (activeIndex < 0 && documents.size() > documentCache.capacity())
+				activeIndex = 0;
+			const size_t cachedCount = documents.size() -
+					(activeIndex >= 0 ? 1u : 0u);
+			if (cachedCount > documentCache.capacity())
+				ThrowException("Too many recovered maps are resident at once.");
+		}
+		catch (...)
+		{
+			conf = previousConfig;
+			loaded = previousLoading;
+			wad = previousWads;
+			throw;
+		}
+
+		documentCache.clear();
+		for (size_t index = 0; index < documents.size(); ++index)
+		{
+			if (static_cast<int>(index) == activeIndex)
+				continue;
+			NewDocument &recovered = documents[index].second;
+			const bool stored = documentCache.store(documents[index].first,
+					std::move(recovered.doc), recovered.loading);
+			SYS_ASSERT(stored);
+			(void)stored;
+		}
+
+		projectMetadataDirty_ = true;
+		UpdateViewOnResources();
+		if (activeIndex >= 0)
+		{
+			NewDocument &active = documents[static_cast<size_t>(activeIndex)].second;
+			level = std::move(active.doc);
+			loaded = std::move(active.loading);
+			if (main_win)
+			{
+				testmap::updateMenuName(main_win->menu_bar, loaded);
+				menu::setUndoDetail(main_win->menu_bar, level.basis.undoMenuName());
+				menu::setRedoDetail(main_win->menu_bar, level.basis.redoMenuName());
+			}
+			refreshViewAfterLoad(active.bad, package.get(), loaded.levelName, false);
+		}
+		else if (main_win)
+		{
+			main_win->SetTitle(package->PathName().u8string(), loaded.levelName,
+					false);
+		}
+
+		Status_Set("Recovered project (%zu changed map%s); use Save Project",
+				documents.size(), documents.size() == 1 ? "" : "s");
+		recoveryDeferred_ = false;
+		Project_ResetAutosaveTimer();
+		return true;
+	}
+	catch (const std::exception &error)
+	{
+		DLG_ShowError(false, "Could not recover the project: %s\n\nThe recovery "
+				"data has been kept for another attempt.", error.what());
+		return false;
+	}
 }
 
 bool Instance::Project_SwitchMap(const std::shared_ptr<Wad_file> &package,
@@ -1069,6 +1416,7 @@ bool Instance::Project_CreateMap(const SString &mapName)
 		documentCache.erase(mapName);
 		SaveLevelAndUpdateWindow(loaded, mapName, *package, false);
 		Status_Set("Created %s", mapName.c_str());
+		Project_SynchronizeRecoveryAfterSave();
 		RedrawMap();
 		return true;
 	}
@@ -1307,6 +1655,10 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 {
 	// TODO: change this to start a new instance
 	SString map_name = map_namem;
+	const bool discardOldRecovery = gInstance->Project_HasChanges() &&
+			!gInstance->Project_HasDeferredRecovery();
+	const fs::path oldPackagePath = gInstance->wad.master.editWad() ?
+			gInstance->wad.master.editWad()->PathName() : fs::path{};
 	if (!gInstance->Project_ConfirmClose("open another map"))
 		return;
 
@@ -1391,6 +1743,10 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 		testmap::updateMenuName(gInstance->main_win->menu_bar, gInstance->loaded);
 
 	gInstance->refreshViewAfterLoad(newdoc.bad, wad.get(), map_name, true);
+	if (discardOldRecovery && !oldPackagePath.empty())
+		RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
+	gInstance->Project_ResetAutosaveTimer();
+	gInstance->Project_CheckRecovery();
 }
 
 
@@ -1429,6 +1785,9 @@ void Instance::CMD_OpenMap()
 
 	if (!Project_ConfirmClose("open another map"))
 		return;
+	const bool discardOldRecovery = Project_HasChanges() && !recoveryDeferred_;
+	const fs::path oldPackagePath = this->wad.master.editWad() ?
+			this->wad.master.editWad()->PathName() : fs::path{};
 
 	LoadingData loading = loaded;
 	if (did_load || (this->wad.master.editWad() &&
@@ -1519,6 +1878,11 @@ void Instance::CMD_OpenMap()
 		testmap::updateMenuName(main_win->menu_bar, loaded);
 
 	refreshViewAfterLoad(newdoc.bad, wad.get(), map_name, new_resources);
+	if (discardOldRecovery && !oldPackagePath.empty())
+		RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
+	Project_ResetAutosaveTimer();
+	if (newEditWad)
+		Project_CheckRecovery();
 }
 
 
@@ -1656,10 +2020,17 @@ void Instance::CMD_FlipMap()
 			Project_SwitchMap(wad, map_name);
 		else
 		{
+			const bool discardOldRecovery = Project_HasChanges() &&
+					!recoveryDeferred_;
+			const fs::path oldPackagePath = this->wad.master.editWad() ?
+					this->wad.master.editWad()->PathName() : fs::path{};
 			if (!Project_ConfirmClose("open another map"))
 				return;
-			Project_ClearDocumentCache();
 			LoadLevel(wad.get(), map_name);
+			Project_ClearDocumentCache();
+			if (discardOldRecovery && !oldPackagePath.empty())
+				RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
+			Project_ResetAutosaveTimer();
 		}
 	}
 	catch (const std::runtime_error &error)
@@ -1885,13 +2256,15 @@ static void EmptyLump(Wad_file& wad, const char *name)
 	wad.AddLump(name);
 }
 
-void Instance::SaveLevel(LoadingData& loading, const SString &level, Wad_file &wad, bool inhibit_node_build)
+void Instance::StoreDocumentInWad(LoadingData &loading,
+		const SString &mapName, Wad_file &wad, const Document &document,
+		bool inhibitNodeBuild)
 {
 	// set global level name now (for debugging code)
-	loading.levelName = level.asUpper();
+	loading.levelName = mapName.asUpper();
 
 	// remove previous version of level (if it exists)
-	int lev_num = wad.LevelFind(level);
+	int lev_num = wad.LevelFind(mapName);
 	int level_lump = -1;
 
 	if (lev_num >= 0)
@@ -1903,55 +2276,61 @@ void Instance::SaveLevel(LoadingData& loading, const SString &level, Wad_file &w
 
 	wad.InsertPoint(level_lump);
 
-	int saving_level = this->level.SaveHeader(wad, level);
+	int saving_level = document.SaveHeader(wad, mapName);
 
 	if (loading.levelFormat == MapFormat::udmf)
 	{
-		UDMF_SaveLevel(loading, wad);
+		UDMF_SaveLevel(loading, wad, document);
 	}
 	else
 	{
 		// IOANCH 9/2015: save Hexen format maps
 		if (loading.levelFormat == MapFormat::hexen)
 		{
-			this->level.SaveThings_Hexen(wad);
-			this->level.SaveLineDefs_Hexen(wad);
+			document.SaveThings_Hexen(wad);
+			document.SaveLineDefs_Hexen(wad);
 		}
 		else
 		{
-			this->level.SaveThings(wad);
-			this->level.SaveLineDefs(wad);
+			document.SaveThings(wad);
+			document.SaveLineDefs(wad);
 		}
 
-		this->level.SaveSideDefs(wad);
-		this->level.SaveVertices(wad);
+		document.SaveSideDefs(wad);
+		document.SaveVertices(wad);
 
 		EmptyLump(wad, "SEGS");
 		EmptyLump(wad, "SSECTORS");
 		EmptyLump(wad, "NODES");
 
-		this->level.SaveSectors(wad);
+		document.SaveSectors(wad);
 
 		EmptyLump(wad, "REJECT");
 		EmptyLump(wad, "BLOCKMAP");
 
 		if (loading.levelFormat == MapFormat::hexen)
 		{
-			this->level.SaveBehavior(wad);
-			this->level.SaveScripts(wad);
+			document.SaveBehavior(wad);
+			document.SaveScripts(wad);
 		}
 	}
 
 	// build the nodes
-	if (config::bsp_on_save && ! inhibit_node_build)
+	if (config::bsp_on_save && !inhibitNodeBuild)
 	{
-		BuildNodesAfterSave(saving_level, loading, wad);
+		BuildNodesAfterSave(saving_level, loading, wad, document);
 	}
 
 	// this is mainly for Next/Prev-map commands
 	// [ it doesn't change the on-disk wad file at all ]
 	wad.SortLevels();
 
+}
+
+void Instance::SaveLevel(LoadingData &loading, const SString &mapName,
+		Wad_file &wad, bool inhibitNodeBuild)
+{
+	StoreDocumentInWad(loading, mapName, wad, level, inhibitNodeBuild);
 	loading.writeEurekaLump(wad);
 	wad.writeToDisk();
 }
@@ -1970,7 +2349,8 @@ void Instance::ConfirmLevelSaveSuccess(const LoadingData &loading, const Wad_fil
 		M_SaveUserState();
 	}
 
-        this->level.markSaved();
+	level.markSaved();
+	projectMetadataDirty_ = false;
 }
 
 //
@@ -2019,7 +2399,103 @@ bool Instance::M_SaveMap(bool inhibit_node_build)
 		DLG_ShowError(false, "Could not save map: %s", e.what());
 		return false;
 	}
+	Project_SynchronizeRecoveryAfterSave();
 
+	return true;
+}
+
+bool Instance::M_SaveProject(bool inhibit_node_build)
+{
+	std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package)
+	{
+		DLG_Notify("Save Project requires an editable project package.\n\n"
+				"Use Export Map to create one first.");
+		return false;
+	}
+	if (package->IsReadOnly())
+	{
+		DLG_Notify("The current project package is read-only.\n\n"
+				"Use Export Map to create a writable package first.");
+		return false;
+	}
+	if (recoveryDeferred_)
+	{
+		// Merge any work made since "Later" into the retained snapshot before
+		// asking again. Recovering then produces one complete resident set.
+		if (Project_HasChanges() && !Project_WriteAutosave())
+		{
+			DLG_Notify("The retained recovery could not be updated.  Save Project "
+					"has stopped to avoid losing either version of your work.");
+			return false;
+		}
+		Project_CheckRecovery();
+		if (recoveryDeferred_)
+			return false;
+	}
+	if (!Project_HasChanges())
+	{
+		Status_Set("Project is already saved");
+		return true;
+	}
+
+	const fs::path packagePath = package->PathName();
+	std::vector<CachedMapDocument *> cached = documentCache.dirtyDocuments();
+	const bool activeDirty = level.hasChanges();
+	const size_t mapCount = cached.size() + (activeDirty ? 1 : 0);
+
+	M_BackupWad(package.get());
+	gLog.printf("Saving Project : %s (%zu changed map%s)\n",
+			reinterpret_cast<const char *>(packagePath.u8string().c_str()),
+			mapCount, mapCount == 1 ? "" : "s");
+
+	try
+	{
+		for (CachedMapDocument *entry : cached)
+		{
+			StoreDocumentInWad(entry->loading, entry->mapName, *package,
+					entry->document, inhibit_node_build);
+		}
+		if (activeDirty)
+		{
+			StoreDocumentInWad(loaded, loaded.levelName, *package, level,
+					inhibit_node_build);
+		}
+
+		// Metadata and every changed resident map share this single validated,
+		// atomic package replacement.
+		loaded.writeEurekaLump(*package);
+		package->writeToDisk();
+	}
+	catch (const std::runtime_error &error)
+	{
+		// Serialization mutates the in-memory aggregate before the atomic disk
+		// commit. Reload it so a failed save cannot poison a later attempt.
+		std::shared_ptr<Wad_file> restored = M_OpenEditablePackage(packagePath);
+		if (restored)
+			wad.master.ReplaceEditWad(restored);
+		DLG_ShowError(false, "Could not save project; the original package was "
+				"preserved: %s", error.what());
+		return false;
+	}
+
+	for (CachedMapDocument *entry : cached)
+		entry->document.markSaved();
+	if (activeDirty)
+		level.markSaved();
+	projectMetadataDirty_ = false;
+
+	if (!global::home_dir.empty())
+		global::recent.addRecent(packagePath, loaded.levelName, global::home_dir);
+	Status_Set("Saved project (%zu map%s)", mapCount,
+			mapCount == 1 ? "" : "s");
+	if (main_win)
+	{
+		main_win->SetTitle(packagePath.u8string(), loaded.levelName, false);
+		M_SaveUserState();
+	}
+	Project_DiscardRecovery();
+	Project_ResetAutosaveTimer();
 	return true;
 }
 
@@ -2132,6 +2608,9 @@ bool Instance::M_ExportMap(bool inhibit_node_build)
 	{
 		return false;
 	}
+	const bool discardOldRecovery = Project_HasChanges() && !recoveryDeferred_;
+	const fs::path oldPackagePath = this->wad.master.editWad() ?
+			this->wad.master.editWad()->PathName() : fs::path{};
 
 	// back-up an existing wad
 	if (wad->NumLumps() > 0)
@@ -2168,6 +2647,9 @@ bool Instance::M_ExportMap(bool inhibit_node_build)
 	this->wad.master.ReplaceEditWad(wad);
 	Project_ClearDocumentCache();
 	ConfirmLevelSaveSuccess(loaded, *wad);
+	if (discardOldRecovery && !oldPackagePath.empty())
+		RecoveryStore(global::cache_dir / "recovery").discard(oldPackagePath);
+	Project_ResetAutosaveTimer();
 
 	return true;
 }
@@ -2176,6 +2658,19 @@ bool Instance::M_ExportMap(bool inhibit_node_build)
 void Instance::CMD_SaveMap()
 {
 	M_SaveMap(false);
+}
+
+void Instance::CMD_SaveProject()
+{
+	M_SaveProject(false);
+}
+
+void Instance::CMD_SaveAll()
+{
+	// The current application model owns one project Instance. Keeping this
+	// command distinct makes its application-wide intent explicit and leaves
+	// room for multiple project windows without changing bindings or menus.
+	M_SaveProject(false);
 }
 
 
@@ -2236,6 +2731,7 @@ void Instance::CMD_CopyMap()
 		SaveLevelAndUpdateWindow(loaded, new_name, *wad.master.editWad(), false);
 
 		Status_Set("Copied to %s", loaded.levelName.c_str());
+		Project_SynchronizeRecoveryAfterSave();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -2329,6 +2825,7 @@ void Instance::CMD_RenameMap()
 					loaded.levelName, false);
 
 		Status_Set("Renamed to %s", loaded.levelName.c_str());
+		Project_SynchronizeRecoveryAfterSave();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -2438,6 +2935,7 @@ void Instance::CMD_DeleteMap()
 		const SString& map_name = lump->Name();
 		LoadLevel(wad.master.gameWad().get(), map_name);
 	}
+	Project_SynchronizeRecoveryAfterSave();
 }
 
 //--- editor settings ---
