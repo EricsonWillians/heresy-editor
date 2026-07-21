@@ -29,6 +29,7 @@
 
 #include "Document.h"
 #include "m_game.h"
+#include "m_project.h"
 #include "w_wad.h"
 #include "WadData.h"
 #include <unordered_map>
@@ -54,6 +55,7 @@ struct LoadingData
 	std::vector<fs::path> resourceList;
 	MapFormat levelFormat = {};	// format of current map
 	SString testingCommandLine;	// command-line for testing map (stored in Eureka lump due to possible port and mod-specific features)
+	ProjectMetadata project;	// Explicit project intent; empty for directly opened legacy WADs
 };
 
 

@@ -25,6 +25,7 @@
 #include "m_files.h"
 #include "m_game.h"
 #include "m_iwad.h"
+#include "m_package.h"
 #include "m_loadsave.h"
 #include "m_parse.h"
 #include "m_streams.h"
@@ -90,8 +91,8 @@ void M_ValidateGivenFiles()
 {
 	for (const fs::path &pwad : global::Pwad_list)
 	{
-		if (! Wad_file::Validate(pwad))
-			ThrowException("Given pwad does not exist or is invalid: %s\n",
+		if (!M_ValidateEditablePackage(pwad))
+			ThrowException("Given WAD/PK3 package does not exist or is invalid: %s\n",
 						   reinterpret_cast<const char *>(pwad.u8string().c_str()));
 	}
 }
@@ -383,7 +384,7 @@ bool Instance::M_TryOpenMostRecent()
 	// M_LoadRecent has already validated the filename, so this should
 	// normally work.
 
-	std::shared_ptr<Wad_file> wad = Wad_file::loadFromFile(recentMap.file);
+	std::shared_ptr<Wad_file> wad = M_OpenEditablePackage(recentMap.file);
 
 	if (! wad)
 	{
@@ -530,6 +531,7 @@ bool LoadingData::parseEurekaLump(const fs::path &home_dir, const fs::path &old_
 		bool keep_cmd_line_args)
 {
 	gLog.printf("Parsing '%s' lump\n", EUREKA_LUMP);
+	project.clear();
 
 	const Lump_c * lump = wad->FindLump(EUREKA_LUMP);
 
@@ -641,6 +643,10 @@ bool LoadingData::parseEurekaLump(const fs::path &home_dir, const fs::path &old_
 		{
 			testingCommandLine = value;
 		}
+		else if (project.parseField(key, value))
+		{
+			// Project fields are owned by the GUI-independent project model.
+		}
 		else
 		{
 			gLog.printf("WARNING: unknown keyword '%s' in %s lump\n", key.c_str(), EUREKA_LUMP);
@@ -694,7 +700,10 @@ void LoadingData::writeEurekaLump(Wad_file &wad) const
 
 	Lump_c &lump = wad.AddLump(EUREKA_LUMP);
 
-	lump.Printf("# Eureka project info\n");
+	lump.Printf("# Heresy Editor project info\n");
+
+	for (const auto &field : project.serializedFields())
+		lump.Printf("%s %s\n", field.first.c_str(), field.second.spaceEscape().c_str());
 
 	if (!gameName.empty())
 		lump.Printf("game %s\n", gameName.c_str());
@@ -753,13 +762,17 @@ static void backup_scan_file(const fs::path &name, int flags, void *priv_dat)
 }
 
 
-inline static fs::path Backup_Name(const fs::path &dir_name, int slot)
+inline static fs::path Backup_Name(const fs::path &dir_name, int slot,
+		const fs::path &extension)
 {
-	return dir_name / fs::path(reinterpret_cast<const char8_t *>(SString::printf("%d.wad", slot).c_str()));
+	fs::path name = std::to_string(slot);
+	name += extension.empty() ? fs::path(".wad") : extension;
+	return dir_name / name;
 }
 
 
-static void Backup_Prune(const fs::path &dir_name, int b_low, int b_high, int wad_size)
+static void Backup_Prune(const fs::path &dir_name, int b_low, int b_high,
+		int wad_size, const fs::path &extension)
 {
 	// Note: the logic here for checking space is very crude, it assumes
 	//       all existing backups have the same size as the currrent wad.
@@ -774,7 +787,7 @@ static void Backup_Prune(const fs::path &dir_name, int b_low, int b_high, int wa
 
 	for ( ; b_low <= b_high - backup_num + 1 ; b_low++)
 	{
-		FileDelete(Backup_Name(dir_name, b_low));
+		FileDelete(Backup_Name(dir_name, b_low, extension));
 	}
 }
 
@@ -810,10 +823,11 @@ void M_BackupWad(const Wad_file *wad)
 
 	int b_low  = scan_data.low;
 	int b_high = scan_data.high;
+	const fs::path extension = wad->PathName().extension();
 
 	// actually back-up the file
 
-	fs::path dest_name = Backup_Name(dir_name, b_high + 1);
+	fs::path dest_name = Backup_Name(dir_name, b_high + 1, extension);
 
 	bool copiedReadOnly = false;
 	if(wad->IsReadOnly())
@@ -840,7 +854,7 @@ void M_BackupWad(const Wad_file *wad)
 	{
 		int wad_size = wad->TotalSize();
 
-		Backup_Prune(dir_name, b_low, b_high, wad_size);
+		Backup_Prune(dir_name, b_low, b_high, wad_size, extension);
 	}
 
 	gLog.printf("Backed up wad to: %s\n", reinterpret_cast<const char *>(dest_name.u8string().c_str()));

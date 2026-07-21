@@ -30,6 +30,7 @@
 #include "Errors.h"
 #include "main.h"
 
+#include <functional>
 #include <memory>
 
 #include <filesystem>
@@ -194,6 +195,8 @@ private:
 	}
 
 public:
+	using SaveHandler = std::function<void(const Wad_file &)>;
+
 	~Wad_file();
 
 	// open a wad file.
@@ -210,6 +213,12 @@ public:
 										  WadOpenMode mode
 										  = WadOpenMode::append);
 	static std::shared_ptr<Wad_file> loadFromFile(const fs::path &filename);
+	static std::shared_ptr<Wad_file> loadFromData(const fs::path &displayName,
+			const std::vector<byte> &data,
+			WadOpenMode mode = WadOpenMode::append);
+	static std::shared_ptr<Wad_file> CreateVirtual(const fs::path &displayName,
+			SaveHandler saveHandler,
+			WadOpenMode mode = WadOpenMode::append);
 	static std::shared_ptr<Wad_file> readFromDir(const fs::path &path);
 
 	// check the given wad file exists and is a WAD file
@@ -226,6 +235,10 @@ public:
 	bool IsIWAD() const noexcept
 	{
 		return kind == WadKind::IWAD;
+	}
+	bool IsPackageBacked() const noexcept
+	{
+		return static_cast<bool>(saveHandler_);
 	}
 
 	int TotalSize() const noexcept;
@@ -248,6 +261,7 @@ public:
 	}
 	int LevelHeader(int lev_num) const noexcept;
 	int LevelLastLump(int lev_num) const noexcept;
+	const SString &LevelName(int lev_num) const noexcept;
 
 	// these return a level number (0 .. count-1)
 	int LevelFind(const SString &name) const noexcept;
@@ -265,6 +279,8 @@ public:
 	// returns true if successful, false on error.
 	bool Backup(const fs::path &new_filename) const;
 
+	std::vector<byte> serialize() const;
+	std::vector<byte> serializeLevel(int lev_num) const;
 	void writeToDisk() noexcept(false);
 
 	// change name of a lump (can be a level marker too)
@@ -293,6 +309,8 @@ public:
 	// something else in the WAD.
 	Lump_c & AddLump (const SString &name);
 	Lump_c * AddLevel(const SString &name, int *lev_num = nullptr);
+	void AppendLevelFrom(const Wad_file &source, int sourceLev);
+	void ReplaceLevelFrom(int targetLev, const Wad_file &source, int sourceLev);
 
 	// set the insertion point -- the next lump will be added _before_
 	// this index, and it will be incremented so that a sequence of
@@ -316,6 +334,7 @@ private:
 
 	// read the existing directory.
 	bool ReadDirectory(FILE *fp, int totalSize);
+	bool ReadDirectory(const std::vector<byte> &data);
 
 	void DetectLevels();
 	void ProcessNamespaces();
@@ -323,6 +342,9 @@ private:
 	void FixLevelGroup(int index, int num_added, int num_removed);
 
 	void writeToPath(const fs::path &path) const noexcept(false);
+	std::vector<byte> serializeRange(int start, int finish, WadKind kind) const;
+
+	SaveHandler saveHandler_;
 
 	// deliberately don't implement these
 	Wad_file(const Wad_file& other);

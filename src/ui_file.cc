@@ -24,6 +24,7 @@
 #include "main.h"
 #include "m_config.h"
 #include "m_files.h"
+#include "m_package.h"
 #include "m_game.h"
 #include "w_wad.h"
 
@@ -586,7 +587,7 @@ void UI_OpenMap::LoadFile()
 
 	chooser.title("Pick file to open");
 	chooser.type(Fl_Native_File_Chooser::BROWSE_FILE);
-	chooser.filter("Wads\t*.wad");
+	chooser.filter("Map Packages\t*.{wad,pk3,zip}");
 	chooser.directory(reinterpret_cast<const char *>(inst.Main_FileOpFolder().u8string().c_str()));
 
 	// Show native chooser
@@ -609,21 +610,21 @@ void UI_OpenMap::LoadFile()
 	}
 
 
-	std::shared_ptr<Wad_file> wad = Wad_file::Open(fs::path(reinterpret_cast<const char8_t *>(chooser.filename())),
-												   WadOpenMode::append);
+	std::shared_ptr<Wad_file> wad = M_OpenEditablePackage(
+			fs::path(reinterpret_cast<const char8_t *>(chooser.filename())));
 
 	if (! wad)
 	{
 		// FIXME: get an error message, add it here
 
-		DLG_Notify("Unable to open the chosen WAD file.\n\n"
+		DLG_Notify("Unable to open the chosen WAD or PK3 package.\n\n"
 				   "Please try again.");
 		return;
 	}
 
-	if (wad->LevelCount() < 0)
+	if (wad->LevelCount() <= 0)
 	{
-		DLG_Notify("The chosen WAD contains no levels.\n\n"
+		DLG_Notify("The chosen package contains no editable levels.\n\n"
 				   "Please try again.");
 		return;
 	}
@@ -652,7 +653,9 @@ void UI_OpenMap::LoadFile()
 
 
 UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_startup) :
-	UI_Escapable_Window(is_startup ? 400 : 500, is_startup ? 200 : 440, new_project ? "New Project" : "Manage Project"),
+	UI_Escapable_Window(is_startup ? 400 : 500,
+			is_startup ? 200 : (new_project ? 477 : 440),
+			new_project ? "New Project" : "Manage Project"),
 	inst(inst)
 {
 	callback(close_callback, this);
@@ -699,6 +702,23 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 	format_choice->down_box(FL_BORDER_BOX);
 	format_choice->callback((Fl_Callback*)format_callback, this);
 
+	if (new_project)
+	{
+		package_choice = new Fl_Choice(140, by+136, 240, 29, "Package: ");
+		package_choice->labelfont(FL_HELVETICA_BOLD);
+		package_choice->down_box(FL_BORDER_BOX);
+		package_choice->add("WAD package|PK3 package (BiasedDoom / GZDoom)");
+		package_choice->value(0);
+		package_choice->callback((Fl_Callback*)package_callback, this);
+
+		campaign_choice = new Fl_Choice(140, by+173, 240, 29, "Campaign: ");
+		campaign_choice->labelfont(FL_HELVETICA_BOLD);
+		campaign_choice->down_box(FL_BORDER_BOX);
+		campaign_choice->add("Full IWAD replacement|Single map");
+		campaign_choice->value(0);
+		campaign_choice->callback((Fl_Callback*)campaign_callback, this);
+	}
+
 #if 0  // Disabled for now
 	namespace_choice = new Fl_Choice(140, by+140, 150, 29, "Namespace: ");
 	namespace_choice->labelfont(FL_HELVETICA_BOLD);
@@ -717,7 +737,9 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 
 	if (! is_startup)
 	{
-		Fl_Box *res_title = new Fl_Box(15, by+190, 185, 30, "Resource Files or Folders:");
+		const int project_shift = new_project ? 37 : 0;
+		Fl_Box *res_title = new Fl_Box(15, by+190+project_shift, 185, 30,
+				"Resource Files or Folders:");
 		res_title->labelfont(FL_HELVETICA_BOLD);
 		res_title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 	}
@@ -729,7 +751,7 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 		if (is_startup)
 			continue;
 
-		int cy = by + 220 + r * 35;
+		int cy = by + 220 + (new_project ? 37 : 0) + r * 35;
 
 		char res_label[64];
 		snprintf(res_label, sizeof(res_label), "%d. ", 1 + r);
@@ -760,7 +782,7 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 
 	// bottom buttons
 	{
-		by += is_startup ? 80 : 375;
+		by += is_startup ? 80 : 375 + (new_project ? 37 : 0);
 
 		Fl_Group *g = new Fl_Group(0, by, w(), h() - by);
 		g->box(FL_FLAT_BOX);
@@ -1110,6 +1132,20 @@ void UI_ProjectSetup::format_callback(Fl_Choice *w, void *data)
 	that->PopulateNamespaces();
 }
 
+void UI_ProjectSetup::campaign_callback(Fl_Choice *w, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	that->result.campaign = (w->value() == 1) ? CampaignMode::singleMap :
+			CampaignMode::fullIwad;
+}
+
+void UI_ProjectSetup::package_callback(Fl_Choice *w, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	that->result.package = (w->value() == 1) ? ProjectPackage::pk3 :
+			ProjectPackage::wad;
+}
+
 
 void UI_ProjectSetup::namespace_callback(Fl_Choice *w, void *data)
 {
@@ -1208,13 +1244,13 @@ void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
 #ifdef __APPLE__
-		chooser.filter("Wads\t*.wad\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 #endif
 	}
 	else
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_FILE);
-		chooser.filter("Wads\t*.wad\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
+		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nEureka defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 	}
 	chooser.directory(reinterpret_cast<const char *>(that->inst.Main_FileOpFolder().u8string().c_str()));
 

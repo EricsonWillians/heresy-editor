@@ -86,6 +86,7 @@ public:
 	void CMD_Clipboard_Paste();
 	void CMD_CopyAndPaste();
 	void CMD_CopyMap();
+	void CMD_CreateNextMap();
 	void CMD_CopyProperties();
 	void CMD_DefaultProps();
 	void CMD_Delete();
@@ -441,7 +442,7 @@ private:
 	bool M_ExportMap(bool inhibit_node_build);
 	void Navigate2D();
 	void Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexcept(false);
-	std::optional<fs::path> Project_AskFile() const;
+	std::optional<fs::path> Project_AskFile(ProjectPackage package) const;
 	void SaveLevel(LoadingData &loading, const SString &level, Wad_file &wad, bool inhibit_node_build);
 	void ConfirmLevelSaveSuccess(const LoadingData &loading, const Wad_file &wad);
 	void SaveLevelAndUpdateWindow(LoadingData& loading, const SString& level, Wad_file &wad, bool inhibit_node_build);

@@ -81,8 +81,11 @@ add_executable(
     m_iwad_test.cpp
     m_keys_test.cpp
     m_parse_test.cpp
+    m_package_test.cpp
+    m_project_test.cpp
     m_select_test.cpp
     m_streams_test.cpp
+    m_zip_test.cpp
     m_testmap_test.cpp
     main_test.cpp
     r_grid_test.cpp

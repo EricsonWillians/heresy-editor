@@ -22,7 +22,9 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
+#include <functional>
 #include <stdint.h>
+#include <vector>
 
 //
 // Exception-safe, atomic file writer. It starts by writing everything to an
@@ -33,12 +35,14 @@ namespace fs = std::filesystem;
 class BufferedOutFile
 {
 public:
+	using Validator = std::function<bool(const fs::path &)>;
+
 	explicit BufferedOutFile(const fs::path& path) : mPath(path)
 	{
 	}
 
 	void write(const void* data, size_t size);
-	void commit();
+	void commit(const Validator &validator = {});
 
 private:
 	const fs::path mPath;	// the target path

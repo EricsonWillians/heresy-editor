@@ -37,6 +37,7 @@
 #include "m_game.h"
 #include "m_files.h"
 #include "m_loadsave.h"
+#include "m_package.h"
 #include "m_testmap.h"
 
 #include "e_main.h"
@@ -1009,6 +1010,15 @@ NewResources loadResources(const LoadingData& loading, const WadData &waddata) n
 					gLog.printf("Error loading Dehacked file %s\n", reinterpret_cast<const char *>(resource.u8string().c_str()));
 				continue;
 			}
+			if (M_ProjectPackageForPath(resource) == ProjectPackage::pk3)
+			{
+				std::shared_ptr<Wad_file> package = M_OpenEditablePackage(resource);
+				if (!package)
+					ThrowException("Cannot load PK3 resource: %s",
+						reinterpret_cast<const char *>(resource.u8string().c_str()));
+				resourceWads.push_back(std::move(package));
+				continue;
+			}
 			// Otherwise wad
 			if (!Wad_file::Validate(resource))
 				ThrowException("Invalid resource WAD file: %s", reinterpret_cast<const char *>(resource.u8string().c_str()));
@@ -1024,6 +1034,7 @@ NewResources loadResources(const LoadingData& loading, const WadData &waddata) n
 		std::shared_ptr<Wad_file> gameWad = Wad_file::Open(newres.loading.iwadName, WadOpenMode::read);
 		if (!gameWad)
 			ThrowException("Could not load IWAD file");
+		M_RefreshProjectMapSlots(newres.loading.project, *gameWad);
 
 		newres.waddata.reloadResources(gameWad, newres.config, resourceWads);
 		dehacked::loadLumps(newres.waddata.master, newres.config);
@@ -1293,7 +1304,8 @@ int EurekaMain(int argc, char *argv[])
 			M_ValidateGivenFiles();
 
 			// TODO: main instance
-			std::shared_ptr<Wad_file> editWad = Wad_file::Open(global::Pwad_list[0], WadOpenMode::append);
+			std::shared_ptr<Wad_file> editWad =
+					M_OpenEditablePackage(global::Pwad_list[0]);
 			if(!editWad)
 			{
 				ThrowException("Cannot load pwad: %s\n", reinterpret_cast<const char *>(global::Pwad_list[0].u8string().c_str()));

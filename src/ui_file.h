@@ -152,6 +152,8 @@ public:
 		SString port;
 		MapFormat mapFormat = MapFormat::invalid;
 		SString nameSpace;
+		ProjectPackage package = ProjectPackage::wad;
+		CampaignMode campaign = CampaignMode::fullIwad;
 		fs::path resources[RES_NUM];
 	};
 
@@ -159,6 +161,8 @@ private:
 	Fl_Choice *game_choice;
 	Fl_Choice *port_choice;
 	Fl_Choice *format_choice;
+	Fl_Choice *package_choice = nullptr;
+	Fl_Choice *campaign_choice = nullptr;
 
 	Fl_Output *res_name[RES_NUM];
 
@@ -179,6 +183,8 @@ private:
 	static void   game_callback(Fl_Choice*, void*);
 	static void   port_callback(Fl_Choice*, void*);
 	static void format_callback(Fl_Choice*, void*);
+	static void package_callback(Fl_Choice*, void*);
+	static void campaign_callback(Fl_Choice*, void*);
 	static void namespace_callback(Fl_Choice*, void*);
 
 	static void  find_callback(Fl_Button*, void*);

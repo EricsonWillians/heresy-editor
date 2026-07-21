@@ -37,6 +37,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_files.h"
+#include "m_package.h"
 #include "m_loadsave.h"
 #include "m_testmap.h"
 #include "r_subdiv.h"
@@ -114,7 +115,7 @@ void Instance::FreshLevel()
 }
 
 
-std::optional<fs::path> Instance::Project_AskFile() const
+std::optional<fs::path> Instance::Project_AskFile(ProjectPackage package) const
 {
 	// this returns false if user cancelled
 
@@ -122,8 +123,8 @@ std::optional<fs::path> Instance::Project_AskFile() const
 
 	chooser.title("Pick file to create");
 	chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
-	chooser.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
-	chooser.filter("Wads\t*.wad");
+	chooser.filter(package == ProjectPackage::pk3 ?
+			"PK3 Packages\t*.pk3" : "WAD Packages\t*.wad");
 	chooser.directory(reinterpret_cast<const char *>(Main_FileOpFolder().u8string().c_str()));
 
 	// Show native chooser
@@ -144,12 +145,21 @@ std::optional<fs::path> Instance::Project_AskFile() const
 			break;  // OK
 	}
 
-	// if extension is missing, add ".wad"
+	const char *requiredExtension = package == ProjectPackage::pk3 ? ".pk3" : ".wad";
+	const char *packageName = package == ProjectPackage::pk3 ? "PK3" : "WAD";
+
+	// If the extension is missing, add the selected package extension.
 	fs::path filename = fs::path(reinterpret_cast<const char8_t *>(chooser.filename()));
 
 	fs::path extension = filename.extension();
 	if(extension.empty())
-		filename = fs::path(filename.u8string() + u8".wad");
+		filename += requiredExtension;
+	else if (!MatchExtensionNoCase(filename, requiredExtension))
+	{
+		DLG_Notify("A %s project destination must use the %s extension.",
+				packageName, requiredExtension);
+		return {};
+	}
 
 	return filename;
 }
@@ -210,21 +220,7 @@ void Instance::CMD_NewProject()
 		if (!level.Main_ConfirmQuit("create a new project"))
 			return;
 
-		/* first, ask for the output file */
-
-		std::optional<fs::path> filename = Project_AskFile();
-
-		if (!filename)
-			return;
-
-		if(global::recent.hasIwadByPath(*filename))
-		{
-			DLG_Notify("Cannot overwrite a game IWAD: %s", reinterpret_cast<const char *>(filename.value().u8string().c_str()));
-			return;
-		}
-
-
-		/* second, query what Game, Port and Resources to use */
+		/* First choose the package, game, port, format, and resources. */
 		// TODO: new instance
 		UI_ProjectSetup dialog(*this, true /* new_project */, false /* is_startup */);
 
@@ -235,31 +231,22 @@ void Instance::CMD_NewProject()
 			return;
 		}
 
-		if(FileExists(*filename))
+		/* Then choose a destination with the matching package extension. */
+		std::optional<fs::path> filename = Project_AskFile(result->package);
+		if (!filename)
+			return;
+
+		if(global::recent.hasIwadByPath(*filename))
 		{
-			if(!DLG_Confirm({"Cancel", "&Overwrite"}, "Are you sure you want to overwrite %s with a new project?", reinterpret_cast<const char *>(filename.value().u8string().c_str())))
-			{
-				return;
-			}
+			DLG_Notify("Cannot overwrite a game IWAD: %s", reinterpret_cast<const char *>(filename.value().u8string().c_str()));
+			return;
 		}
 
-		// Backup existing file before overwriting
-		try
+		if (FileExists(*filename))
 		{
-			std::shared_ptr<Wad_file> oldFile = Wad_file::Open(*filename, WadOpenMode::read);
-			if(oldFile)
-			{
-				if(oldFile->IsIWAD())
-				{
-					DLG_Notify("Overwriting game IWAD files is not allowed: %s", reinterpret_cast<const char *>(filename->u8string().c_str()));
-					return;
-				}
-				M_BackupWad(oldFile.get());
-			}
-		}
-		catch(const std::runtime_error &e)
-		{
-			gLog.printf("Error reading old WAD %s: %s\n", reinterpret_cast<const char *>(filename->u8string().c_str()), e.what());
+			DLG_Notify("The destination package already exists:\n\n%s",
+				reinterpret_cast<const char *>(filename->u8string().c_str()));
+			return;
 		}
 
 
@@ -267,26 +254,27 @@ void Instance::CMD_NewProject()
 		updateLoading(*result, loading);
 		newres = loadResources(loading, wad);
 
+		const std::shared_ptr<Wad_file> &gameWad = newres.waddata.master.gameWad();
+		if (!gameWad || !gameWad->IsReadOnly())
+			ThrowException("The selected IWAD could not be opened read-only.");
 
-		// determine map name (same as first level in the IWAD)
-		SString map_name = "MAP01";
+		newres.loading.project = M_NewProjectMetadata(*filename,
+				result->package, result->campaign, *gameWad);
+		if (newres.loading.project.mapSlots.empty())
+			ThrowException("The selected IWAD does not contain a valid map slot.");
 
-		int idx = newres.waddata.master.gameWad()->LevelFindFirst();
-
-		if (idx >= 0)
-		{
-			idx = newres.waddata.master.gameWad()->LevelHeader(idx);
-			map_name = newres.waddata.master.gameWad()->GetLump(idx)->Name();
-		}
+		const SString map_name = newres.loading.project.mapSlots.front();
 
 		gLog.printf("Creating New File : %s in %s\n", map_name.c_str(), reinterpret_cast<const char *>(filename->u8string().c_str()));
 
 
-		std::shared_ptr<Wad_file> wad = Wad_file::Open(*filename, WadOpenMode::write);
+		std::shared_ptr<PackageBackend> backend =
+				M_CreatePackageBackend(*filename, result->package);
+		std::shared_ptr<Wad_file> wad = backend ? backend->openEditable() : nullptr;
 
 		if (!wad)
 		{
-			DLG_Notify("Unable to create the new WAD file.");
+			DLG_Notify("Unable to create the new project package.");
 			return;
 		}
 
@@ -405,6 +393,75 @@ void Instance::CMD_FreshMap()
 		DLG_ShowError(false, "Could not create fresh map: %s", e.what());
 	}
 
+}
+
+
+void Instance::CMD_CreateNextMap()
+{
+	if (!loaded.project.isExplicit())
+	{
+		DLG_Notify("Create Next Map requires an explicit Heresy Editor project.\n\n"
+				"Use Fresh Map for an ordinary WAD.");
+		return;
+	}
+
+	std::shared_ptr<Wad_file> editWad = wad.master.editWad();
+	if (!editWad || editWad->IsReadOnly())
+	{
+		DLG_Notify("The project WAD is not available for writing.");
+		return;
+	}
+
+	std::optional<SString> nextMap = M_NextProjectMap(loaded.project,
+			loaded.levelName);
+	if (!nextMap)
+	{
+		DLG_Notify("There is no map slot after %s in this campaign.",
+				loaded.levelName.c_str());
+		return;
+	}
+
+	// Persist the current map before any navigation.  This also refreshes the
+	// embedded project metadata and creates the normal project backup.
+	if (!M_SaveMap(false))
+		return;
+
+	if (editWad->LevelFind(*nextMap) >= 0)
+	{
+		LoadLevel(editWad.get(), *nextMap);
+		Status_Set("Opened existing %s", nextMap->c_str());
+		return;
+	}
+
+	Document previousDocument = std::move(level);
+	LoadingData previousLoading = loaded;
+	const fs::path packagePath = editWad->PathName();
+
+	try
+	{
+		FreshLevel();
+		SaveLevelAndUpdateWindow(loaded, *nextMap, *editWad, false);
+		Status_Set("Created %s", nextMap->c_str());
+		RedrawMap();
+	}
+	catch (const std::runtime_error &e)
+	{
+		level = std::move(previousDocument);
+		loaded = std::move(previousLoading);
+
+		// SaveLevel mutates the in-memory WAD before committing it.  Reload the
+		// last validated on-disk package so a failed write cannot poison later
+		// saves in this session.
+		std::shared_ptr<Wad_file> restored = M_OpenEditablePackage(packagePath);
+		if (restored)
+			wad.master.ReplaceEditWad(restored);
+
+		if (main_win)
+			testmap::updateMenuName(main_win->menu_bar, loaded);
+		RedrawMap();
+		DLG_ShowError(false, "%s could not be written, but the original project "
+				"file was preserved: %s", nextMap->c_str(), e.what());
+	}
 }
 
 
@@ -1078,14 +1135,14 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 	// make sure file exists, as Open() with 'a' would create it otherwise
 	if (FileExists(filename))
 	{
-		wad = Wad_file::loadFromFile(filename);
+		wad = M_OpenEditablePackage(filename);
 	}
 
 	if (! wad)
 	{
 		// FIXME: get an error message, add it here
 
-		DLG_Notify("Unable to open that WAD file.");
+		DLG_Notify("Unable to open that WAD or PK3 package.");
 		return;
 	}
 
@@ -1105,12 +1162,15 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 
 	if (lev_num < 0)
 	{
-		DLG_Notify("No levels found in that WAD.");
+		DLG_Notify("No editable levels were found in that package.");
 
 		return;
 	}
 
 	LoadingData loading = gInstance->loaded;
+	// Opening another package must not leak explicit project state from the
+	// previously active package.  Legacy WADs remain implicit projects.
+	loading.project.clear();
 
 	if (wad->FindLump(EUREKA_LUMP))
 	{
@@ -1175,6 +1235,11 @@ void Instance::CMD_OpenMap()
 	}
 
 	LoadingData loading = loaded;
+	if (did_load || (this->wad.master.editWad() &&
+			wad != this->wad.master.editWad()))
+	{
+		loading.project.clear();
+	}
 	if (did_load && wad->FindLump(EUREKA_LUMP) && !loading.parseEurekaLump(global::home_dir,
 		global::old_linux_home_and_cache_dir, global::install_dir, global::recent, wad.get()))
 	{
@@ -1806,6 +1871,7 @@ bool Instance::M_ExportMap(bool inhibit_node_build)
 	}
 	// adopt iwad/port/resources of the target wad
 	LoadingData loading = loaded;
+	loading.project.clear();
 	if (wad->FindLump(EUREKA_LUMP))
 	{
 		if (!loading.parseEurekaLump(global::home_dir, global::old_linux_home_and_cache_dir,
