@@ -8,6 +8,7 @@
 #include "m_files.h"
 #include "m_package.h"
 #include "m_recovery.h"
+#include "m_session.h"
 #include "testUtils/TempDirContext.hpp"
 
 #include "gtest/gtest.h"
@@ -199,6 +200,32 @@ TEST_P(ProjectSaveTest, RotatesWholePackageBackups)
 		EXPECT_EQ(backup.extension(), packagePath().extension());
 		EXPECT_TRUE(M_ValidateEditablePackage(backup));
 	}
+}
+
+
+TEST_P(ProjectSaveTest, PersistsActiveAndNavigatorSessionBesidePackage)
+{
+	std::shared_ptr<Wad_file> package = createPackage();
+	instance.wad.master.ReplaceEditWad(package);
+	instance.loaded.levelName = "MAP02";
+	instance.loaded.gameName = "doom2";
+	instance.loaded.iwadName = getSubPath("portable/doom2.wad");
+	instance.loaded.project.version = ProjectMetadata::CURRENT_VERSION;
+	instance.loaded.project.name = "Session Test";
+	instance.loaded.project.package = GetParam();
+	instance.loaded.project.campaign = CampaignMode::custom;
+	instance.loaded.project.mapSlots = { "MAP02", "MAP01" };
+	instance.Project_SetNavigatorSelection("MAP01");
+
+	ASSERT_TRUE(instance.M_SaveProject(true));
+	std::optional<ProjectSession> session = M_LoadProjectSession(packagePath());
+	ASSERT_TRUE(session);
+	EXPECT_EQ(session->activeMap, "MAP02");
+	EXPECT_EQ(session->navigatorMap, "MAP01");
+	EXPECT_EQ(session->iwadGame, "doom2");
+	EXPECT_EQ(session->iwadFile, "doom2.wad");
+	EXPECT_TRUE(session->iwadRelative.is_relative());
+	EXPECT_TRUE(fs::exists(M_ProjectSessionPath(packagePath())));
 }
 
 INSTANTIATE_TEST_SUITE_P(WadAndPk3, ProjectSaveTest,

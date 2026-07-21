@@ -71,8 +71,9 @@ Creating and reopening a WAD or PK3 project
 
 1. Choose File -> New Project.
 2. Select WAD package or PK3 package, then select the game IWAD, source-port
-   compatibility profile, map format, and optional resource files.  Keep Full
-   IWAD replacement selected for a normal campaign.
+   compatibility profile, map format, and optional resource files.  Choose a
+   full-IWAD campaign, a single-map campaign, or enter a custom ordered list of
+   1-8 character map slots.
 3. Pick a new `.wad` or `.pk3` destination.  Heresy Editor refuses to overwrite
    an existing destination or a known IWAD.
 4. The editor creates and opens the first canonical map (for Doom II this is
@@ -82,10 +83,10 @@ Creating and reopening a WAD or PK3 project
 6. Save the current map with File -> Save Map, or atomically save every dirty
    resident map with File -> Save Project or File -> Save All, then close the
    editor.
-7. Reopen the `.wad` or `.pk3` with File -> Open Map, the recent-files menu, or the
-   command line.  The game/profile settings and campaign slot order are read
-   from the package, and every saved map remains selectable through Open Map or
-   the existing next/previous-map commands.
+7. Reopen the `.wad` or `.pk3` with File -> Open Map, File -> Recent Projects,
+   or the command line.  The game/profile settings and campaign slot order are
+   read from the package.  An adjacent `.heresy` session restores the last map,
+   navigator selection, and a portable IWAD location hint.
 
 Staged implementation plan
 --------------------------
@@ -124,24 +125,37 @@ dirty until Save Project commits them.  The interval is configurable in
 Preferences (two minutes by default, zero to disable).  Existing configurable
 package backups continue to rotate independently before interactive saves.
 
-Stage 5 should add sidecar/session metadata for editor-only state, portable IWAD
-resolution hints, custom campaign layouts, recent-project entries, and restore
-of the last active map and navigator selection.
+Stage 5 is complete: each explicit project has a versioned adjacent
+`<package>.heresy` session sidecar for editor-only state.  It restores the last
+active map and Campaign Navigator selection and stores the IWAD game, basename,
+and package-relative location without serializing an absolute IWAD path.  IWAD
+resolution tries that portable relative hint, a sibling IWAD, remembered IWADs,
+and the normal cross-platform/Steam discovery paths.  The sidecar is parsed
+defensively and written through a validated same-directory atomic replacement.
+
+Full-IWAD, single-map, and custom ordered campaign layouts are available from
+New Project and Manage Project.  Custom slots are normalized, deduplicated, and
+validated before becoming authoritative package metadata.  Explicit WAD and
+PK3 projects have a separate recent-project history keyed by full path, so
+same-named projects in different directories do not collide.  Startup prefers
+the latest recent project and restores its saved session when possible.
 
 Known limitations of the current foundation
 -------------------------------------------
 
 * New Project is a compact project-settings dialog followed by a destination,
   not yet a paged wizard with a final summary.
-* Campaign slots come from maps present in the selected IWAD.  Custom slot
-  lists and engine-specific overrides are not exposed yet.
+* Custom campaign layouts are explicit ordered map-slot lists.  They do not yet
+  model engine-specific episode graphs, secret exits, or display titles.
 * Save Map intentionally writes only the active document.  Use Save Project or
   Save All to commit cached dirty maps in the same atomic package transaction.
 * The cache is intentionally bounded at eight total resident documents.  If
   all eight contain unsaved changes, another map cannot open until one is
   saved; clean documents are evicted automatically as needed.
 * WAD metadata remains embedded in `__EUREKA` for compatibility.  PK3 metadata
-  uses `heresy/project.txt`; a separate editor-only session sidecar is planned.
+  uses `heresy/project.txt`.  The adjacent `.heresy` sidecar contains only
+  editor session state and portable IWAD hints; it has no effect on gameplay.
+  Existing per-map viewport state remains in the checksum-keyed editor cache.
 * Recovery snapshots contain unsaved project settings and dirty resident maps,
   not clean maps that can already be reloaded from the project package.  The
   document cache remains bounded at eight total maps.

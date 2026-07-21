@@ -35,8 +35,10 @@ FEATURES
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
 -  Campaign Navigator with safe multi-map working state
+-  Full-IWAD, single-map, and custom ordered campaign layouts
 -  Atomic Save Project / Save All for WAD and PK3 projects
 -  Per-map autosave with validated, rotating startup recovery
+-  Portable project sessions with recent-project and IWAD restoration
 
 
 SUPPORTED GAMES
@@ -102,7 +104,20 @@ directory names remain compatibility identifiers so existing settings continue
 to work.
 
 You can open a WAD or PK3 project using File/Open Map, or create one with
-File/New Project.
+File/New Project.  New Project and Manage Project support a full IWAD campaign,
+a single-map campaign, or a validated custom map order.  File/Create Next Map
+and Campaign Navigator follow that stored order.
+
+Explicit projects also use an adjacent `<package>.heresy` session file.  It
+restores the last active map and Campaign Navigator selection and records only
+portable IWAD hints: the game, IWAD filename, and a path relative to the
+project package.  It does not contain an absolute IWAD path or gameplay data.
+Keep it beside the WAD or PK3 when moving a project; Heresy Editor validates it,
+ignores damaged or incompatible sessions, and rewrites it atomically.
+
+File/Recent Projects is separate from File/Recent Files, so projects with the
+same filename in different folders remain distinct.  Automatic recent loading
+prefers the latest explicit project and restores its last map when available.
 
 File/Campaign Navigator shows configured and additional maps together with
 their current, dirty, or missing state.  It can open, create, duplicate,

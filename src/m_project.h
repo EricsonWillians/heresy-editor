@@ -74,6 +74,13 @@ struct CampaignMapStatus
 
 std::vector<SString> M_ProjectMapSlots(const Wad_file &iwad);
 
+bool M_IsValidProjectMapName(const SString &name) noexcept;
+
+std::optional<std::vector<SString>> M_ParseCustomMapSlots(
+		const SString &text, SString *error = nullptr);
+
+SString M_FormatCustomMapSlots(const std::vector<SString> &slots);
+
 void M_RefreshProjectMapSlots(ProjectMetadata &project, const Wad_file &iwad);
 
 ProjectMetadata M_NewProjectMetadata(const fs::path &packagePath,

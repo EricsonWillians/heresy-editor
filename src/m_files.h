@@ -78,6 +78,32 @@ public:
 	const RecentMap &Lookup(int index) const;
 };
 
+
+class RecentProjects_c
+{
+private:
+	typedef std::deque<RecentMap> Deque;
+
+	Deque::iterator find(const fs::path &file);
+	Deque list;
+
+public:
+	int getSize() const
+	{
+		return static_cast<int>(list.size());
+	}
+
+	void clear()
+	{
+		list.clear();
+	}
+
+	void insert(const fs::path &file, const SString &map);
+	void Write(std::ostream &stream) const;
+	SString Format(int index) const;
+	const RecentMap &Lookup(int index) const;
+};
+
 //
 // Holds recently collected knowledge
 //
@@ -87,6 +113,8 @@ public:
 	void load(const fs::path &home_dir, const fs::path &old_home_dir);
 	void save(const fs::path &home_dir) const;
 	void addRecent(const fs::path &filename, const SString &map_name, const fs::path &home_dir);
+	void addRecentProject(const fs::path &filename, const SString &map_name,
+			const fs::path &home_dir);
 
 	const fs::path *queryIWAD(const SString &game) const
 	{
@@ -126,6 +154,11 @@ public:
 		return files;
 	}
 
+	const RecentProjects_c &getProjects() const
+	{
+		return projects;
+	}
+
 	bool hasIwadByPath(const fs::path &path) const;
 
 private:
@@ -135,11 +168,13 @@ private:
 	void writePortPaths(std::ostream &os) const;
 
 	RecentFiles_c files;
+	RecentProjects_c projects;
 	std::map<SString, fs::path> known_iwads;
 	std::map<SString, fs::path> port_paths;
 };
 
 void M_OpenRecentFromMenu(void *priv_data);
+void M_OpenRecentProjectFromMenu(void *priv_data);
 
 void M_ValidateGivenFiles();
 int  M_FindGivenFile(const fs::path &filename);

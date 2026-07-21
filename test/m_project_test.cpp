@@ -93,6 +93,27 @@ TEST_F(ProjectTest, MetadataFieldsRoundTrip)
 	EXPECT_FALSE(parsed.parseField("future_setting", "value"));
 }
 
+
+TEST(ProjectModel, ParsesAndValidatesCustomCampaignOrder)
+{
+	SString error;
+	std::optional<std::vector<SString>> slots = M_ParseCustomMapSlots(
+			"map01, MAP02  e1m9;secret_1", &error);
+	ASSERT_TRUE(slots) << error.c_str();
+	EXPECT_EQ(*slots, (std::vector<SString>{
+			"MAP01", "MAP02", "E1M9", "SECRET_1" }));
+	EXPECT_EQ(M_FormatCustomMapSlots(*slots),
+			"MAP01, MAP02, E1M9, SECRET_1");
+
+	EXPECT_FALSE(M_ParseCustomMapSlots("", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("MAP01 map01", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("TOO_LONG_1", &error));
+	EXPECT_FALSE(M_ParseCustomMapSlots("MAP-01", &error));
+	EXPECT_TRUE(M_IsValidProjectMapName("E1M1"));
+	EXPECT_TRUE(M_IsValidProjectMapName("SECRET_1"));
+	EXPECT_FALSE(M_IsValidProjectMapName("SECRET_01"));
+}
+
 TEST_F(ProjectTest, SingleMapCampaignHasNoNextSlot)
 {
 	auto iwad = Wad_file::Open(getSubPath("doom.wad"), WadOpenMode::write);

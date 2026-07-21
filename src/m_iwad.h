@@ -40,6 +40,10 @@ IWADSearchLocations M_SystemIWADSearchLocations(
 std::map<SString, fs::path> M_DiscoverIWADs(
 		const std::vector<SString> &games, const IWADSearchLocations &locations);
 
+// Validate both the IWAD header and the canonical game filename.  This is
+// intentionally stricter than Wad_file::Validate(), which also accepts PWADs.
+bool M_IsIWADForGame(const fs::path &path, const SString &game);
+
 #endif // HERESY_M_IWAD_H
 
 //--- editor settings ---

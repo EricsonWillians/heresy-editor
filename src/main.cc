@@ -891,6 +891,8 @@ void Main_Loop()
 			const bool discardChanges = gInstance->Project_HasChanges();
 			if (gInstance->Project_ConfirmClose("quit"))
 			{
+				gInstance->Project_SaveSession();
+				gInstance->M_SaveUserState();
 				if (discardChanges && !gInstance->Project_HasDeferredRecovery())
 					gInstance->Project_DiscardRecovery();
 				break;
@@ -1335,8 +1337,18 @@ int EurekaMain(int argc, char *argv[])
 		// Note: there is logic in M_ParseEurekaLump() to ensure that command
 		// line arguments can override the EUREKA_LUMP values.
 
+		std::optional<ProjectSession> initialProjectSession;
 		if (gInstance->wad.master.editWad())
 		{
+			initialProjectSession = gInstance->Project_LoadSession(
+					gInstance->wad.master.editWad()->PathName(), gInstance->loaded,
+					true /* command-line IWAD wins */);
+			if (gInstance->loaded.levelName.empty() && initialProjectSession &&
+					gInstance->wad.master.editWad()->LevelFind(
+							initialProjectSession->activeMap) >= 0)
+			{
+				gInstance->loaded.levelName = initialProjectSession->activeMap;
+			}
 			if (! gInstance->loaded.parseEurekaLump(global::home_dir,
 					global::old_linux_home_and_cache_dir, global::install_dir, global::recent,
 					gInstance->wad.master.editWad().get(), true /* keep_cmd_line_args */))
@@ -1344,6 +1356,8 @@ int EurekaMain(int argc, char *argv[])
 				// user cancelled the load
 				gInstance->wad.master.RemoveEditWad();
 			}
+			else
+				gInstance->Project_AdoptSession(initialProjectSession);
 		}
 
 
@@ -1376,6 +1390,7 @@ int EurekaMain(int argc, char *argv[])
 		// do this *after* loading the level, since config file parsing
 		// can depend on the map format and UDMF namespace.
 		gInstance->Main_LoadResources(gInstance->loaded);	// TODO: instance management
+		gInstance->Project_SaveSession();
 		gInstance->Project_CheckRecovery();
 
 

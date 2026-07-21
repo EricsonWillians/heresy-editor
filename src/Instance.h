@@ -27,6 +27,7 @@
 #include "m_game.h"
 #include "m_loadsave.h"
 #include "m_nodes.h"
+#include "m_session.h"
 #include "main.h"
 #include "r_grid.h"
 #include "r_render.h"
@@ -407,6 +408,15 @@ public:
 	bool Project_CheckRecovery();
 	void Project_DiscardRecovery() noexcept;
 	void Project_ResetAutosaveTimer() noexcept;
+	std::optional<ProjectSession> Project_LoadSession(const fs::path &packagePath,
+			LoadingData &loading, bool preserveExplicitIWAD);
+	void Project_AdoptSession(const std::optional<ProjectSession> &session);
+	void Project_SaveSession() noexcept;
+	void Project_SetNavigatorSelection(const SString &mapName) noexcept;
+	const SString &Project_NavigatorSelection() const noexcept
+	{
+		return navigatorSelection_;
+	}
 	bool Project_HasChanges() const noexcept
 	{
 		return projectMetadataDirty_ || level.hasChanges() ||
@@ -429,6 +439,8 @@ public:
 		documentCache.clear();
 		projectMetadataDirty_ = false;
 		recoveryDeferred_ = false;
+		projectSession_.reset();
+		navigatorSelection_.clear();
 	}
 
 private:
@@ -583,6 +595,8 @@ public:	// will be private when we encapsulate everything
 	std::unordered_map<SString, Fl_Menu_Button *> op_all_menus;
 	bool projectMetadataDirty_ = false;
 	bool recoveryDeferred_ = false;
+	std::optional<ProjectSession> projectSession_;
+	SString navigatorSelection_;
 	int autosaveInterval_ = -1;
 	std::chrono::steady_clock::time_point autosaveDeadline_{};
 	// these are grabbed from FL_MOUSEWHEEL events
