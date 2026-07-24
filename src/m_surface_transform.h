@@ -25,7 +25,7 @@
 #include <vector>
 
 class EditOperation;
-class Document;
+struct Document;
 class Img_c;
 class Palette;
 enum class MapFormat;

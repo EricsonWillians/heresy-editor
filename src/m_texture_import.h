@@ -16,7 +16,7 @@
 
 namespace fs = std::filesystem;
 
-class Document;
+struct Document;
 class Img_c;
 struct ConfigData;
 struct WadData;
