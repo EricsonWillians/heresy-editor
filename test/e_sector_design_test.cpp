@@ -7,6 +7,7 @@
 #include "Document.h"
 #include "Instance.h"
 #include "LineDef.h"
+#include "m_config.h"
 #include "Sector.h"
 #include "SideDef.h"
 #include "Vertex.h"
@@ -18,11 +19,13 @@
 
 #include "gtest/gtest.h"
 
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <numbers>
+#include <set>
 #include <sstream>
 
 namespace
@@ -88,6 +91,12 @@ int CountWidgetsByType(Fl_Group &group)
 			result += CountWidgetsByType<Widget>(*childGroup);
 	}
 	return result;
+}
+
+DesignPreviewRole ExpectedArchitectureRole(
+		SectorArchitectureElement element)
+{
+	return M_ArchitectureDescriptor(element).role;
 }
 
 bool PointInsidePath(const std::vector<v2double_t> &path,
@@ -485,6 +494,1414 @@ TEST_F(SmartSectorFixture,
 	EXPECT_EQ(doc.numSectors(), 1);
 	EXPECT_EQ(doc.numLinedefs(), 4);
 	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   VolumetricArchitectureBuildsDistinctFloorWallCeilingAndWaterGeometry)
+{
+	const int host = addBoxSector(-1024, -768, 1024, 768, 24, 192);
+	const int bystander =
+			addBoxSector(1536, -256, 1792, 256, 8, 160);
+	doc.sectors[host]->light = 176;
+	doc.sectors[host]->tag = 41;
+	doc.sectors[bystander]->light = 112;
+	doc.sectors[bystander]->type = 9;
+	doc.sectors[bystander]->tag = 73;
+	const Sector originalHost = *doc.sectors[host];
+	const Sector originalBystander = *doc.sectors[bystander];
+	const int originalVertices = doc.numVertices();
+	const int originalLines = doc.numLinedefs();
+	const int originalSides = doc.numSidedefs();
+	const int originalSectors = doc.numSectors();
+
+	SectorDesignRequest request;
+	request.mode = SectorDesignMode::architecture;
+	request.anchors = {{-640, -480}, {640, 480}};
+	request.architectureStyle = SectorArchitectureStyle::gothic;
+	request.architectureBays = 4;
+	request.architectureSize = 24;
+	request.architectureHeight = 16;
+	request.architectureMargin = 32;
+
+	for (int element = static_cast<int>(
+				SectorArchitectureElement::raisedDais);
+		 element <= static_cast<int>(
+				SectorArchitectureElement::raisedBridge);
+		 ++element)
+		for (MapFormat format :
+			 {MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+		{
+			request.architectureElement =
+					static_cast<SectorArchitectureElement>(element);
+			const SectorDesignPlan preview = M_PlanSectorDesign(
+					doc, config, nullptr, format, request);
+			SString issueText;
+			for (const SectorDesignIssue &issue : preview.issues)
+				issueText += SString::printf(
+						"\n- %s", issue.message.c_str());
+			ASSERT_TRUE(preview.valid())
+					<< "element " << element << ", format "
+					<< static_cast<int>(format)
+					<< issueText.c_str();
+			ASSERT_GT(preview.plannedStructures, 0);
+			ASSERT_EQ(preview.shapes.size(),
+					  static_cast<size_t>(preview.plannedStructures));
+			EXPECT_EQ(preview.retainedSectors,
+					  std::vector<int>({host}));
+			for (const PlannedSectorShape &shape : preview.shapes)
+			{
+				EXPECT_EQ(shape.role, ExpectedArchitectureRole(
+						request.architectureElement));
+				EXPECT_EQ(shape.modelSector, host);
+				EXPECT_GE(shape.outer.size(), 4u);
+			}
+
+			switch (request.architectureElement)
+			{
+				case SectorArchitectureElement::raisedDais:
+				ASSERT_EQ(preview.shapes.size(), 1u);
+				EXPECT_GT(preview.shapes[0].floorDelta, 0);
+				EXPECT_FALSE(preview.shapes[0].closed);
+				break;
+				case SectorArchitectureElement::sunkenCourt:
+				ASSERT_EQ(preview.shapes.size(), 1u);
+				EXPECT_LT(preview.shapes[0].floorDelta, 0);
+				break;
+				case SectorArchitectureElement::tieredZiggurat:
+				ASSERT_EQ(preview.shapes.size(), 3u);
+				EXPECT_EQ(preview.shapes[1].modelShape, 0);
+				EXPECT_EQ(preview.shapes[2].modelShape, 1);
+				EXPECT_TRUE(std::all_of(
+						preview.shapes.begin(), preview.shapes.end(),
+						[](const PlannedSectorShape &shape)
+						{
+							return shape.floorDelta > 0 &&
+									!shape.closed;
+						}));
+				break;
+				case SectorArchitectureElement::grandStair:
+				ASSERT_EQ(preview.shapes.size(), 4u);
+				for (size_t index = 0;
+					 index < preview.shapes.size(); ++index)
+					EXPECT_EQ(preview.shapes[index].floorDelta,
+							  16 * static_cast<int>(index + 1));
+				break;
+				case SectorArchitectureElement::fountainBasin:
+				ASSERT_EQ(preview.shapes.size(), 2u);
+				EXPECT_LT(preview.shapes[0].floorDelta, 0);
+				EXPECT_TRUE(preview.shapes[1].closed);
+				EXPECT_EQ(preview.shapes[1].modelShape, 0);
+				break;
+				case SectorArchitectureElement::reflectingPool:
+				ASSERT_EQ(preview.shapes.size(), 1u);
+				EXPECT_LT(preview.shapes[0].floorDelta, 0);
+				break;
+				case SectorArchitectureElement::balconyGallery:
+				ASSERT_EQ(preview.shapes.size(), 2u);
+				EXPECT_GT(preview.shapes[0].floorDelta, 0);
+				EXPECT_EQ(preview.shapes[1].modelShape, 0);
+				EXPECT_LT(preview.shapes[1].floorDelta, 0);
+				EXPECT_FALSE(preview.shapes[0].closed);
+				EXPECT_FALSE(preview.shapes[1].closed);
+				break;
+				case SectorArchitectureElement::processionalChannel:
+				ASSERT_EQ(preview.shapes.size(), 1u);
+				EXPECT_LT(preview.shapes[0].floorDelta, 0);
+				break;
+				case SectorArchitectureElement::screenWall:
+				ASSERT_EQ(preview.shapes.size(), 5u);
+				EXPECT_TRUE(std::all_of(
+						preview.shapes.begin(), preview.shapes.end(),
+						[](const PlannedSectorShape &shape)
+						{
+							return shape.closed;
+						}));
+				break;
+				case SectorArchitectureElement::cofferedCeiling:
+				ASSERT_EQ(preview.shapes.size(), 8u);
+				EXPECT_TRUE(std::all_of(
+						preview.shapes.begin(), preview.shapes.end(),
+						[](const PlannedSectorShape &shape)
+						{
+							return shape.ceilingDelta > 0 &&
+									shape.floorDelta == 0 &&
+									!shape.closed;
+						}));
+				break;
+				case SectorArchitectureElement::groinVaults:
+				ASSERT_EQ(preview.shapes.size(), 4u);
+				EXPECT_TRUE(std::all_of(
+						preview.shapes.begin(), preview.shapes.end(),
+						[](const PlannedSectorShape &shape)
+						{
+							return shape.ceilingDelta > 0 &&
+									!shape.closed;
+						}));
+				break;
+				case SectorArchitectureElement::raisedBridge:
+				ASSERT_EQ(preview.shapes.size(), 1u);
+				EXPECT_GT(preview.shapes[0].floorDelta, 0);
+				break;
+				default:
+					FAIL() << "unexpected volumetric element";
+			}
+
+			SectorDesignPlan applied;
+			ASSERT_TRUE(M_ApplySectorDesign(
+					doc, config, nullptr, format, request, &applied))
+					<< "element " << element << ", format "
+					<< static_cast<int>(format);
+			ASSERT_EQ(applied.createdSectors.size(),
+					  preview.shapes.size());
+			std::map<int, bool> generatedSectorClosed;
+			for (size_t shapeIndex = 0;
+				 shapeIndex < preview.shapes.size(); ++shapeIndex)
+			{
+				generatedSectorClosed.emplace(
+						applied.createdSectors[shapeIndex],
+						preview.shapes[shapeIndex].closed);
+			}
+			std::vector<int> expectedFloors(
+					preview.shapes.size(), originalHost.floorh);
+			std::vector<int> expectedCeilings(
+					preview.shapes.size(), originalHost.ceilh);
+			for (size_t shapeIndex = 0;
+				 shapeIndex < preview.shapes.size(); ++shapeIndex)
+			{
+				const PlannedSectorShape &shape =
+						preview.shapes[shapeIndex];
+				const int parent = shape.modelShape;
+				const int baseFloor = parent >= 0 ?
+						expectedFloors[parent] : originalHost.floorh;
+				const int baseCeiling = parent >= 0 ?
+						expectedCeilings[parent] : originalHost.ceilh;
+				expectedFloors[shapeIndex] =
+						baseFloor + shape.floorDelta;
+				expectedCeilings[shapeIndex] = shape.closed ?
+						expectedFloors[shapeIndex] :
+						baseCeiling + shape.ceilingDelta;
+				const int sector = applied.createdSectors[shapeIndex];
+				ASSERT_TRUE(doc.isSector(sector));
+				EXPECT_EQ(doc.sectors[sector]->floorh,
+						  expectedFloors[shapeIndex]);
+				EXPECT_EQ(doc.sectors[sector]->ceilh,
+						  expectedCeilings[shapeIndex]);
+				int connectedBoundaries = 0;
+				for (const std::shared_ptr<LineDef> &line :
+						doc.linedefs)
+				{
+					const int right = line->right >= 0 ?
+							doc.sidedefs[line->right]->sector : -1;
+					const int left = line->left >= 0 ?
+							doc.sidedefs[line->left]->sector : -1;
+					if (!((right == sector && left >= 0) ||
+						  (left == sector && right >= 0)))
+						continue;
+					EXPECT_TRUE(line->TwoSided());
+					const int neighbor = right == sector ? left : right;
+					const auto neighborShape =
+							generatedSectorClosed.find(neighbor);
+					const bool solidBoundary = shape.closed ||
+							(neighborShape != generatedSectorClosed.end() &&
+							 neighborShape->second);
+					if (solidBoundary)
+						EXPECT_NE(
+								line->flags & MLF_Blocking, 0u);
+					else
+						EXPECT_EQ(
+								line->flags & MLF_Blocking, 0u);
+					connectedBoundaries++;
+				}
+				EXPECT_GT(connectedBoundaries, 0)
+						<< "element " << element << ", format "
+						<< static_cast<int>(format)
+						<< ", sector " << sector;
+			}
+			EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+			EXPECT_EQ(doc.sectors[host]->ceilh, originalHost.ceilh);
+			EXPECT_EQ(doc.sectors[host]->light, originalHost.light);
+			EXPECT_EQ(doc.sectors[host]->tag, originalHost.tag);
+			EXPECT_EQ(doc.sectors[bystander]->floorh,
+					  originalBystander.floorh);
+			EXPECT_EQ(doc.sectors[bystander]->ceilh,
+					  originalBystander.ceilh);
+			EXPECT_EQ(doc.sectors[bystander]->floor_tex,
+					  originalBystander.floor_tex);
+			EXPECT_EQ(doc.sectors[bystander]->ceil_tex,
+					  originalBystander.ceil_tex);
+			EXPECT_EQ(doc.sectors[bystander]->light,
+					  originalBystander.light);
+			EXPECT_EQ(doc.sectors[bystander]->type,
+					  originalBystander.type);
+			EXPECT_EQ(doc.sectors[bystander]->tag,
+					  originalBystander.tag);
+
+			ASSERT_TRUE(doc.basis.undo());
+			EXPECT_EQ(doc.numVertices(), originalVertices);
+			EXPECT_EQ(doc.numLinedefs(), originalLines);
+			EXPECT_EQ(doc.numSidedefs(), originalSides);
+			EXPECT_EQ(doc.numSectors(), originalSectors);
+			EXPECT_FALSE(doc.basis.undo());
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   ArchitectureCatalogHasFiftyEightStableOrderedDescriptors)
+{
+	const auto &catalog = M_ArchitectureCatalog();
+	ASSERT_EQ(catalog.size(), 58u);
+	std::set<SString> ids;
+	std::array<int, 6> families{};
+	for (size_t index = 0; index < catalog.size(); ++index)
+	{
+		const SectorArchitectureDescriptor &descriptor = catalog[index];
+		EXPECT_EQ(static_cast<size_t>(descriptor.element), index);
+		EXPECT_TRUE(ids.insert(descriptor.id).second)
+				<< descriptor.id;
+		EXPECT_FALSE(SString(descriptor.label).empty());
+		EXPECT_FALSE(SString(descriptor.description).empty());
+		EXPECT_LE(descriptor.minimumBays, descriptor.defaultBays);
+		EXPECT_GE(descriptor.maximumBays, descriptor.defaultBays);
+		EXPECT_GE(descriptor.defaultSize, descriptor.minimumSize);
+		EXPECT_TRUE(M_ArchitectureSupportsFunction(
+				descriptor.element,
+				SectorArchitectureFunction::staticGeometry));
+		families[static_cast<size_t>(descriptor.family)]++;
+		EXPECT_EQ(&M_ArchitectureDescriptor(descriptor.element),
+				  &descriptor);
+	}
+	EXPECT_EQ(families, (std::array<int, 6>{21, 8, 8, 8, 6, 7}));
+	EXPECT_STREQ(catalog.front().id, "pillar");
+	EXPECT_STREQ(catalog[27].id, "raised_bridge");
+	EXPECT_STREQ(catalog[28].id, "cross_core");
+	EXPECT_STREQ(catalog.back().id, "beam_lattice");
+	EXPECT_TRUE(M_ArchitectureSupportsFunction(
+			SectorArchitectureElement::centralPlatform,
+			SectorArchitectureFunction::smartLift));
+	EXPECT_FALSE(M_ArchitectureSupportsFunction(
+			SectorArchitectureElement::raisedDais,
+			SectorArchitectureFunction::smartLift));
+	EXPECT_TRUE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::switchbackStair).
+					sizeUsesPlayerClearance);
+	EXPECT_TRUE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::bifurcatedStair).
+					sizeUsesPlayerClearance);
+	EXPECT_TRUE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::landingCatwalk).
+					sizeUsesPlayerClearance);
+	EXPECT_TRUE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::crossingBridges).
+					sizeUsesPlayerClearance);
+	EXPECT_TRUE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::gatehousePassage).
+					sizeUsesPlayerClearance);
+	EXPECT_FALSE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::spiralStair).
+					sizeUsesPlayerClearance);
+	EXPECT_FALSE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::perimeterMoat).
+					sizeUsesPlayerClearance);
+	EXPECT_FALSE(
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::domedCeiling).
+					sizeUsesPlayerClearance);
+}
+
+TEST_F(SmartSectorFixture,
+	   EveryStage25StructurePlansAndAppliesInsideAHostInEveryFormat)
+{
+	const int host = addBoxSector(
+			-2048, -1536, 2048, 1536, 24, 256);
+	const Sector originalHost = *doc.sectors[host];
+	const int originalVertices = doc.numVertices();
+	const int originalLines = doc.numLinedefs();
+	const int originalSides = doc.numSidedefs();
+	const int originalSectors = doc.numSectors();
+
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.element) <
+			static_cast<int>(SectorArchitectureElement::crossCore))
+			continue;
+		for (MapFormat format :
+				{MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+		{
+			SectorDesignRequest request;
+			request.mode = SectorDesignMode::architecture;
+			request.anchors = {{-768, -576}, {768, 576}};
+			request.architectureElement = descriptor.element;
+			request.architectureStyle =
+					SectorArchitectureStyle::functional;
+			request.architectureBays = descriptor.defaultBays;
+			request.architectureSize =
+					std::max(16.0, descriptor.defaultSize);
+			request.architectureHeight =
+					std::max(8.0, descriptor.defaultHeight);
+			request.architectureMargin = 64;
+
+			const SectorDesignPlan first = M_PlanSectorDesign(
+					doc, config, nullptr, format, request);
+			const SectorDesignPlan second = M_PlanSectorDesign(
+					doc, config, nullptr, format, request);
+			SString issues;
+			for (const SectorDesignIssue &issue : first.issues)
+				issues += SString::printf("\n- %s",
+						issue.message.c_str());
+			ASSERT_TRUE(first.valid())
+					<< descriptor.id << ", format "
+					<< static_cast<int>(format) << issues.c_str();
+			ASSERT_GT(first.plannedStructures, 0)
+					<< descriptor.id;
+			ASSERT_EQ(first.shapes.size(),
+					static_cast<size_t>(first.plannedStructures));
+			ASSERT_EQ(first.shapes.size(), second.shapes.size());
+			for (size_t shapeIndex = 0;
+				 shapeIndex < first.shapes.size(); ++shapeIndex)
+			{
+				const PlannedSectorShape &shape =
+						first.shapes[shapeIndex];
+				EXPECT_EQ(shape.outer,
+						  second.shapes[shapeIndex].outer)
+						<< descriptor.id;
+				EXPECT_EQ(shape.role, descriptor.role)
+						<< descriptor.id;
+				EXPECT_EQ(shape.modelSector, host)
+						<< descriptor.id;
+			}
+
+			SectorDesignPlan applied;
+			const bool appliedOkay = M_ApplySectorDesign(
+					doc, config, nullptr, format, request, &applied);
+			SString applyIssues;
+			for (const SectorDesignIssue &issue : applied.issues)
+				applyIssues += SString::printf(
+						"\n- %s", issue.message.c_str());
+			ASSERT_TRUE(appliedOkay)
+					<< descriptor.id << ", format "
+					<< static_cast<int>(format)
+					<< applyIssues.c_str();
+			EXPECT_EQ(doc.sectors[host]->floorh,
+					  originalHost.floorh);
+			EXPECT_EQ(doc.sectors[host]->ceilh,
+					  originalHost.ceilh);
+			EXPECT_EQ(doc.sectors[host]->light,
+					  originalHost.light);
+			if (descriptor.family ==
+						SectorArchitectureFamily::structuralSupports ||
+				descriptor.family ==
+						SectorArchitectureFamily::wallsScreens)
+			{
+				const std::set<int> generated(
+						applied.createdSectors.begin(),
+						applied.createdSectors.end());
+				int solidBoundaries = 0;
+				for (const std::shared_ptr<LineDef> &line :
+						doc.linedefs)
+				{
+					const int right = line->right >= 0 ?
+							doc.sidedefs[line->right]->sector : -1;
+					const int left = line->left >= 0 ?
+							doc.sidedefs[line->left]->sector : -1;
+					if (generated.count(right) ==
+						generated.count(left))
+						continue;
+					solidBoundaries++;
+					EXPECT_NE(line->flags & MLF_Blocking, 0u)
+							<< descriptor.id;
+				}
+				EXPECT_GT(solidBoundaries, 0)
+						<< descriptor.id;
+			}
+			ASSERT_TRUE(doc.basis.undo()) << descriptor.id;
+			EXPECT_EQ(doc.numVertices(), originalVertices);
+			EXPECT_EQ(doc.numLinedefs(), originalLines);
+			EXPECT_EQ(doc.numSidedefs(), originalSides);
+			EXPECT_EQ(doc.numSectors(), originalSectors);
+			EXPECT_FALSE(doc.basis.undo());
+		}
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   PostSwitchbackCatalogTailWorksAtPracticalFootprintsInBothAxes)
+{
+	addBoxSector(-512, -512, 512, 512, 24, 256);
+	const int first = static_cast<int>(
+			SectorArchitectureElement::bifurcatedStair);
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.element) < first)
+			continue;
+		for (const std::pair<v2double_t, v2double_t> &drag : {
+				std::pair<v2double_t, v2double_t>{
+						{-128, -96}, {128, 96}},
+				std::pair<v2double_t, v2double_t>{
+						{-96, -128}, {96, 128}}
+			 })
+		{
+			SectorDesignRequest request;
+			request.mode = SectorDesignMode::architecture;
+			request.anchors = {drag.first, drag.second};
+			request.architectureElement = descriptor.element;
+			request.architectureStyle =
+					SectorArchitectureStyle::gothic;
+			request.architectureBays = descriptor.defaultBays;
+			request.architectureSize = std::max(
+					descriptor.defaultSize,
+					descriptor.minimumSize);
+			request.architectureHeight =
+					descriptor.defaultHeight;
+			request.architectureMargin = 16;
+
+			const SectorDesignPlan preview = M_PlanSectorDesign(
+					doc, config, nullptr, MapFormat::doom, request);
+			SString issues;
+			for (const SectorDesignIssue &issue : preview.issues)
+				issues += SString::printf(
+						"\n- %s", issue.message.c_str());
+			ASSERT_TRUE(preview.valid())
+					<< descriptor.id << issues.c_str();
+			ASSERT_GT(preview.plannedStructures, 0)
+					<< descriptor.id;
+		}
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   WallAndCeilingFamiliesApplyTheirPhysicalEffectsInEveryFormat)
+{
+	const int host = addBoxSector(
+			-512, -512, 512, 512, 24, 192);
+	doc.sectors[host]->light = 176;
+	doc.sectors[host]->tag = 41;
+	const Sector originalHost = *doc.sectors[host];
+	const int originalVertices = doc.numVertices();
+	const int originalLines = doc.numLinedefs();
+	const int originalSides = doc.numSidedefs();
+	const int originalSectors = doc.numSectors();
+
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		const bool wall =
+				descriptor.family ==
+						SectorArchitectureFamily::wallsScreens;
+		const bool ceiling =
+				descriptor.family ==
+						SectorArchitectureFamily::ceilingsVaults;
+		if (!wall && !ceiling)
+			continue;
+
+		for (MapFormat format :
+				{MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+		{
+			SectorDesignRequest request;
+			request.mode = SectorDesignMode::architecture;
+			request.anchors = {{-256, -192}, {256, 192}};
+			request.architectureElement = descriptor.element;
+			request.architectureStyle =
+					SectorArchitectureStyle::gothic;
+			request.architectureBays = descriptor.defaultBays;
+			request.architectureSize =
+					descriptor.defaultSize;
+			request.architectureHeight =
+					descriptor.defaultHeight;
+			request.architectureMargin =
+					descriptor.defaultMargin;
+
+			SectorDesignPlan applied;
+			const bool didApply = M_ApplySectorDesign(
+					doc, config, nullptr, format,
+					request, &applied);
+			SString applyIssues;
+			for (const SectorDesignIssue &issue : applied.issues)
+				applyIssues += SString::printf(
+						"\n- %s", issue.message.c_str());
+			ASSERT_TRUE(didApply)
+					<< descriptor.id << ", format "
+					<< static_cast<int>(format)
+					<< applyIssues.c_str();
+			ASSERT_EQ(applied.createdSectors.size(),
+					  applied.shapes.size())
+					<< descriptor.id;
+			const std::set<int> generated(
+					applied.createdSectors.begin(),
+					applied.createdSectors.end());
+			for (int sector : applied.createdSectors)
+			{
+				ASSERT_TRUE(doc.isSector(sector));
+				EXPECT_EQ(doc.sectors[sector]->floorh,
+						  originalHost.floorh)
+						<< descriptor.id;
+				if (wall)
+					EXPECT_EQ(doc.sectors[sector]->ceilh,
+							  originalHost.floorh)
+							<< descriptor.id;
+				else
+					EXPECT_NE(doc.sectors[sector]->ceilh,
+							  originalHost.ceilh)
+							<< descriptor.id;
+				EXPECT_EQ(doc.sectors[sector]->light,
+						  originalHost.light)
+						<< descriptor.id;
+				EXPECT_EQ(doc.sectors[sector]->tag,
+						  originalHost.tag)
+						<< descriptor.id;
+			}
+
+			int interfaces = 0;
+			for (const std::shared_ptr<LineDef> &line :
+					doc.linedefs)
+			{
+				const int right = line->right >= 0 ?
+						doc.sidedefs[line->right]->sector : -1;
+				const int left = line->left >= 0 ?
+						doc.sidedefs[line->left]->sector : -1;
+				if (!generated.count(right) &&
+					!generated.count(left))
+					continue;
+				ASSERT_TRUE(line->TwoSided())
+						<< descriptor.id;
+				if (wall)
+					EXPECT_NE(line->flags & MLF_Blocking, 0u)
+							<< descriptor.id;
+				else
+					EXPECT_EQ(line->flags & MLF_Blocking, 0u)
+							<< descriptor.id;
+				interfaces++;
+			}
+			EXPECT_GT(interfaces, 0) << descriptor.id;
+			EXPECT_EQ(doc.sectors[host]->floorh,
+					  originalHost.floorh);
+			EXPECT_EQ(doc.sectors[host]->ceilh,
+					  originalHost.ceilh);
+			EXPECT_EQ(doc.sectors[host]->light,
+					  originalHost.light);
+			EXPECT_EQ(doc.sectors[host]->tag,
+					  originalHost.tag);
+
+			ASSERT_TRUE(doc.basis.undo()) << descriptor.id;
+			EXPECT_EQ(doc.numVertices(), originalVertices);
+			EXPECT_EQ(doc.numLinedefs(), originalLines);
+			EXPECT_EQ(doc.numSidedefs(), originalSides);
+			EXPECT_EQ(doc.numSectors(), originalSectors);
+			EXPECT_FALSE(doc.basis.undo());
+		}
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   WallAndScreenFootprintsFollowTheGestureLongAxis)
+{
+	addBoxSector(-512, -512, 512, 512, 24, 192);
+
+	struct Bounds
+	{
+		double minX = std::numeric_limits<double>::infinity();
+		double minY = std::numeric_limits<double>::infinity();
+		double maxX = -std::numeric_limits<double>::infinity();
+		double maxY = -std::numeric_limits<double>::infinity();
+	};
+	auto includeShape = [](Bounds &bounds,
+						   const PlannedSectorShape &shape)
+	{
+		for (const v2double_t &point : shape.outer)
+		{
+			bounds.minX = std::min(bounds.minX, point.x);
+			bounds.minY = std::min(bounds.minY, point.y);
+			bounds.maxX = std::max(bounds.maxX, point.x);
+			bounds.maxY = std::max(bounds.maxY, point.y);
+		}
+	};
+
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (descriptor.family !=
+				SectorArchitectureFamily::wallsScreens)
+			continue;
+
+		SectorDesignRequest request;
+		request.mode = SectorDesignMode::architecture;
+		request.anchors = {{-384, -96}, {384, 96}};
+		request.architectureElement = descriptor.element;
+		request.architectureStyle =
+				SectorArchitectureStyle::gothic;
+		request.architectureBays = descriptor.defaultBays;
+		request.architectureSize = descriptor.defaultSize;
+		request.architectureHeight = descriptor.defaultHeight;
+		request.architectureMargin = descriptor.defaultMargin;
+
+		const SectorDesignPlan plan = M_PlanSectorDesign(
+				doc, config, nullptr, MapFormat::doom, request);
+		ASSERT_TRUE(plan.valid()) << descriptor.id;
+		ASSERT_FALSE(plan.shapes.empty()) << descriptor.id;
+		EXPECT_TRUE(std::all_of(
+				plan.shapes.begin(), plan.shapes.end(),
+				[](const PlannedSectorShape &shape)
+				{
+					return shape.closed;
+				})) << descriptor.id;
+		Bounds bounds;
+		for (const PlannedSectorShape &shape : plan.shapes)
+			includeShape(bounds, shape);
+		EXPECT_GT(bounds.maxX - bounds.minX,
+				  (bounds.maxY - bounds.minY) * 2.0)
+				<< descriptor.id;
+
+		if (descriptor.element ==
+				SectorArchitectureElement::gatehousePassage)
+		{
+			ASSERT_EQ(plan.shapes.size(), 2u);
+			std::array<Bounds, 2> masses;
+			includeShape(masses[0], plan.shapes[0]);
+			includeShape(masses[1], plan.shapes[1]);
+			if (masses[0].minX > masses[1].minX)
+				std::swap(masses[0], masses[1]);
+			EXPECT_LT(masses[0].maxX, 0.0);
+			EXPECT_GT(masses[1].minX, 0.0);
+			EXPECT_GE(
+					masses[1].minX - masses[0].maxX,
+					descriptor.defaultSize - 0.01);
+		}
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   CrossVaultAndBeamLatticeBuildDistinctCeilingTopology)
+{
+	const int host = addBoxSector(
+			-512, -512, 512, 512, 24, 192);
+	doc.sectors[host]->light = 176;
+	doc.sectors[host]->tag = 41;
+	const Sector originalHost = *doc.sectors[host];
+	const int originalVertices = doc.numVertices();
+	const int originalLines = doc.numLinedefs();
+	const int originalSides = doc.numSidedefs();
+	const int originalSectors = doc.numSectors();
+
+	const SectorArchitectureDescriptor &vaultDescriptor =
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::ribbedCrossVault);
+	SectorDesignRequest vault;
+	vault.mode = SectorDesignMode::architecture;
+	vault.anchors = {{-256, -192}, {256, 192}};
+	vault.architectureElement =
+			SectorArchitectureElement::ribbedCrossVault;
+	vault.architectureBays = vaultDescriptor.defaultBays;
+	vault.architectureSize = vaultDescriptor.defaultSize;
+	vault.architectureHeight = vaultDescriptor.defaultHeight;
+	vault.architectureMargin = vaultDescriptor.defaultMargin;
+	const SectorDesignPlan vaultPlan = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, vault);
+	ASSERT_TRUE(vaultPlan.valid());
+	ASSERT_EQ(vaultPlan.shapes.size(), 5u);
+	const int fullRelief = static_cast<int>(
+			vaultDescriptor.defaultHeight);
+	const int quadrantRelief = std::max(1, fullRelief / 2);
+	EXPECT_EQ(std::count_if(
+			vaultPlan.shapes.begin(), vaultPlan.shapes.end(),
+			[&](const PlannedSectorShape &shape)
+			{
+				return shape.ceilingDelta == fullRelief;
+			}), 1);
+	EXPECT_EQ(std::count_if(
+			vaultPlan.shapes.begin(), vaultPlan.shapes.end(),
+			[&](const PlannedSectorShape &shape)
+			{
+				return shape.ceilingDelta == quadrantRelief;
+			}), 4);
+	EXPECT_TRUE(std::all_of(
+			vaultPlan.shapes.begin(), vaultPlan.shapes.end(),
+			[](const PlannedSectorShape &shape)
+			{
+				return shape.floorDelta == 0 && !shape.closed &&
+						shape.holes.empty();
+			}));
+
+	const SectorArchitectureDescriptor &beamDescriptor =
+			M_ArchitectureDescriptor(
+					SectorArchitectureElement::beamLattice);
+	SectorDesignRequest beam;
+	beam.mode = SectorDesignMode::architecture;
+	beam.anchors = {{-256, -192}, {256, 192}};
+	beam.architectureElement =
+			SectorArchitectureElement::beamLattice;
+	beam.architectureBays = beamDescriptor.defaultBays;
+	beam.architectureSize = beamDescriptor.defaultSize;
+	beam.architectureHeight = beamDescriptor.defaultHeight;
+	beam.architectureMargin = beamDescriptor.defaultMargin;
+	const SectorDesignPlan beamPlan = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, beam);
+	ASSERT_TRUE(beamPlan.valid());
+	ASSERT_EQ(beamPlan.shapes.size(), 1u);
+	EXPECT_EQ(beamPlan.shapes.front().holes.size(), 9u);
+	EXPECT_EQ(beamPlan.plannedRetainedCells, 9);
+	EXPECT_TRUE(beamPlan.shapes.front().holesRetainModel);
+	EXPECT_EQ(beamPlan.shapes.front().floorDelta, 0);
+	EXPECT_EQ(beamPlan.shapes.front().ceilingDelta,
+			  -static_cast<int>(beamDescriptor.defaultHeight));
+	EXPECT_GT(beamPlan.shapes.front().outer.size(), 8u);
+
+	SectorDesignPlan applied;
+	ASSERT_TRUE(M_ApplySectorDesign(
+			doc, config, nullptr, MapFormat::doom,
+			beam, &applied));
+	ASSERT_EQ(applied.createdSectors.size(), 1u);
+	const int beamSector = applied.createdSectors.front();
+	ASSERT_TRUE(doc.isSector(beamSector));
+	EXPECT_EQ(doc.sectors[beamSector]->floorh,
+			  originalHost.floorh);
+	EXPECT_EQ(doc.sectors[beamSector]->ceilh,
+			  originalHost.ceilh -
+					static_cast<int>(
+							beamDescriptor.defaultHeight));
+	EXPECT_EQ(doc.numSectors(),
+			  originalSectors + 1 +
+					static_cast<int>(
+							beamPlan.shapes.front().holes.size()));
+	for (int sector = originalSectors;
+		 sector < doc.numSectors(); ++sector)
+	{
+		if (sector == beamSector)
+			continue;
+		EXPECT_EQ(doc.sectors[sector]->floorh, originalHost.floorh);
+		EXPECT_EQ(doc.sectors[sector]->ceilh, originalHost.ceilh);
+		EXPECT_EQ(doc.sectors[sector]->light, originalHost.light);
+		EXPECT_EQ(doc.sectors[sector]->tag, originalHost.tag);
+	}
+	for (const std::shared_ptr<LineDef> &line : doc.linedefs)
+	{
+		const int right = line->right >= 0 ?
+				doc.sidedefs[line->right]->sector : -1;
+		const int left = line->left >= 0 ?
+				doc.sidedefs[line->left]->sector : -1;
+		if (right == beamSector || left == beamSector)
+		{
+			EXPECT_TRUE(line->TwoSided());
+			EXPECT_EQ(line->flags & MLF_Blocking, 0u);
+		}
+	}
+
+	ASSERT_TRUE(doc.basis.undo());
+	EXPECT_EQ(doc.numVertices(), originalVertices);
+	EXPECT_EQ(doc.numLinedefs(), originalLines);
+	EXPECT_EQ(doc.numSidedefs(), originalSides);
+	EXPECT_EQ(doc.numSectors(), originalSectors);
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   EveryStage25StructureBuildsANewVoidHallInEveryFormat)
+{
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.element) <
+			static_cast<int>(SectorArchitectureElement::crossCore))
+			continue;
+		for (MapFormat format :
+				{MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+		{
+			SectorDesignRequest request;
+			request.mode = SectorDesignMode::architecture;
+			request.anchors = {{-768, -576}, {768, 576}};
+			request.architectureElement = descriptor.element;
+			request.architectureStyle =
+					SectorArchitectureStyle::functional;
+			request.architectureBays = descriptor.defaultBays;
+			request.architectureSize =
+					std::max(16.0, descriptor.defaultSize);
+			request.architectureHeight =
+					std::max(8.0, descriptor.defaultHeight);
+			request.architectureMargin = 64;
+			request.properties.floorMode =
+					SectorValueMode::absolute;
+			request.properties.floorValue = 24;
+			request.properties.ceilingMode =
+					SectorValueMode::absolute;
+			request.properties.ceilingValue = 256;
+
+			const SectorDesignPlan preview = M_PlanSectorDesign(
+					doc, config, nullptr, format, request);
+			SString issues;
+			for (const SectorDesignIssue &issue : preview.issues)
+				issues += SString::printf(
+						"\n- %s", issue.message.c_str());
+			ASSERT_TRUE(preview.valid())
+					<< descriptor.id << ", format "
+					<< static_cast<int>(format) << issues.c_str();
+			EXPECT_EQ(preview.plannedArchitectureHosts, 1);
+			ASSERT_EQ(preview.shapes.size(),
+					static_cast<size_t>(
+							preview.plannedStructures + 1));
+			EXPECT_EQ(preview.shapes.front().role,
+					  DesignPreviewRole::proposed);
+			for (size_t index = 1; index < preview.shapes.size(); ++index)
+			{
+				EXPECT_TRUE(preview.shapes[index].inheritModelOnly)
+						<< descriptor.id;
+				EXPECT_GE(preview.shapes[index].modelShape, 0)
+						<< descriptor.id;
+			}
+
+			SectorDesignPlan applied;
+			ASSERT_TRUE(M_ApplySectorDesign(
+					doc, config, nullptr, format, request, &applied))
+					<< descriptor.id << ", format "
+					<< static_cast<int>(format);
+			EXPECT_EQ(applied.createdSectors.size(),
+					static_cast<size_t>(
+							applied.plannedStructures + 1));
+			ASSERT_TRUE(doc.basis.undo());
+			EXPECT_EQ(doc.numVertices(), 0);
+			EXPECT_EQ(doc.numLinedefs(), 0);
+			EXPECT_EQ(doc.numSidedefs(), 0);
+			EXPECT_EQ(doc.numSectors(), 0);
+			EXPECT_FALSE(doc.basis.undo());
+		}
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   Stage25StyleAwareAndMirroredStructuresChangeTheirOutlines)
+{
+	addBoxSector(-2048, -1536, 2048, 1536, 24, 256);
+	const std::array<SectorArchitectureElement, 8> styled{
+		SectorArchitectureElement::crossCore,
+		SectorArchitectureElement::hollowTower,
+		SectorArchitectureElement::buttressedTower,
+		SectorArchitectureElement::steppedMonument,
+		SectorArchitectureElement::octagonalPodium,
+		SectorArchitectureElement::fountainCourt,
+		SectorArchitectureElement::gatehousePassage,
+		SectorArchitectureElement::domedCeiling
+	};
+	for (SectorArchitectureElement element : styled)
+	{
+		std::vector<std::vector<std::vector<v2double_t>>> outlines;
+		for (int style = 0;
+			 style <= static_cast<int>(
+					SectorArchitectureStyle::infernal);
+			 ++style)
+		{
+			const SectorArchitectureDescriptor &descriptor =
+					M_ArchitectureDescriptor(element);
+			SectorDesignRequest request;
+			request.mode = SectorDesignMode::architecture;
+			request.anchors = {{-768, -576}, {768, 576}};
+			request.architectureElement = element;
+			request.architectureStyle =
+					static_cast<SectorArchitectureStyle>(style);
+			request.architectureBays = descriptor.defaultBays;
+			request.architectureSize = std::max(
+					32.0,
+					M_MinimumArchitectureSize(
+							request.architectureStyle, element));
+			request.architectureHeight = 16;
+			request.architectureMargin = 64;
+			const SectorDesignPlan plan = M_PlanSectorDesign(
+					doc, config, nullptr, MapFormat::doom, request);
+			ASSERT_TRUE(plan.valid())
+					<< descriptor.id << ", style " << style;
+			std::vector<std::vector<v2double_t>> signature;
+			for (const PlannedSectorShape &shape : plan.shapes)
+				signature.push_back(shape.outer);
+			outlines.push_back(std::move(signature));
+		}
+		for (size_t style = 1; style < outlines.size(); ++style)
+			EXPECT_NE(outlines[style - 1], outlines[style])
+					<< M_ArchitectureDescriptor(element).id
+					<< ", style " << style;
+	}
+
+	const std::array<SectorArchitectureElement, 5> mirrored{
+		SectorArchitectureElement::cornerTerraces,
+		SectorArchitectureElement::switchbackStair,
+		SectorArchitectureElement::bifurcatedStair,
+		SectorArchitectureElement::spiralStair,
+		SectorArchitectureElement::staggeredScreen
+	};
+	for (SectorArchitectureElement element : mirrored)
+	{
+		const SectorArchitectureDescriptor &descriptor =
+				M_ArchitectureDescriptor(element);
+		SectorDesignRequest request;
+		request.mode = SectorDesignMode::architecture;
+		request.anchors = {{-768, -576}, {768, 576}};
+		request.architectureElement = element;
+		request.architectureBays = descriptor.defaultBays;
+		request.architectureSize =
+				std::max(24.0, descriptor.defaultSize);
+		request.architectureHeight = 8;
+		request.architectureMargin = 64;
+		const SectorDesignPlan normal = M_PlanSectorDesign(
+				doc, config, nullptr, MapFormat::doom, request);
+		request.architectureMirrored = true;
+		const SectorDesignPlan flipped = M_PlanSectorDesign(
+				doc, config, nullptr, MapFormat::doom, request);
+		ASSERT_TRUE(normal.valid()) << descriptor.id;
+		ASSERT_TRUE(flipped.valid()) << descriptor.id;
+		ASSERT_EQ(normal.shapes.size(), flipped.shapes.size());
+		bool differs = false;
+		for (size_t index = 0; index < normal.shapes.size(); ++index)
+			differs = differs ||
+					normal.shapes[index].outer !=
+							flipped.shapes[index].outer;
+		EXPECT_TRUE(differs) << descriptor.id;
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   Stage25AnchorOrderControlsCascadeAndStairDirection)
+{
+	addBoxSector(-1024, -768, 1024, 768, 24, 256);
+	for (SectorArchitectureElement element :
+			{SectorArchitectureElement::steppedCascade,
+			 SectorArchitectureElement::splitLevelStage,
+			 SectorArchitectureElement::switchbackStair})
+	{
+		const SectorArchitectureDescriptor &descriptor =
+				M_ArchitectureDescriptor(element);
+		SectorDesignRequest request;
+		request.mode = SectorDesignMode::architecture;
+		request.anchors = {{-640, -384}, {640, 384}};
+		request.architectureElement = element;
+		request.architectureBays = descriptor.defaultBays;
+		request.architectureSize =
+				std::max(24.0, descriptor.defaultSize);
+		request.architectureHeight = 8;
+		request.architectureMargin = 48;
+		const SectorDesignPlan forward = M_PlanSectorDesign(
+				doc, config, nullptr, MapFormat::doom, request);
+		std::reverse(request.anchors.begin(), request.anchors.end());
+		const SectorDesignPlan reverse = M_PlanSectorDesign(
+				doc, config, nullptr, MapFormat::doom, request);
+		ASSERT_TRUE(forward.valid()) << descriptor.id;
+		ASSERT_TRUE(reverse.valid()) << descriptor.id;
+		ASSERT_EQ(forward.shapes.size(), reverse.shapes.size());
+		EXPECT_NE(forward.shapes.front().outer,
+				  reverse.shapes.front().outer)
+				<< descriptor.id;
+	}
+}
+
+TEST_F(SmartSectorFixture,
+	   Stage25PreviewLabelsClearanceAndDescriptorLimitsAreValidated)
+{
+	addBoxSector(-1024, -768, 1024, 768, 0, 128);
+	config.miscInfo.player_h = 56;
+	SectorDesignRequest request;
+	request.mode = SectorDesignMode::architecture;
+	request.anchors = {{-640, -384}, {640, 384}};
+	request.architectureElement =
+			SectorArchitectureElement::switchbackStair;
+	request.architectureBays = 4;
+	request.architectureSize = 24;
+	request.architectureHeight = 12;
+	request.architectureMargin = 48;
+	const SectorDesignPlan preview = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request);
+	ASSERT_TRUE(preview.valid());
+	EXPECT_TRUE(std::any_of(
+			preview.previewLabels.begin(),
+			preview.previewLabels.end(),
+			[](const DesignPreviewLabel &label)
+			{
+				return label.text.find("forward ->") !=
+						SString::npos;
+			}));
+	EXPECT_TRUE(std::any_of(
+			preview.previewLabels.begin(),
+			preview.previewLabels.end(),
+			[](const DesignPreviewLabel &label)
+			{
+				return label.text.find("floor +") !=
+						SString::npos;
+			}));
+	EXPECT_TRUE(std::any_of(
+			preview.issues.begin(), preview.issues.end(),
+			[](const SectorDesignIssue &issue)
+			{
+				return issue.severity ==
+							SectorDesignIssueSeverity::warning &&
+						issue.message.find("player height") !=
+							SString::npos;
+			}));
+
+	config.miscInfo.player_r = 32;
+	request.architectureElement =
+			SectorArchitectureElement::gatehousePassage;
+	request.architectureBays = 1;
+	request.architectureSize = 32;
+	request.architectureHeight = 16;
+	const SectorDesignPlan narrowGate = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request);
+	ASSERT_TRUE(narrowGate.valid());
+	EXPECT_TRUE(std::any_of(
+			narrowGate.issues.begin(), narrowGate.issues.end(),
+			[](const SectorDesignIssue &issue)
+			{
+				return issue.message.find("player diameter") !=
+						SString::npos;
+			}));
+
+	request.architectureElement =
+			SectorArchitectureElement::spiralStair;
+	request.architectureBays = 5;
+	EXPECT_FALSE(M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request).valid());
+	request.architectureBays = 12;
+	request.architectureSize = 1;
+	EXPECT_FALSE(M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request).valid());
+	request.architectureSize = 24;
+	request.rotation =
+			std::numeric_limits<double>::quiet_NaN();
+	EXPECT_FALSE(M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request).valid());
+	const int sectors = doc.numSectors();
+	EXPECT_FALSE(M_ApplySectorDesign(
+			doc, config, nullptr, MapFormat::doom, request));
+	EXPECT_EQ(doc.numSectors(), sectors);
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   CentralPlatformSmartLiftIsOptionalAndAtomicAcrossFormats)
+{
+	config.line_types[62].desc = "Encoded lift";
+	config.line_types[88].desc = "Tagged lift";
+	SectorActionPreset encoded;
+	encoded.kind = SectorActionKind::lift;
+	encoded.id = "encoded";
+	encoded.label = "Encoded lift";
+	encoded.special = 62;
+	encoded.activation = ActivationPolicy::encoded;
+	config.sector_action_presets.push_back(encoded);
+	SectorActionPreset tagged;
+	tagged.kind = SectorActionKind::lift;
+	tagged.id = "tagged";
+	tagged.label = "Tagged lift";
+	tagged.special = 88;
+	tagged.activation = ActivationPolicy::useRepeat;
+	tagged.args[0].targetTag = true;
+	tagged.args[1].value = 16;
+	config.sector_action_presets.push_back(tagged);
+
+	for (MapFormat format :
+			{MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+	{
+		const int host = addBoxSector(
+				-512, -512, 512, 512, 24, 192);
+		SectorDesignRequest request;
+		request.mode = SectorDesignMode::architecture;
+		request.anchors = {{-256, -192}, {256, 192}};
+		request.architectureElement =
+				SectorArchitectureElement::centralPlatform;
+		request.architectureSize = 24;
+		request.architectureHeight = 32;
+		request.architectureMargin = 32;
+		request.architectureFunction =
+				SectorArchitectureFunction::smartLift;
+		request.actionPresetId =
+				format == MapFormat::doom ? "encoded" : "tagged";
+
+		const SectorDesignPlan preview = M_PlanSectorDesign(
+				doc, config, nullptr, format, request);
+		ASSERT_TRUE(preview.valid());
+		ASSERT_EQ(preview.shapes.size(), 1u);
+		EXPECT_TRUE(preview.shapes.front().smartLift);
+		EXPECT_EQ(preview.shapes.front().role,
+				  DesignPreviewRole::lift);
+		EXPECT_EQ(preview.plannedLifts, 1);
+		ASSERT_TRUE(preview.resolvedActionPreset);
+		EXPECT_EQ(preview.resolvedActionPreset->id,
+				  request.actionPresetId);
+
+		SectorDesignPlan applied;
+		ASSERT_TRUE(M_ApplySectorDesign(
+				doc, config, nullptr, format, request, &applied));
+		ASSERT_EQ(applied.createdSectors.size(), 1u);
+		const int platform = applied.createdSectors.front();
+		EXPECT_EQ(doc.sectors[platform]->floorh, 56);
+		EXPECT_GT(doc.sectors[platform]->tag, 0);
+		int triggers = 0;
+		for (const std::shared_ptr<LineDef> &line : doc.linedefs)
+			if (line->type ==
+				(format == MapFormat::doom ? 62 : 88))
+				triggers++;
+		EXPECT_GT(triggers, 0);
+		ASSERT_TRUE(doc.basis.undo());
+		EXPECT_EQ(doc.numSectors(), host + 1);
+		EXPECT_FALSE(doc.basis.undo());
+		doc.vertices.clear();
+		doc.linedefs.clear();
+		doc.sidedefs.clear();
+		doc.sectors.clear();
+	}
+
+	const int host = addBoxSector(
+			-512, -512, 512, 512, 24, 192);
+	SectorDesignRequest unsupported;
+	unsupported.mode = SectorDesignMode::architecture;
+	unsupported.anchors = {{-256, -192}, {256, 192}};
+	unsupported.architectureElement =
+			SectorArchitectureElement::raisedDais;
+	unsupported.architectureFunction =
+			SectorArchitectureFunction::smartLift;
+	const SectorDesignPlan rejected = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, unsupported);
+	EXPECT_FALSE(rejected.valid());
+	EXPECT_EQ(doc.numSectors(), host + 1);
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   ArchitectureFloorConnectsHostAndAdjacentSectorAcrossEitherWinding)
+{
+	const int host = addSector(24, 192);
+	const int neighbor = addSector(24, 192);
+	const int v0 = addVertex(-256, -256);
+	const int v1 = addVertex(-256, 256);
+	const int v2 = addVertex(0, 256);
+	const int v3 = addVertex(0, -256);
+	const int v4 = addVertex(256, 256);
+	const int v5 = addVertex(256, -256);
+	addLine(v0, v1, host);
+	addLine(v1, v2, host);
+	// The host is deliberately on the right side of this downward line.
+	// Reversing it below puts the host on the left and certifies both cases.
+	const int shared = addLine(v2, v3, host, neighbor);
+	addLine(v3, v0, host);
+	addLine(v2, v4, neighbor);
+	addLine(v4, v5, neighbor);
+	addLine(v5, v3, neighbor);
+
+	const int originalVertices = doc.numVertices();
+	const int originalLines = doc.numLinedefs();
+	const int originalSides = doc.numSidedefs();
+	const int originalSectors = doc.numSectors();
+
+	for (MapFormat format :
+		 {MapFormat::doom, MapFormat::hexen, MapFormat::udmf})
+		for (bool reverseShared : {false, true})
+		{
+			if (reverseShared)
+			{
+				std::swap(doc.linedefs[shared]->start,
+						  doc.linedefs[shared]->end);
+				std::swap(doc.linedefs[shared]->right,
+						  doc.linedefs[shared]->left);
+			}
+
+			for (SectorArchitectureElement element :
+				 {SectorArchitectureElement::raisedDais,
+				  SectorArchitectureElement::centralPlatform,
+				  SectorArchitectureElement::crossingBridges,
+				  SectorArchitectureElement::crossCanal,
+				  SectorArchitectureElement::partitionWall})
+			{
+				SectorDesignRequest request;
+				request.mode = SectorDesignMode::architecture;
+				// Wall generators follow the gesture's long axis. Give the
+				// partition a horizontal footprint so its actual wall mass,
+				// rather than merely its layout envelope, reaches the shared
+				// boundary being exercised here.
+				request.anchors =
+						element ==
+								SectorArchitectureElement::partitionWall ?
+							std::vector<v2double_t>{
+									{-192, -96}, {0, 96}} :
+							std::vector<v2double_t>{
+									{-192, -192}, {0, 192}};
+				request.architectureHostSector = host;
+				request.architectureElement = element;
+				request.architectureSize = 16;
+				request.architectureHeight = 16;
+				request.architectureMargin = 0;
+
+				SectorDesignPlan preview = M_PlanSectorDesign(
+						doc, config, nullptr, format, request);
+				ASSERT_TRUE(preview.valid())
+						<< static_cast<int>(element) << " format "
+						<< static_cast<int>(format) << " reverse "
+						<< reverseShared;
+
+				SectorDesignPlan applied;
+				ASSERT_TRUE(M_ApplySectorDesign(
+						doc, config, nullptr, format,
+						request, &applied));
+				ASSERT_EQ(applied.createdSectors.size(), 1u);
+				const int generated =
+						applied.createdSectors.front();
+				int hostPortals = 0;
+				int neighborPortals = 0;
+				for (const std::shared_ptr<LineDef> &line :
+						doc.linedefs)
+				{
+					const int right = line->right >= 0 ?
+							doc.sidedefs[line->right]->sector : -1;
+					const int left = line->left >= 0 ?
+							doc.sidedefs[line->left]->sector : -1;
+					const bool generatedHost =
+							(right == generated && left == host) ||
+							(left == generated && right == host);
+					const bool generatedNeighbor =
+							(right == generated &&
+							 left == neighbor) ||
+							(left == generated &&
+							 right == neighbor);
+					if (!generatedHost && !generatedNeighbor)
+						continue;
+					EXPECT_TRUE(line->TwoSided());
+					if (element ==
+						SectorArchitectureElement::partitionWall)
+						EXPECT_NE(
+								line->flags & MLF_Blocking, 0u);
+					else
+						EXPECT_EQ(
+								line->flags & MLF_Blocking, 0u);
+					hostPortals += generatedHost;
+					neighborPortals += generatedNeighbor;
+				}
+				EXPECT_GT(hostPortals, 0);
+				EXPECT_GT(neighborPortals, 0);
+				if (element ==
+					SectorArchitectureElement::crossCanal)
+					EXPECT_EQ(doc.sectors[generated]->floorh, 8);
+				else if (element ==
+						 SectorArchitectureElement::partitionWall)
+					EXPECT_EQ(
+							doc.sectors[generated]->floorh,
+							doc.sectors[generated]->ceilh);
+				else
+					EXPECT_EQ(doc.sectors[generated]->floorh, 40);
+
+				ASSERT_TRUE(doc.basis.undo());
+				EXPECT_EQ(doc.numVertices(), originalVertices);
+				EXPECT_EQ(doc.numLinedefs(), originalLines);
+				EXPECT_EQ(doc.numSidedefs(), originalSides);
+				EXPECT_EQ(doc.numSectors(), originalSectors);
+				EXPECT_FALSE(doc.basis.undo());
+			}
+
+			if (reverseShared)
+			{
+				std::swap(doc.linedefs[shared]->start,
+						  doc.linedefs[shared]->end);
+				std::swap(doc.linedefs[shared]->right,
+						  doc.linedefs[shared]->left);
+			}
+		}
+}
+
+TEST_F(SmartSectorFixture,
+	   NestedArchitectureUsesTransitivePlanOwnershipInANewVoidHall)
+{
+	SectorDesignRequest request;
+	request.mode = SectorDesignMode::architecture;
+	request.anchors = {{-256, -192}, {256, 192}};
+	request.architectureElement =
+			SectorArchitectureElement::tieredZiggurat;
+	request.architectureSize = 32;
+	request.architectureHeight = 12;
+	request.architectureMargin = 24;
+	request.properties.floorMode = SectorValueMode::absolute;
+	request.properties.floorValue = 8;
+	request.properties.ceilingMode = SectorValueMode::absolute;
+	request.properties.ceilingValue = 192;
+
+	const SectorDesignPlan preview = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request);
+	ASSERT_TRUE(preview.valid());
+	ASSERT_EQ(preview.plannedArchitectureHosts, 1);
+	ASSERT_EQ(preview.plannedStructures, 3);
+	ASSERT_EQ(preview.shapes.size(), 4u);
+	EXPECT_EQ(preview.shapes[1].modelShape, 0);
+	EXPECT_EQ(preview.shapes[2].modelShape, 1);
+	EXPECT_EQ(preview.shapes[3].modelShape, 2);
+
+	SectorDesignPlan applied;
+	ASSERT_TRUE(M_ApplySectorDesign(
+			doc, config, nullptr, MapFormat::doom, request, &applied));
+	ASSERT_EQ(applied.createdSectors.size(), 4u);
+	EXPECT_EQ(doc.sectors[applied.createdSectors[0]]->floorh, 8);
+	EXPECT_EQ(doc.sectors[applied.createdSectors[1]]->floorh, 20);
+	EXPECT_EQ(doc.sectors[applied.createdSectors[2]]->floorh, 32);
+	EXPECT_EQ(doc.sectors[applied.createdSectors[3]]->floorh, 44);
+	ASSERT_TRUE(doc.basis.undo());
+	EXPECT_EQ(doc.numVertices(), 0);
+	EXPECT_EQ(doc.numLinedefs(), 0);
+	EXPECT_EQ(doc.numSidedefs(), 0);
+	EXPECT_EQ(doc.numSectors(), 0);
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   ArchitecturalStructuresProtectHolesAndGrandStairsFollowTheGesture)
+{
+	const int host = addRingSector(320, 64, 24, 192);
+	SectorDesignRequest request;
+	request.mode = SectorDesignMode::architecture;
+	request.anchors = {{-240, -240}, {240, 240}};
+	request.architectureElement =
+			SectorArchitectureElement::raisedDais;
+	request.architectureSize = 24;
+	request.architectureHeight = 16;
+	request.architectureMargin = 80;
+
+	const SectorDesignPlan blocked = M_PlanSectorDesign(
+			doc, config, nullptr, MapFormat::doom, request);
+	EXPECT_FALSE(blocked.valid());
+	EXPECT_TRUE(std::any_of(
+			blocked.issues.begin(), blocked.issues.end(),
+			[](const SectorDesignIssue &issue)
+			{
+				return issue.message.find("foreign cell") !=
+						SString::npos;
+			}));
+	EXPECT_EQ(blocked.retainedSectors, std::vector<int>({host}));
+
+	// The directional property is pure planning geometry, so use a void hall
+	// to avoid coupling this check to fixture construction details.
+	SectorDesignRequest stair;
+	stair.mode = SectorDesignMode::architecture;
+	stair.anchors = {{256, -128}, {-256, 128}};
+	stair.architectureElement =
+			SectorArchitectureElement::grandStair;
+	stair.architectureBays = 4;
+	stair.architectureSize = 48;
+	stair.architectureHeight = 8;
+	stair.architectureMargin = 16;
+	Instance emptyInstance;
+	const SectorDesignPlan stairs = M_PlanSectorDesign(
+			emptyInstance.level, config, nullptr, MapFormat::doom, stair);
+	ASSERT_TRUE(stairs.valid());
+	ASSERT_EQ(stairs.shapes.size(), 5u);
+	// Shape zero is the generated hall. The first, lowest tread lies at the
+	// gesture start (positive X); the last, highest tread lies at negative X.
+	auto centroidX = [](const PlannedSectorShape &shape)
+	{
+		double result = 0;
+		for (const v2double_t &point : shape.outer)
+			result += point.x;
+		return result / shape.outer.size();
+	};
+	EXPECT_GT(centroidX(stairs.shapes[1]),
+			  centroidX(stairs.shapes[4]));
+	EXPECT_EQ(stairs.shapes[1].floorDelta, 8);
+	EXPECT_EQ(stairs.shapes[4].floorDelta, 32);
 }
 
 TEST_F(SmartSectorFixture,
@@ -2809,7 +4226,7 @@ TEST_F(SmartSectorFixture,
 
 	UI_SectorDesigner panel(inst, 0, 0, 340, 760);
 	panel.Open(SectorDesignMode::architecture);
-	Fl_Input *size = FindInputByLabel(panel, "Struct. size:");
+	Fl_Input *size = FindInputByLabel(panel, "Diameter:");
 	Fl_Choice *style = FindWidgetByLabel<Fl_Choice>(panel, "Style:");
 	ASSERT_NE(size, nullptr);
 	ASSERT_NE(style, nullptr);
@@ -2949,6 +4366,568 @@ TEST_F(SmartSectorFixture,
 }
 
 TEST_F(SmartSectorFixture,
+	   ArchitecturePanelBuildsPurposeBuiltCeilingGeometry)
+{
+	const int host = addBoxSector(-384, -320, 384, 320, 24, 160);
+	const Sector originalHost = *doc.sectors[host];
+	inst.conf = config;
+	inst.loaded.gameName = "architecture_coffered_ceiling";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+
+	UI_SectorDesigner panel(inst, 0, 0, 360, 760);
+	panel.Open(SectorDesignMode::architecture);
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	Fl_Input *elevation =
+			FindInputByLabel(panel, "Elevation:");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+	ASSERT_NE(elevation, nullptr);
+	family->value(5);
+	family->do_callback();
+	structure->value(0);
+	structure->do_callback();
+	ASSERT_TRUE(elevation->active());
+	elevation->value("24");
+	elevation->do_callback();
+
+	panel.CanvasClick({-288, -224}, 0);
+	panel.CanvasMove({288, 224}, 0, true);
+	panel.CanvasRelease({288, 224}, 0);
+	ASSERT_TRUE(panel.Plan().valid());
+	ASSERT_EQ(panel.Plan().plannedStructures, 8);
+	EXPECT_TRUE(std::all_of(
+			panel.Plan().shapes.begin(), panel.Plan().shapes.end(),
+			[](const PlannedSectorShape &shape)
+			{
+				return shape.role ==
+							DesignPreviewRole::architectureCeiling &&
+						!shape.closed &&
+						shape.floorDelta == 0 &&
+						shape.ceilingDelta == 24;
+			}));
+	EXPECT_NE(panel.ReviewText().find(
+			"Architecture family: Ceilings and vaults. "
+			"Structure: Coffered ceiling"), SString::npos);
+	EXPECT_NE(panel.ReviewText().find(
+			"24.0-unit elevation/depth"), SString::npos);
+
+	panel.Commit();
+	EXPECT_EQ(doc.numSectors(), 9);
+	EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+	EXPECT_EQ(doc.sectors[host]->ceilh, originalHost.ceilh);
+	ASSERT_TRUE(inst.edit.Selected);
+	EXPECT_EQ(inst.edit.Selected->count_obj(), 8);
+	for (int sector = 1; sector < doc.numSectors(); ++sector)
+	{
+		EXPECT_EQ(doc.sectors[sector]->floorh, originalHost.floorh);
+		EXPECT_EQ(doc.sectors[sector]->ceilh,
+				  originalHost.ceilh + 24);
+	}
+	ASSERT_TRUE(doc.basis.undo());
+	EXPECT_EQ(doc.numSectors(), 1);
+	EXPECT_FALSE(doc.basis.undo());
+	panel.Close();
+}
+
+TEST_F(SmartSectorFixture,
+	   ArchitectureFamiliesDragPreviewAndBuildInsideAnExistingSector)
+{
+	const int host = addBoxSector(-640, -512, 640, 512, 24, 192);
+	const Sector originalHost = *doc.sectors[host];
+	inst.conf = config;
+	inst.loaded.gameName = "architecture_family_existing_host";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+
+	UI_SectorDesigner panel(inst, 0, 0, 360, 800);
+	panel.Open(SectorDesignMode::architecture);
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+
+	struct Scenario
+	{
+		int family;
+		int structure;
+		const char *familyName;
+		DesignPreviewRole role;
+	};
+	const Scenario scenarios[] =
+	{
+		{1, 0, "Floors and terraces",
+		 DesignPreviewRole::architectureFloor},
+		{2, 0, "Circulation",
+		 DesignPreviewRole::architectureCirculation},
+		{3, 1, "Waterworks",
+		 DesignPreviewRole::architectureWater},
+		{4, 0, "Walls and screens",
+		 DesignPreviewRole::architectureWall},
+		{5, 0, "Ceilings and vaults",
+		 DesignPreviewRole::architectureCeiling}
+	};
+
+	for (const Scenario &scenario : scenarios)
+	{
+		family->value(scenario.family);
+		family->do_callback();
+		structure->value(scenario.structure);
+		structure->do_callback();
+
+		panel.CanvasClick({-384, -288}, 0);
+		panel.CanvasMove({384, 288}, 0, true);
+		panel.CanvasRelease({384, 288}, 0);
+		ASSERT_TRUE(panel.Plan().valid()) << scenario.familyName;
+		ASSERT_GT(panel.Plan().plannedStructures, 0);
+		EXPECT_TRUE(std::all_of(
+				panel.Plan().shapes.begin(), panel.Plan().shapes.end(),
+				[&](const PlannedSectorShape &shape)
+				{
+					return shape.role == scenario.role &&
+							shape.modelSector == host;
+				}));
+		ASSERT_TRUE(inst.edit.designAssistPreview);
+		EXPECT_TRUE(std::any_of(
+				inst.edit.designAssistPreview->paths.begin(),
+				inst.edit.designAssistPreview->paths.end(),
+				[&](const DesignPreviewPath &path)
+				{
+					return path.role == scenario.role &&
+							path.filled && path.closed;
+				}));
+		const SString review = panel.ReviewText();
+		EXPECT_NE(review.find(SString::printf(
+				"Architecture family: %s", scenario.familyName)),
+				SString::npos);
+		EXPECT_NE(review.find("Effect:"), SString::npos);
+		EXPECT_NE(review.find("preview)"), SString::npos);
+
+		panel.Commit();
+		ASSERT_GT(doc.numSectors(), 1);
+		EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+		EXPECT_EQ(doc.sectors[host]->ceilh, originalHost.ceilh);
+		ASSERT_TRUE(inst.edit.Selected);
+		ASSERT_GT(inst.edit.Selected->count_obj(), 0);
+
+		const Sector &created = *doc.sectors[1];
+		switch (scenario.role)
+		{
+			case DesignPreviewRole::architectureFloor:
+			case DesignPreviewRole::architectureCirculation:
+				EXPECT_GT(created.floorh, originalHost.floorh);
+				break;
+			case DesignPreviewRole::architectureWater:
+				EXPECT_LT(created.floorh, originalHost.floorh);
+				break;
+			case DesignPreviewRole::architectureWall:
+				EXPECT_EQ(created.floorh, created.ceilh);
+				break;
+			case DesignPreviewRole::architectureCeiling:
+				EXPECT_GT(created.ceilh, originalHost.ceilh);
+				break;
+			default:
+				FAIL() << "Unexpected architecture preview role";
+		}
+
+		ASSERT_TRUE(doc.basis.undo());
+		EXPECT_EQ(doc.numSectors(), 1);
+		EXPECT_FALSE(doc.basis.undo());
+	}
+	panel.Close();
+}
+
+TEST_F(SmartSectorFixture,
+	   EveryPurposeBuiltStructureUsesRealCanvasDragBesideANeighbor)
+{
+	const int host = addSector(24, 192);
+	const int neighbor = addSector(8, 160);
+	doc.sectors[neighbor]->light = 112;
+	doc.sectors[neighbor]->tag = 77;
+	const int v0 = addVertex(-384, -384);
+	const int v1 = addVertex(-384, 384);
+	const int v2 = addVertex(0, 384);
+	const int v3 = addVertex(0, -384);
+	const int v4 = addVertex(384, 384);
+	const int v5 = addVertex(384, -384);
+	addLine(v0, v1, host);
+	addLine(v1, v2, host);
+	addLine(v2, v3, host, neighbor);
+	addLine(v3, v0, host);
+	addLine(v2, v4, neighbor);
+	addLine(v4, v5, neighbor);
+	addLine(v5, v3, neighbor);
+	const Sector originalHost = *doc.sectors[host];
+	const Sector originalNeighbor = *doc.sectors[neighbor];
+	inst.conf = config;
+	inst.loaded.gameName = "architecture_real_canvas_events";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+
+	UI_MainWindow window(inst);
+	inst.main_win = &window;
+	window.ShowSectorDesigner(SectorDesignMode::architecture);
+	UI_SectorDesigner &panel = *window.sector_design_box;
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	Fl_Button *make =
+			FindWidgetByLabel<Fl_Button>(panel, "Make Sectors");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+	ASSERT_NE(make, nullptr);
+
+	struct Scenario
+	{
+		int family;
+		int structure;
+		SectorArchitectureElement element;
+	};
+	std::vector<Scenario> scenarios;
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.element) <
+			static_cast<int>(SectorArchitectureElement::crossCore))
+			continue;
+		int structureIndex = 0;
+		for (const SectorArchitectureDescriptor &candidate :
+				M_ArchitectureCatalog())
+		{
+			if (candidate.element == descriptor.element)
+				break;
+			if (candidate.family == descriptor.family)
+				structureIndex++;
+		}
+		scenarios.push_back({
+			static_cast<int>(descriptor.family),
+			structureIndex, descriptor.element
+		});
+	}
+	ASSERT_EQ(scenarios.size(), 30u);
+
+	const bool oldFocus = global::app_has_focus;
+	global::app_has_focus = true;
+	auto sendPointerEvent = [&](int event, const v2double_t &point,
+								bool buttonDown)
+	{
+		const v2double_t origin = inst.grid.getOrig();
+		const double scale = inst.grid.getScale();
+		Fl::e_x_root = window.x_root() + window.canvas->x() +
+				window.canvas->w() / 2 +
+				iround((point.x - origin.x) * scale);
+		Fl::e_y_root = window.y_root() + window.canvas->y() +
+				window.canvas->h() / 2 +
+				iround((origin.y - point.y) * scale);
+		Fl::e_x = Fl::e_x_root - window.x_root();
+		Fl::e_y = Fl::e_y_root - window.y_root();
+		Fl::e_keysym = FL_Button + 1;
+		Fl::e_state = buttonDown ? FL_BUTTON1 : 0;
+		return window.canvas->handle(event);
+	};
+
+	int scenarioIndex = 0;
+	for (const Scenario &scenario : scenarios)
+	{
+		SCOPED_TRACE(SString::printf(
+				"architecture element %d",
+				static_cast<int>(scenario.element)).c_str());
+		family->value(scenario.family);
+		family->do_callback();
+		structure->value(scenario.structure);
+		structure->do_callback();
+
+		EXPECT_EQ(sendPointerEvent(FL_PUSH, {-320, -224}, true), 1);
+		// Alternate the backend-reported button state. The event is still an
+		// FL_DRAG and must remain a drag even on compositors which omit the
+		// intermediate FL_BUTTON1 state bit.
+		EXPECT_EQ(sendPointerEvent(
+				FL_DRAG, {-32, 224}, scenarioIndex % 2 == 0), 1);
+		EXPECT_EQ(sendPointerEvent(FL_RELEASE, {-32, 224}, false), 1);
+		SString shapeBounds;
+		for (const PlannedSectorShape &shape : panel.Plan().shapes)
+		{
+			double lowX = std::numeric_limits<double>::infinity();
+			double lowY = std::numeric_limits<double>::infinity();
+			double highX = -std::numeric_limits<double>::infinity();
+			double highY = -std::numeric_limits<double>::infinity();
+			for (const v2double_t &point : shape.outer)
+			{
+				lowX = std::min(lowX, point.x);
+				lowY = std::min(lowY, point.y);
+				highX = std::max(highX, point.x);
+				highY = std::max(highY, point.y);
+			}
+			shapeBounds += SString::printf(
+					"\nrole %d bounds %.1f %.1f .. %.1f %.1f",
+					static_cast<int>(shape.role),
+					lowX, lowY, highX, highY);
+		}
+		for (const SectorDesignIssue &issue : panel.Plan().issues)
+			if (issue.position)
+				shapeBounds += SString::printf(
+						"\nissue position %.1f %.1f",
+						issue.position->x, issue.position->y);
+		ASSERT_TRUE(panel.Plan().valid())
+				<< static_cast<int>(scenario.element) << "\n"
+				<< panel.ReviewText().c_str()
+				<< shapeBounds.c_str();
+		ASSERT_GT(panel.Plan().shapes.size(), 0u)
+				<< panel.ReviewText().c_str();
+		EXPECT_NE(panel.ReviewText().find(
+				M_ArchitectureDescriptor(
+						scenario.element).label), SString::npos)
+				<< panel.ReviewText().c_str();
+		EXPECT_TRUE(std::all_of(
+				panel.Plan().shapes.begin(), panel.Plan().shapes.end(),
+				[&](const PlannedSectorShape &shape)
+				{
+					return shape.role ==
+							ExpectedArchitectureRole(scenario.element);
+				}));
+
+		EXPECT_EQ(doc.numSectors(), 2);
+		EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+		EXPECT_EQ(doc.sectors[host]->ceilh, originalHost.ceilh);
+		EXPECT_EQ(doc.sectors[neighbor]->floorh,
+				  originalNeighbor.floorh);
+		EXPECT_EQ(doc.sectors[neighbor]->ceilh,
+				  originalNeighbor.ceilh);
+		ASSERT_TRUE(make->active())
+				<< panel.ReviewText().c_str();
+		make->do_callback();
+		EXPECT_GT(doc.numSectors(), 2);
+		EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+		EXPECT_EQ(doc.sectors[host]->ceilh, originalHost.ceilh);
+		EXPECT_EQ(doc.sectors[neighbor]->floorh,
+				  originalNeighbor.floorh);
+		EXPECT_EQ(doc.sectors[neighbor]->ceilh,
+				  originalNeighbor.ceilh);
+		EXPECT_EQ(doc.sectors[neighbor]->light,
+				  originalNeighbor.light);
+		EXPECT_EQ(doc.sectors[neighbor]->tag,
+				  originalNeighbor.tag);
+		ASSERT_TRUE(doc.basis.undo());
+		EXPECT_EQ(doc.numSectors(), 2);
+		EXPECT_FALSE(doc.basis.undo());
+		panel.Refresh();
+		scenarioIndex++;
+	}
+
+	// A compositor may coalesce a short drag into press + displaced release.
+	// The release coordinate itself must still complete the architecture
+	// gesture instead of silently leaving one anchor.
+	family->value(1);
+	family->do_callback();
+	structure->value(0);
+	structure->do_callback();
+	EXPECT_EQ(sendPointerEvent(FL_PUSH, {-320, -192}, true), 1);
+	EXPECT_EQ(sendPointerEvent(FL_RELEASE, {-64, 192}, false), 1);
+	ASSERT_TRUE(panel.Plan().valid());
+	ASSERT_EQ(panel.Plan().shapes.size(), 1u);
+	panel.Escape();
+
+	global::app_has_focus = oldFocus;
+	window.HideSectorDesigner();
+	inst.main_win = nullptr;
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   RealCanvasFloorDragBuildsInsideEditorCreatedInitialSector)
+{
+	inst.conf = config;
+	inst.loaded.gameName = "architecture_editor_initial_sector";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+	inst.edit.map.x = -256;
+	inst.edit.map.y = -256;
+
+	const int oldSectorSize = config::new_sector_size;
+	config::new_sector_size = 512;
+	inst.CMD_ObjectInsert();
+	config::new_sector_size = oldSectorSize;
+	ASSERT_EQ(doc.numSectors(), 1);
+	const int host = 0;
+	const Sector originalHost = *doc.sectors[host];
+
+	UI_MainWindow window(inst);
+	inst.main_win = &window;
+	window.ShowSectorDesigner(SectorDesignMode::architecture);
+	UI_SectorDesigner &panel = *window.sector_design_box;
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	Fl_Button *make =
+			FindWidgetByLabel<Fl_Button>(panel, "Make Sectors");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+	ASSERT_NE(make, nullptr);
+	family->value(1);
+	family->do_callback();
+	structure->value(0);
+	structure->do_callback();
+
+	const bool oldFocus = global::app_has_focus;
+	global::app_has_focus = true;
+	auto sendPointerEvent = [&](int event, const v2double_t &point,
+								bool buttonDown)
+	{
+		const v2double_t origin = inst.grid.getOrig();
+		const double scale = inst.grid.getScale();
+		Fl::e_x_root = window.x_root() + window.canvas->x() +
+				window.canvas->w() / 2 +
+				iround((point.x - origin.x) * scale);
+		Fl::e_y_root = window.y_root() + window.canvas->y() +
+				window.canvas->h() / 2 +
+				iround((origin.y - point.y) * scale);
+		Fl::e_x = Fl::e_x_root - window.x_root();
+		Fl::e_y = Fl::e_y_root - window.y_root();
+		Fl::e_keysym = FL_Button + 1;
+		Fl::e_state = buttonDown ? FL_BUTTON1 : 0;
+		return window.canvas->handle(event);
+	};
+
+	EXPECT_EQ(sendPointerEvent(FL_PUSH, {-192, -160}, true), 1);
+	EXPECT_EQ(sendPointerEvent(FL_DRAG, {192, 160}, true), 1);
+	EXPECT_EQ(sendPointerEvent(FL_RELEASE, {192, 160}, false), 1);
+	ASSERT_TRUE(panel.Plan().valid()) << panel.ReviewText().c_str();
+	ASSERT_EQ(panel.Plan().shapes.size(), 1u);
+	EXPECT_EQ(panel.Plan().shapes.front().role,
+			  DesignPreviewRole::architectureFloor);
+
+	make->do_callback();
+	ASSERT_EQ(doc.numSectors(), 2);
+	const int floor = 1;
+	EXPECT_EQ(doc.sectors[host]->floorh, originalHost.floorh);
+	EXPECT_GT(doc.sectors[floor]->floorh, originalHost.floorh);
+	int portals = 0;
+	for (const std::shared_ptr<LineDef> &line : doc.linedefs)
+	{
+		const int right = line->right >= 0 ?
+				doc.sidedefs[line->right]->sector : -1;
+		const int left = line->left >= 0 ?
+				doc.sidedefs[line->left]->sector : -1;
+		if (!((right == host && left == floor) ||
+			  (left == host && right == floor)))
+			continue;
+		EXPECT_TRUE(line->TwoSided());
+		EXPECT_EQ(line->flags & MLF_Blocking, 0u);
+		portals++;
+	}
+	EXPECT_GT(portals, 0);
+
+	inst.CMD_Undo();
+	EXPECT_EQ(doc.numSectors(), 1);
+	global::app_has_focus = oldFocus;
+	window.HideSectorDesigner();
+	inst.main_win = nullptr;
+	ASSERT_TRUE(doc.basis.undo());
+	EXPECT_EQ(doc.numSectors(), 0);
+	EXPECT_FALSE(doc.basis.undo());
+}
+
+TEST_F(SmartSectorFixture,
+	   ArchitectureMirrorKeyAndPerStructureMemoryAreContextual)
+{
+	addBoxSector(-1024, -768, 1024, 768, 24, 256);
+	inst.conf = config;
+	inst.loaded.gameName = "stage25_structure_memory";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+	UI_SectorDesigner panel(inst, 0, 0, 380, 860);
+	panel.Open(SectorDesignMode::architecture);
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	Fl_Check_Button *mirror =
+			FindWidgetByLabel<Fl_Check_Button>(
+					panel, "Mirrored (F)");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+	ASSERT_NE(mirror, nullptr);
+
+	family->value(
+			static_cast<int>(
+					SectorArchitectureFamily::circulation));
+	family->do_callback();
+	structure->value(3);
+	structure->do_callback();
+	Fl_Input *bays =
+			FindInputByLabel(panel, "Steps/flight:");
+	ASSERT_NE(bays, nullptr);
+	bays->value("6");
+	bays->do_callback();
+	panel.CanvasClick({-640, -384}, 0);
+	panel.CanvasMove({640, 384}, 0, true);
+	panel.CanvasRelease({640, 384}, 0);
+	ASSERT_TRUE(panel.Plan().valid());
+	std::vector<std::vector<v2double_t>> normal;
+	for (const PlannedSectorShape &shape : panel.Plan().shapes)
+		normal.push_back(shape.outer);
+	EXPECT_TRUE(panel.CanvasKey('f'));
+	EXPECT_EQ(mirror->value(), 1);
+	ASSERT_TRUE(panel.Plan().valid());
+	ASSERT_EQ(panel.Plan().shapes.size(), normal.size());
+	bool changed = false;
+	for (size_t index = 0; index < normal.size(); ++index)
+		changed = changed ||
+				normal[index] != panel.Plan().shapes[index].outer;
+	EXPECT_TRUE(changed);
+
+	structure->value(5);
+	structure->do_callback();
+	EXPECT_STREQ(bays->label(), "Steps:");
+	bays->value("10");
+	bays->do_callback();
+	EXPECT_EQ(mirror->value(), 0);
+	structure->value(3);
+	structure->do_callback();
+	EXPECT_STREQ(bays->label(), "Steps/flight:");
+	EXPECT_STREQ(bays->value(), "6");
+	EXPECT_EQ(mirror->value(), 1);
+
+	panel.Close();
+	panel.Open(SectorDesignMode::architecture);
+	family = FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	structure = FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+	EXPECT_EQ(family->value(),
+			  static_cast<int>(
+					SectorArchitectureFamily::circulation));
+	EXPECT_EQ(structure->value(), 3);
+	bays = FindInputByLabel(panel, "Steps/flight:");
+	ASSERT_NE(bays, nullptr);
+	EXPECT_STREQ(bays->value(), "6");
+	EXPECT_EQ(mirror->value(), 1);
+	panel.Close();
+}
+
+TEST_F(SmartSectorFixture,
 	   ArchitecturePanelBuildsARotundaAroundAnExistingSectorHole)
 {
 	const int host = addRingSector(256, 64, 24, 160);
@@ -2963,7 +4942,7 @@ TEST_F(SmartSectorFixture,
 	UI_SectorDesigner panel(inst, 0, 0, 340, 760);
 	panel.Open(SectorDesignMode::architecture);
 	Fl_Choice *element =
-			FindWidgetByLabel<Fl_Choice>(panel, "Element:");
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
 	ASSERT_NE(element, nullptr);
 	element->value(static_cast<int>(
 			SectorArchitectureElement::rotunda));
@@ -3185,15 +5164,26 @@ TEST_F(SmartSectorFixture,
 	Fl_Input *sides = FindInputByLabel(panel, "Sides:");
 	Fl_Input *inner = FindInputByLabel(panel, "Inner %:");
 	Fl_Choice *style = FindWidgetByLabel<Fl_Choice>(panel, "Style:");
-	Fl_Choice *element = FindWidgetByLabel<Fl_Choice>(panel, "Element:");
+	Fl_Choice *family = FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *element = FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
 	Fl_Input *bays = FindInputByLabel(panel, "Bays:");
+	Fl_Input *elevation = FindInputByLabel(panel, "Elevation:");
+	Fl_Check_Button *mirror =
+			FindWidgetByLabel<Fl_Check_Button>(
+					panel, "Mirrored (F)");
+	Fl_Choice *function =
+			FindWidgetByLabel<Fl_Choice>(panel, "Function:");
 	ASSERT_NE(mode, nullptr);
 	ASSERT_NE(profile, nullptr);
 	ASSERT_NE(sides, nullptr);
 	ASSERT_NE(inner, nullptr);
 	ASSERT_NE(style, nullptr);
+	ASSERT_NE(family, nullptr);
 	ASSERT_NE(element, nullptr);
 	ASSERT_NE(bays, nullptr);
+	ASSERT_NE(elevation, nullptr);
+	ASSERT_NE(mirror, nullptr);
+	ASSERT_NE(function, nullptr);
 
 	EXPECT_EQ(profile->size(), 32);
 	EXPECT_STREQ(profile->text(0), "Regular - Custom (3-64)");
@@ -3216,11 +5206,19 @@ TEST_F(SmartSectorFixture,
 	mode->value(static_cast<int>(SectorDesignMode::architecture));
 	mode->do_callback();
 	EXPECT_TRUE(style->active());
+	EXPECT_TRUE(family->active());
 	EXPECT_TRUE(element->active());
 	EXPECT_EQ(style->size(), 8);
-	EXPECT_EQ(element->size(), 17);
+	EXPECT_EQ(family->size(), 7);
+	EXPECT_EQ(element->size(), 22);
 	EXPECT_STREQ(style->text(
 			static_cast<int>(SectorArchitectureStyle::gothic)), "Gothic");
+	EXPECT_STREQ(family->text(0), "Structural supports");
+	EXPECT_STREQ(family->text(1), "Floors and terraces");
+	EXPECT_STREQ(family->text(2), "Circulation");
+	EXPECT_STREQ(family->text(3), "Waterworks");
+	EXPECT_STREQ(family->text(4), "Walls and screens");
+	EXPECT_STREQ(family->text(5), "Ceilings and vaults");
 	EXPECT_STREQ(element->text(
 			static_cast<int>(SectorArchitectureElement::sanctuary)),
 			"Complex sanctuary");
@@ -3239,6 +5237,135 @@ TEST_F(SmartSectorFixture,
 			SectorArchitectureElement::fortifiedKeep));
 	element->do_callback();
 	EXPECT_FALSE(bays->active());
+	EXPECT_FALSE(mirror->active());
+	EXPECT_FALSE(function->active());
+	EXPECT_STREQ(element->text(16), "Cross-shaped structural core");
+	EXPECT_STREQ(element->text(20), "Stepped monument plinth");
+
+	family->value(1);
+	family->do_callback();
+	EXPECT_EQ(element->size(), 9);
+	EXPECT_STREQ(element->text(0), "Raised dais");
+	EXPECT_STREQ(element->text(1), "Sunken court");
+	EXPECT_STREQ(element->text(2), "Tiered ziggurat");
+	EXPECT_STREQ(element->text(3), "Central platform - lift");
+	EXPECT_STREQ(element->text(7), "Horseshoe amphitheater");
+	element->do_callback();
+	EXPECT_FALSE(style->active());
+	EXPECT_FALSE(bays->active());
+	EXPECT_TRUE(elevation->active());
+	element->value(3);
+	element->do_callback();
+	EXPECT_TRUE(function->active());
+
+	family->value(4);
+	family->do_callback();
+	EXPECT_EQ(element->size(), 7);
+	EXPECT_STREQ(element->text(0), "Perforated screen wall");
+	EXPECT_STREQ(element->text(1), "Solid partition wall");
+	EXPECT_STREQ(element->text(5), "Gatehouse with open passage");
+	EXPECT_FALSE(style->active());
+	EXPECT_TRUE(bays->active());
+	EXPECT_FALSE(elevation->active());
+
+	family->value(3);
+	family->do_callback();
+	EXPECT_EQ(element->size(), 9);
+	EXPECT_STREQ(element->text(0),
+				 "Fountain basin and centerpiece");
+	EXPECT_STREQ(element->text(3), "Perimeter moat");
+	EXPECT_STREQ(element->text(7), "Four-basin fountain court");
+	EXPECT_TRUE(style->active());
+	EXPECT_FALSE(bays->active());
+	EXPECT_TRUE(elevation->active());
+
+	family->value(5);
+	family->do_callback();
+	EXPECT_EQ(element->size(), 8);
+	EXPECT_STREQ(element->text(0), "Coffered ceiling");
+	EXPECT_STREQ(element->text(1), "Groin-vault bays");
+	EXPECT_STREQ(element->text(2), "Recessed tray ceiling");
+	EXPECT_STREQ(element->text(6), "Downstand beam lattice");
+
+	family->value(2);
+	family->do_callback();
+	EXPECT_EQ(element->size(), 9);
+	EXPECT_STREQ(element->text(0), "Grand staircase");
+	EXPECT_STREQ(element->text(1), "Perimeter balcony gallery");
+	EXPECT_STREQ(element->text(2), "Raised bridge");
+	EXPECT_STREQ(element->text(3), "Switchback stairs");
+	EXPECT_STREQ(element->text(7), "Crossing bridges");
+	element->value(3);
+	element->do_callback();
+	EXPECT_TRUE(mirror->active());
+	panel.Close();
+}
+
+TEST_F(SmartSectorFixture,
+	   PostSwitchbackChoicesRecoverEvenWhenAPlatformCallbackIsMissed)
+{
+	addBoxSector(-512, -512, 512, 512, 24, 256);
+	inst.conf = config;
+	inst.loaded.gameName =
+			"architecture_post_switchback_choice_resync";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.SetSnap(false);
+
+	UI_SectorDesigner panel(inst, 0, 0, 360, 800);
+	panel.Open(SectorDesignMode::architecture);
+	Fl_Choice *family =
+			FindWidgetByLabel<Fl_Choice>(panel, "Family:");
+	Fl_Choice *structure =
+			FindWidgetByLabel<Fl_Choice>(panel, "Structure:");
+	ASSERT_NE(family, nullptr);
+	ASSERT_NE(structure, nullptr);
+
+	const int first = static_cast<int>(
+			SectorArchitectureElement::bifurcatedStair);
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.element) < first)
+			continue;
+
+		const int familyIndex =
+				static_cast<int>(descriptor.family);
+		int structureIndex = 0;
+		for (const SectorArchitectureDescriptor &candidate :
+				M_ArchitectureCatalog())
+		{
+			if (candidate.element == descriptor.element)
+				break;
+			if (candidate.family == descriptor.family)
+				structureIndex++;
+		}
+
+		// Simulate a backend which updates a choice value but does not deliver
+		// the widget callback. Any canvas refresh or gesture must still adopt
+		// the visible family, rebuild its index map, and load safe defaults.
+		family->value(familyIndex);
+		panel.Refresh();
+		structure->value(structureIndex);
+		panel.Refresh();
+		EXPECT_NE(panel.ReviewText().find(descriptor.label),
+				  SString::npos)
+				<< descriptor.id;
+
+		panel.CanvasClick({-128, -96}, 0);
+		panel.CanvasClick({128, 96}, 0);
+		SString issues;
+		for (const SectorDesignIssue &issue : panel.Plan().issues)
+			issues += SString::printf(
+					"\n- %s", issue.message.c_str());
+		ASSERT_TRUE(panel.Plan().valid())
+				<< descriptor.id << issues.c_str();
+		ASSERT_GT(panel.Plan().plannedStructures, 0)
+				<< descriptor.id;
+		panel.Escape();
+	}
 	panel.Close();
 }
 

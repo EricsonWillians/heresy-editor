@@ -76,39 +76,133 @@ tag and portal actions with the geometry in one Undo operation.
 
 Architecture accepts a rectangular footprint either initiated inside one
 ordinary host sector or wholly in clear void.  Inside a room it retains the
-host and inserts only supports that stay within that host; the footprint may
-meet the room edge because Margin already controls the actual sections.  In
-particular, the first press locks the host before grid snapping, so a layout
+host and inserts only geometry that belongs completely to that host; the
+footprint may meet the room edge because Margin controls the generated
+structure.  The first press locks the host before grid snapping, so a layout
 can surround holes or follow a strongly concave room even when the footprint
 center is not part of that sector.  In void it first creates a walkable host
-hall, then inserts every support into that plan-local host in the same Undo
-operation.  A void hall may not touch or consume existing geometry.
+hall, then resolves every nested structure through plan-local references in
+the same Undo operation.  A void hall may not touch or consume existing
+geometry.
 
-Element offers 16 purpose-specific layouts: a single pillar, paired pillars,
-triumphal-arch piers, corner piers, colonnade, double-row arcade, perimeter
-cloister, hypostyle hall, buttressed bay, flying-buttress array, four-row nave,
-cruciform transept, columned apse, radial rotunda, multi-ring sanctuary, and
-fortified keep.  Bays controls repeated stations where the chosen layout uses
-them; Structure size controls the support section and Margin protects
-circulation at the footprint edge.  Functional square, Classical round,
-Romanesque octagonal, Gothic clustered, Industrial geared, Art Deco sunburst,
-and Infernal star sections are portable straight-lined constructions in Doom,
-Hexen, and UDMF.
+Architecture uses the same real canvas event pipeline as ordinary editing:
+press inside the host, drag the complete footprint, and release.  The event's
+own root coordinates are authoritative, including under Wayland/XWayland; a
+displaced release also completes the gesture if the compositor coalesces its
+intermediate drag event.  This is intentionally different from two unrelated
+clicks, though the click-click fallback remains available.
+
+Generated cells are not detached decorative islands.  Walkable, water, and
+ceiling cells use two-sided nonblocking boundaries, so floors, terraces,
+stairs, galleries, basins, bridges, coffers, and vault cells remain
+topologically connected to the retained host or their nested parent.  Solid
+supports and wall masses collapse their ceiling to their floor and mark their
+outer boundaries blocking.
+
+Margin controls connection placement.  A positive value leaves host-floor
+circulation around the structure.  With Margin 0, dragging a footprint to an
+existing host boundary splits and reuses the coincident portion.  A walkable
+structure then has an open portal to both the retained host and an existing
+sector on the opposite side, independent of linedef winding.  A boundary to
+void remains an outer wall.  Neighbor floor/ceiling heights, flats, light,
+special, tag, and unrelated line properties are not replaced.
+
+The panel presents a deliberate two-level catalog.  Choose Family first:
+Structural supports, Floors and terraces, Circulation, Waterworks, Walls and
+screens, or Ceilings and vaults.  Structure then contains only the generators
+in that family.  Switching families updates the relevant Style, Bays, Size,
+and Elevation controls immediately instead of hiding floor and ceiling tools
+below a long run of pillar layouts.
+
+The authoritative architecture catalog contains 58 stable structures.  It is
+a real architectural vocabulary rather than a list of differently arranged
+pillars:
+
+* Structural supports contain the original 16 support compositions plus a
+  concave cross core, accessible hollow tower shell with opposed entries,
+  buttressed tower, paired shear-wall passage, and stepped monument plinth.
+* Floors and terraces contain the raised dais, sunken court, and ziggurat plus
+  an optional-lift central platform, directional split-level stage, mirrored
+  corner terraces, style-aware octagonal podium, and horseshoe amphitheater.
+* Circulation contains the grand stair, balcony gallery, and raised bridge plus
+  mirrored switchback stairs, bifurcated ceremonial stairs, clockwise or
+  counterclockwise spiral stairs, a catwalk with end landings, and connected
+  crossing bridges.
+* Waterworks contain the original fountain basin, reflecting pool, and channel
+  plus a retained-center moat, cross canal, twin canals, directional stepped
+  cascade, and four-basin fountain court.
+* Walls and screens contain the perforated screen plus a solid partition,
+  continuous crenellated wall, repeated buttressed wall, mirrored staggered
+  privacy screen, and style-aware gatehouse with an exact open passage.
+* Ceilings and vaults contain coffers and groin-vault bays plus a recessed tray,
+  stepped barrel vault, ribbed cross vault, concentric style-aware dome, and
+  downstand beam lattice.  These adjust the ceiling while leaving floors
+  untouched.
+
+Style is offered only when it changes the outline: cores, towers, monuments,
+podiums, fountain centerpieces, gatehouses, and domes.  Bays is relabelled as
+tiers, rows, steps, rings, buttresses, panels, bands, basins, or beams.  Size
+becomes the relevant width, thickness, tread, passage, well radius, or rib
+width; Elevation becomes rise, depth, relief, recess, or drop.  Each descriptor
+also supplies safe first-use values and exact minimum/count limits, so values
+from an unrelated structure are never carried across silently.  Player
+diameter raises first-use values only for traversable stair, catwalk, bridge,
+and passage widths; wall thicknesses, treads, wells, borders, and dome-ring
+widths retain their own safe descriptor defaults.
+
+The drag's long axis is forward.  Walls and screens span that axis, while
+Thickness controls their short axis; repeated panels, merlons, and buttresses
+are distributed along the wall instead of becoming transverse stubs.  The
+gatehouse reserves its exact centered Passage width on the long axis.  Anchor
+order controls stair, stage, and cascade direction.  F mirrors corner terraces,
+switchback and bifurcated stairs, spiral winding, and staggered screens.
+Per-cell height labels and a forward arrow make that order visible before
+commit.  Style, Bays, Size, Elevation, Margin, mirror state, and optional
+function are remembered independently per structure, game, and format.
+
+Ceiling generators never lower or raise the floor.  The ribbed cross vault
+uses four half-relief quadrants and a full-relief center crossing.  The
+downstand lattice is one connected two-axis beam sector; its enclosed openings
+remain usable sectors with the host room's original properties rather than
+turning into void.
+
+The central platform defaults to Static geometry.  When the active game/format
+provides a compatible lift preset, Function can select Smart Lift; preview
+names the behavior, and apply assigns a fresh tag and the usable local portal
+triggers in the same atomic Undo operation.  Other structures never receive
+implicit specials.  The gatehouse passage remains geometric and respects
+protected door sectors; it does not invent invalid internal Smart Door tracks.
 
 While Architecture owns the canvas, each wheel notch changes Structure size
 by one quarter of the current grid step.  The control respects a
-style-specific, format-safe minimum, so intricate clustered or pointed
-sections cannot silently collapse into multiple cells; choosing a more
-detailed style raises a smaller current size to that minimum automatically.
-Every support is a closed sector inheriting its existing or newly generated
-host context.
-Overlapping supports, host-boundary crossings, protected functional hosts,
-existing geometry contact, and ambiguous topology block apply.
-The white footprint envelope and cyan structural sections remain visible
-throughout review.  A blocked layout does not disappear: its intended
-footprint and affected supports turn red, and exact invalid points or
-conflicting existing lines receive red markers.  Selecting the issue centers
-the canvas on that exact preview location.
+generator-specific, format-safe minimum.  Intricate clustered or pointed
+sections cannot silently collapse into multiple cells; treads, passages,
+walls, canals, and beams retain useful map-format-safe minimums.  Choosing a
+detailed section raises a smaller current size to its minimum automatically.
+Closed supports and wall masses collapse their ceiling to their floor.
+Walkable structures retain headroom, floor structures adjust the floor,
+ceiling structures adjust only the ceiling, and nested terraces inherit the
+previewed parent height exactly.  The planner checks transitive ownership so a
+three-tier structure is valid inside a newly generated hall while unrelated
+containment remains an error.
+
+Every purpose-built family has an unmistakable filled preview and matching
+review explanation: cyan for structural supports, gold for floor forms, green
+for circulation, blue for waterworks, warm red for wall mass, and violet for
+ceiling work.  The review names the family and structure and states whether
+the result raises or excavates a floor, closes a wall sector, or adjusts only
+the ceiling, and reports its connection policy.  This feedback appears during
+press-drag-release inside an existing sector, before Make Sectors can change
+the document.
+
+Overlaps, host-boundary crossings, enclosed holes or foreign cells, protected
+functional hosts, existing geometry contact, inadequate clearance, and
+ambiguous topology block apply.  The white footprint envelope and the
+structure's semantic fill remain visible throughout review.  A blocked
+structure does not disappear: its intended footprint and affected geometry
+turn red, and exact invalid points or conflicting existing lines receive red
+markers.  Selecting the issue centers the canvas on that exact preview
+location.
 
 Connections
 -----------
@@ -140,12 +234,13 @@ Review and safety
 Every gesture is quantized before validation: integer map units in Doom and
 Hexen maps, and 16.16 precision in UDMF.  Preview and apply use those same
 coordinates.  The overlay distinguishes proposed and retained geometry,
-openings, doors, tracks, stairs, lifts, architecture, cuts, anchors, warnings,
-and conflicts.
+openings, doors, tracks, stairs, lifts, six semantic architecture roles, cuts,
+anchors, warnings, and conflicts.
 Hatched fills remain readable in both OpenGL and software rendering.
 
 The Review section reports sectors, planned splits, doors, steps, lifts, and
-architectural structures.
+architectural structures.  Connected ceiling lattices also report the exact
+number of opening sectors that retain the host room's properties.
 Selecting an issue centers the map on its affected sector, line, or preview
 position.  Copy Review copies the complete summary and every untruncated
 diagnostic.  Expand Review opens the same text in a resizable, wrapped view
@@ -255,8 +350,9 @@ Controls and repeat workflow
 * In Corridor mode, the mouse wheel changes Width by the current grid step.
   In Inset / Ring, it changes thickness while preserving inward/outward intent.
   In Architecture, it changes Structure size by one quarter grid step and
-  clamps at the current style's safe minimum.
-* f or F toggles the visible Opposite side state or reverses the corridor.
+  clamps at the current generator's safe minimum.
+* f or F toggles the visible Opposite side state, reverses the corridor, or
+  mirrors a structure whose catalog descriptor supports mirroring.
 * Shift+G toggles Snap to Grid; lowercase g only shows or hides the grid.
 * Drag the grip on the designer's left edge to widen or narrow the side area.
   The map keeps a protected minimum width; double-click the grip to reset it.
@@ -285,6 +381,12 @@ gesture ownership, target sectors, route, door/lift choices, preview, and
 status guidance change together.  Map changes discard stale object references.
 Mode changes, map changes, closing the panel, cancellation, and exceptions
 clear the transient preview.
+
+Saving the active map or project and launching Test in Game preserve its Undo
+and Redo history.  The canvas regains keyboard focus after launch, so
+Ctrl/Cmd+Z can undo the geometry that was just tested.  Edit -> Redo,
+Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y restores an accidental Undo until a different
+edit replaces the redo future.
 
 Configuration
 -------------

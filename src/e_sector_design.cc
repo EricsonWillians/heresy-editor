@@ -37,6 +37,433 @@ constexpr double UDMF_SCALE = 65536.0;
 constexpr double PLAN_EPSILON = 1.0 / UDMF_SCALE;
 
 int SectorForSide(const Document &doc, int side);
+DesignPreviewRole ArchitecturePreviewRole(
+		SectorArchitectureElement element);
+bool IsArchitecturePreviewRole(DesignPreviewRole role);
+
+constexpr std::uint32_t ArchitectureControlBit(
+		SectorArchitectureControl control)
+{
+	return static_cast<std::uint32_t>(control);
+}
+
+constexpr std::uint32_t ArchitectureFunctionBit(
+		SectorArchitectureFunction function)
+{
+	return 1u << static_cast<unsigned>(function);
+}
+
+constexpr std::uint32_t A_STYLE =
+		ArchitectureControlBit(SectorArchitectureControl::style);
+constexpr std::uint32_t A_BAYS =
+		ArchitectureControlBit(SectorArchitectureControl::bays);
+constexpr std::uint32_t A_SIZE =
+		ArchitectureControlBit(SectorArchitectureControl::size);
+constexpr std::uint32_t A_HEIGHT =
+		ArchitectureControlBit(SectorArchitectureControl::height);
+constexpr std::uint32_t A_MARGIN =
+		ArchitectureControlBit(SectorArchitectureControl::margin);
+constexpr std::uint32_t A_MIRROR =
+		ArchitectureControlBit(SectorArchitectureControl::mirror);
+constexpr std::uint32_t A_FUNCTION =
+		ArchitectureControlBit(SectorArchitectureControl::function);
+constexpr std::uint32_t A_STATIC =
+		ArchitectureFunctionBit(
+				SectorArchitectureFunction::staticGeometry);
+constexpr std::uint32_t A_SMART_LIFT =
+		ArchitectureFunctionBit(SectorArchitectureFunction::smartLift);
+
+const std::vector<SectorArchitectureDescriptor> &ArchitectureCatalogData()
+{
+	static const std::vector<SectorArchitectureDescriptor> catalog =
+	{
+		{"pillar", SectorArchitectureElement::pillar,
+		 SectorArchitectureFamily::structuralSupports, "Single pillar",
+		 "One style-aware solid support.", DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Diameter:", "Elevation:", 1, 1, 1, 24, 16, 16, 4},
+		{"paired_pillars", SectorArchitectureElement::pairedPillars,
+		 SectorArchitectureFamily::structuralSupports, "Paired pillars",
+		 "Two style-aware supports across the short axis.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Diameter:", "Elevation:", 2, 1, 2, 24, 16, 16, 4},
+		{"triumphal_arch", SectorArchitectureElement::triumphalArch,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Triumphal arch piers",
+		 "A monumental pair of enlarged passage piers.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Pier size:", "Elevation:", 2, 1, 2, 24, 16, 16, 4},
+		{"corner_piers", SectorArchitectureElement::cornerPiers,
+		 SectorArchitectureFamily::structuralSupports, "Four corner piers",
+		 "Four enlarged style-aware corner supports.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Pier size:", "Elevation:", 4, 1, 4, 24, 16, 16, 4},
+		{"colonnade", SectorArchitectureElement::colonnade,
+		 SectorArchitectureFamily::structuralSupports, "Linear colonnade",
+		 "One repeated row of style-aware columns.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Columns:", "Diameter:", "Elevation:", 4, 1, 32, 24, 16, 16, 4},
+		{"arcade", SectorArchitectureElement::arcade,
+		 SectorArchitectureFamily::structuralSupports, "Double-row arcade",
+		 "Two repeated rows framing a central aisle.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Pier size:", "Elevation:", 4, 1, 32, 24, 16, 16, 4},
+		{"cloister", SectorArchitectureElement::cloister,
+		 SectorArchitectureFamily::structuralSupports, "Perimeter cloister",
+		 "Repeated supports around the complete footprint.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays/side:", "Pier size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"hypostyle_hall", SectorArchitectureElement::hypostyleHall,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Hypostyle column hall",
+		 "A dense repeated support grid.", DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Columns/row:", "Diameter:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"buttressed_bay", SectorArchitectureElement::buttressedBay,
+		 SectorArchitectureFamily::structuralSupports, "Buttressed bay",
+		 "Repeated interior supports with heavier exterior buttresses.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Support size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"flying_buttresses", SectorArchitectureElement::flyingButtresses,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Flying-buttress array",
+		 "Paired inner and outer buttress stations.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Support size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"nave", SectorArchitectureElement::nave,
+		 SectorArchitectureFamily::structuralSupports, "Four-row nave",
+		 "Four longitudinal support rows with a broad center aisle.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Pier size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"transept", SectorArchitectureElement::transept,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Cruciform transept",
+		 "Crossing support rows for a cruciform hall.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Stations:", "Pier size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"apse", SectorArchitectureElement::apse,
+		 SectorArchitectureFamily::structuralSupports, "Columned apse",
+		 "A curved-ended arrangement of repeated supports.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Columns:", "Diameter:", "Elevation:", 5, 2, 24, 24, 16, 16, 4},
+		{"rotunda", SectorArchitectureElement::rotunda,
+		 SectorArchitectureFamily::structuralSupports, "Radial rotunda",
+		 "A circular ring of style-aware supports.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Column pairs:", "Diameter:", "Elevation:",
+		 4, 3, 32, 24, 16, 16, 4},
+		{"sanctuary", SectorArchitectureElement::sanctuary,
+		 SectorArchitectureFamily::structuralSupports, "Complex sanctuary",
+		 "A layered ceremonial support composition.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Stations:", "Support size:", "Elevation:", 4, 1, 16, 24, 16, 16, 4},
+		{"fortified_keep", SectorArchitectureElement::fortifiedKeep,
+		 SectorArchitectureFamily::structuralSupports, "Fortified keep",
+		 "A heavy central and corner support composition.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Mass size:", "Elevation:", 4, 1, 4, 24, 16, 16, 4},
+
+		{"raised_dais", SectorArchitectureElement::raisedDais,
+		 SectorArchitectureFamily::floorsTerraces, "Raised dais",
+		 "One beveled walkable raised floor.",
+		 DesignPreviewRole::architectureFloor,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Bevel:", "Rise:", 1, 1, 1, 24, 16, 16, 1},
+		{"sunken_court", SectorArchitectureElement::sunkenCourt,
+		 SectorArchitectureFamily::floorsTerraces, "Sunken court",
+		 "One beveled walkable recessed floor.",
+		 DesignPreviewRole::architectureFloor,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Bevel:", "Depth:", 1, 1, 1, 24, 16, 16, 1},
+		{"tiered_ziggurat", SectorArchitectureElement::tieredZiggurat,
+		 SectorArchitectureFamily::floorsTerraces, "Tiered ziggurat",
+		 "Three nested walkable floor tiers.",
+		 DesignPreviewRole::architectureFloor,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Tiers:", "Tread:", "Rise/tier:", 3, 3, 3, 24, 16, 16, 1},
+		{"grand_stair", SectorArchitectureElement::grandStair,
+		 SectorArchitectureFamily::circulation, "Grand staircase",
+		 "A straight directional run of walkable steps.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Steps:", "Stair width:", "Rise/step:", 4, 2, 32, 24, 8, 16, 1,
+		 true},
+		{"fountain_basin", SectorArchitectureElement::fountainBasin,
+		 SectorArchitectureFamily::waterworks,
+		 "Fountain basin and centerpiece",
+		 "An elliptical basin with a style-aware solid centerpiece.",
+		 DesignPreviewRole::architectureWater,
+		 A_STYLE | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Center size:", "Depth/relief:", 1, 1, 1, 24, 16, 16, 4},
+		{"reflecting_pool", SectorArchitectureElement::reflectingPool,
+		 SectorArchitectureFamily::waterworks, "Beveled reflecting pool",
+		 "A broad beveled recessed water cell.",
+		 DesignPreviewRole::architectureWater,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Bevel:", "Depth:", 1, 1, 1, 24, 16, 16, 1},
+		{"balcony_gallery", SectorArchitectureElement::balconyGallery,
+		 SectorArchitectureFamily::circulation,
+		 "Perimeter balcony gallery",
+		 "A raised walkable perimeter ring with a retained center.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Gallery depth:", "Rise:", 1, 1, 1, 24, 16, 16, 1},
+		{"processional_channel", SectorArchitectureElement::processionalChannel,
+		 SectorArchitectureFamily::waterworks, "Processional channel",
+		 "A lowered longitudinal channel.",
+		 DesignPreviewRole::architectureWater,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Channel width:", "Depth:", 1, 1, 1, 24, 16, 16, 1},
+		{"screen_wall", SectorArchitectureElement::screenWall,
+		 SectorArchitectureFamily::wallsScreens,
+		 "Perforated screen wall",
+		 "Alternating solid wall panels and full-height openings.",
+		 DesignPreviewRole::architectureWall,
+		 A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Openings:", "Thickness:", "Elevation:", 4, 1, 16, 24, 16, 16, 1},
+		{"coffered_ceiling", SectorArchitectureElement::cofferedCeiling,
+		 SectorArchitectureFamily::ceilingsVaults, "Coffered ceiling",
+		 "A grid of raised ceiling recess cells.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Columns:", "Rib width:", "Recess:", 4, 1, 12, 24, 16, 16, 1},
+		{"groin_vaults", SectorArchitectureElement::groinVaults,
+		 SectorArchitectureFamily::ceilingsVaults, "Groin-vault bays",
+		 "Repeated octagonal raised ceiling cells.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Vaults:", "Rib gap:", "Relief:", 4, 1, 16, 24, 16, 16, 1},
+		{"raised_bridge", SectorArchitectureElement::raisedBridge,
+		 SectorArchitectureFamily::circulation, "Raised bridge",
+		 "One narrow directional raised walkway.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Bridge width:", "Rise:", 1, 1, 1, 24, 16, 16, 1,
+		 true},
+
+		{"cross_core", SectorArchitectureElement::crossCore,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Cross-shaped structural core",
+		 "A single concave style-aware cruciform solid mass.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Arm width:", "Elevation:", 1, 1, 1, 32, 16, 16, 4},
+		{"hollow_tower", SectorArchitectureElement::hollowTower,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Hollow tower shell",
+		 "Four style-aware wall masses around an open center with opposed entries.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Wall thickness:", "Elevation:", 4, 1, 4, 24, 16, 16, 4},
+		{"buttressed_tower", SectorArchitectureElement::buttressedTower,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Buttressed tower",
+		 "A style-aware solid core with repeated projecting buttresses.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Buttresses:", "Core size:", "Elevation:", 8, 4, 16, 32, 16, 16, 4},
+		{"shear_wall_pair", SectorArchitectureElement::shearWallPair,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Paired shear walls",
+		 "Two parallel solid wall slabs framing a traversable passage.",
+		 DesignPreviewRole::architecture,
+		 A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Wall thickness:", "Elevation:", 2, 2, 2, 24, 16, 16, 8},
+		{"stepped_monument", SectorArchitectureElement::steppedMonument,
+		 SectorArchitectureFamily::structuralSupports,
+		 "Stepped monument plinth",
+		 "Nested style-aware solid tiers rising toward a monument center.",
+		 DesignPreviewRole::architecture,
+		 A_STYLE | A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Tiers:", "Tread:", "Rise/tier:", 3, 2, 6, 24, 16, 16, 4},
+
+		{"central_platform", SectorArchitectureElement::centralPlatform,
+		 SectorArchitectureFamily::floorsTerraces,
+		 "Central platform / lift",
+		 "A centered walkable platform that may optionally become a Smart Lift.",
+		 DesignPreviewRole::architectureFloor,
+		 A_SIZE | A_HEIGHT | A_MARGIN | A_FUNCTION,
+		 A_STATIC | A_SMART_LIFT,
+		 "Bays:", "Platform inset:", "Rise:", 1, 1, 1, 24, 16, 16, 4},
+		{"split_level_stage", SectorArchitectureElement::splitLevelStage,
+		 SectorArchitectureFamily::floorsTerraces, "Split-level stage",
+		 "Two adjacent walkable stage levels ordered by the drag direction.",
+		 DesignPreviewRole::architectureFloor,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Levels:", "Center gap:", "Rise/level:", 2, 2, 2, 16, 16, 16, 4},
+		{"corner_terraces", SectorArchitectureElement::cornerTerraces,
+		 SectorArchitectureFamily::floorsTerraces, "Corner terraces",
+		 "Mirrored nested corner-anchored walkable terraces.",
+		 DesignPreviewRole::architectureFloor,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN | A_MIRROR, A_STATIC,
+		 "Tiers:", "Tread:", "Rise/tier:", 3, 2, 6, 24, 16, 16, 8},
+		{"octagonal_podium", SectorArchitectureElement::octagonalPodium,
+		 SectorArchitectureFamily::floorsTerraces,
+		 "Multi-tier octagonal podium",
+		 "Nested style-aware polygonal walkable podium levels.",
+		 DesignPreviewRole::architectureFloor,
+		 A_STYLE | A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Tiers:", "Tread:", "Rise/tier:", 3, 2, 6, 24, 16, 16, 4},
+		{"horseshoe_amphitheater",
+		 SectorArchitectureElement::horseshoeAmphitheater,
+		 SectorArchitectureFamily::floorsTerraces,
+		 "Horseshoe amphitheater",
+		 "Three-sided seating rows rising away from an open stage.",
+		 DesignPreviewRole::architectureFloor,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Rows:", "Row depth:", "Rise/row:", 4, 2, 12, 24, 8, 16, 8},
+
+		{"switchback_stair", SectorArchitectureElement::switchbackStair,
+		 SectorArchitectureFamily::circulation, "Switchback stairs",
+		 "Two mirrored parallel flights joined by a landing.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN | A_MIRROR, A_STATIC,
+		 "Steps/flight:", "Flight width:", "Rise/step:", 4, 2, 16, 24, 8, 16, 8,
+		 true},
+		{"bifurcated_stair", SectorArchitectureElement::bifurcatedStair,
+		 SectorArchitectureFamily::circulation,
+		 "Bifurcated ceremonial stairs",
+		 "One broad lower flight splitting into two upper flights.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN | A_MIRROR, A_STATIC,
+		 "Steps/flight:", "Flight width:", "Rise/step:", 4, 2, 16, 24, 8, 16, 8,
+		 true},
+		{"spiral_stair", SectorArchitectureElement::spiralStair,
+		 SectorArchitectureFamily::circulation, "Spiral stairs",
+		 "Clockwise or counterclockwise wedge steps around a central well.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN | A_MIRROR, A_STATIC,
+		 "Steps:", "Well radius:", "Rise/step:", 12, 6, 32, 24, 8, 16, 8},
+		{"landing_catwalk", SectorArchitectureElement::landingCatwalk,
+		 SectorArchitectureFamily::circulation,
+		 "Catwalk with landings",
+		 "A narrow raised walk with wider end landing cells.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Walk width:", "Rise:", 1, 1, 1, 24, 16, 16, 8,
+		 true},
+		{"crossing_bridges", SectorArchitectureElement::crossingBridges,
+		 SectorArchitectureFamily::circulation, "Crossing bridges",
+		 "Two connected perpendicular raised walks sharing a center.",
+		 DesignPreviewRole::architectureCirculation,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Bridge width:", "Rise:", 1, 1, 1, 24, 16, 16, 8,
+		 true},
+
+		{"perimeter_moat", SectorArchitectureElement::perimeterMoat,
+		 SectorArchitectureFamily::waterworks, "Perimeter moat",
+		 "A recessed perimeter ring with a retained dry center.",
+		 DesignPreviewRole::architectureWater,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Moat width:", "Depth:", 1, 1, 1, 24, 16, 16, 8},
+		{"cross_canal", SectorArchitectureElement::crossCanal,
+		 SectorArchitectureFamily::waterworks, "Cross-shaped canal",
+		 "One connected concave cross-shaped lowered channel.",
+		 DesignPreviewRole::architectureWater,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Channel width:", "Depth:", 1, 1, 1, 24, 16, 16, 8},
+		{"twin_canals", SectorArchitectureElement::twinCanals,
+		 SectorArchitectureFamily::waterworks, "Parallel twin canals",
+		 "Two separated longitudinal lowered channels.",
+		 DesignPreviewRole::architectureWater,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Channels:", "Channel width:", "Depth:", 2, 2, 2, 24, 16, 16, 8},
+		{"stepped_cascade", SectorArchitectureElement::steppedCascade,
+		 SectorArchitectureFamily::waterworks, "Stepped cascade",
+		 "Adjacent basins descending along the drag direction.",
+		 DesignPreviewRole::architectureWater,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Basins:", "Cascade width:", "Drop/basin:", 4, 2, 12, 24, 8, 16, 8},
+		{"fountain_court", SectorArchitectureElement::fountainCourt,
+		 SectorArchitectureFamily::waterworks, "Four-basin fountain court",
+		 "Four recessed basins around a style-aware solid centerpiece.",
+		 DesignPreviewRole::architectureWater,
+		 A_STYLE | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Basins:", "Center/gap:", "Depth/relief:", 4, 4, 4, 24, 16, 16, 4},
+
+		{"partition_wall", SectorArchitectureElement::partitionWall,
+		 SectorArchitectureFamily::wallsScreens, "Solid partition wall",
+		 "One continuous centered floor-to-ceiling wall slab.",
+		 DesignPreviewRole::architectureWall,
+		 A_SIZE | A_MARGIN, A_STATIC,
+		 "Panels:", "Thickness:", "Elevation:", 1, 1, 1, 24, 16, 16, 8},
+		{"crenellated_wall", SectorArchitectureElement::crenellatedWall,
+		 SectorArchitectureFamily::wallsScreens, "Crenellated wall",
+		 "A continuous wall with alternating top-view projections.",
+		 DesignPreviewRole::architectureWall,
+		 A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Merlons:", "Thickness:", "Elevation:", 6, 2, 16, 24, 16, 16, 8},
+		{"buttressed_wall", SectorArchitectureElement::buttressedWall,
+		 SectorArchitectureFamily::wallsScreens, "Buttressed wall",
+		 "A continuous slab with repeated projecting solid buttresses.",
+		 DesignPreviewRole::architectureWall,
+		 A_BAYS | A_SIZE | A_MARGIN, A_STATIC,
+		 "Buttresses:", "Thickness:", "Elevation:", 4, 1, 16, 24, 16, 16, 8},
+		{"staggered_screen", SectorArchitectureElement::staggeredScreen,
+		 SectorArchitectureFamily::wallsScreens,
+		 "Staggered privacy screen",
+		 "Alternating offset wall panels forming a traversable slalom.",
+		 DesignPreviewRole::architectureWall,
+		 A_BAYS | A_SIZE | A_MARGIN | A_MIRROR, A_STATIC,
+		 "Panels:", "Thickness:", "Elevation:", 5, 2, 16, 24, 16, 16, 8},
+		{"gatehouse_passage", SectorArchitectureElement::gatehousePassage,
+		 SectorArchitectureFamily::wallsScreens,
+		 "Gatehouse with open passage",
+		 "Style-aware flanking wall masses preserve a centered traversable opening.",
+		 DesignPreviewRole::architectureWall,
+		 A_STYLE | A_SIZE | A_MARGIN, A_STATIC,
+		 "Bays:", "Passage width:", "Elevation:", 1, 1, 1, 64, 16, 16, 8,
+		 true},
+
+		{"tray_ceiling", SectorArchitectureElement::trayCeiling,
+		 SectorArchitectureFamily::ceilingsVaults, "Recessed tray ceiling",
+		 "One large ceiling recess inside a retained border.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Border width:", "Recess:", 1, 1, 1, 24, 16, 16, 4},
+		{"barrel_vault", SectorArchitectureElement::barrelVault,
+		 SectorArchitectureFamily::ceilingsVaults, "Stepped barrel vault",
+		 "Parallel ceiling bands approximate a smooth barrel profile.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bands:", "Ridge width:", "Total relief:", 5, 3, 15, 24, 16, 16, 4},
+		{"ribbed_cross_vault", SectorArchitectureElement::ribbedCrossVault,
+		 SectorArchitectureFamily::ceilingsVaults, "Ribbed cross vault",
+		 "Four ceiling cells rise toward a shared crossing.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Bays:", "Rib width:", "Relief:", 4, 4, 4, 24, 16, 16, 4},
+		{"domed_ceiling", SectorArchitectureElement::domedCeiling,
+		 SectorArchitectureFamily::ceilingsVaults,
+		 "Concentric polygonal dome",
+		 "Nested style-aware ceiling rings rise toward the center.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_STYLE | A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Rings:", "Ring width:", "Rise/ring:", 4, 2, 8, 24, 8, 16, 4},
+		{"beam_lattice", SectorArchitectureElement::beamLattice,
+		 SectorArchitectureFamily::ceilingsVaults,
+		 "Downstand beam lattice",
+		 "A grid of lowered ceiling strips forming structural beams.",
+		 DesignPreviewRole::architectureCeiling,
+		 A_BAYS | A_SIZE | A_HEIGHT | A_MARGIN, A_STATIC,
+		 "Beams/axis:", "Beam width:", "Drop:", 4, 1, 12, 16, 16, 16, 4}
+	};
+	return catalog;
+}
 
 void AddIssue(SectorDesignPlan &plan, SectorDesignIssueSeverity severity,
 			  const SString &message, int sector = -1, int line = -1,
@@ -346,6 +773,24 @@ bool PointInsidePath(const v2double_t &point,
 			inside = !inside;
 	}
 	return inside;
+}
+
+bool PointOnPathBoundary(const v2double_t &point,
+						 const std::vector<v2double_t> &path)
+{
+	for (size_t index = 0; index < path.size(); ++index)
+		if (PointOnSegment(
+				point, path[index],
+				path[(index + 1) % path.size()]))
+			return true;
+	return false;
+}
+
+bool PointStrictlyInsidePath(const v2double_t &point,
+							 const std::vector<v2double_t> &path)
+{
+	return !PointOnPathBoundary(point, path) &&
+			PointInsidePath(point, path);
 }
 
 void AddPreviewShape(SectorDesignPlan &plan, const PlannedSectorShape &shape)
@@ -940,6 +1385,10 @@ void ResolveProperties(const Document &doc, const ConfigData &config,
 				 "The selected model sector no longer exists.",
 				 request.properties.modelSector);
 	}
+	const SectorPropertyOptions inheritedOnly;
+	std::vector<int> resolvedFloors(plan.shapes.size(), 0);
+	std::vector<int> resolvedCeilings(plan.shapes.size(), 128);
+	std::vector<int> resolvedLights(plan.shapes.size(), 160);
 	for (size_t shapeIndex = 0;
 		 shapeIndex < plan.shapes.size(); ++shapeIndex)
 	{
@@ -953,7 +1402,10 @@ void ResolveProperties(const Document &doc, const ConfigData &config,
 			continue;
 		}
 		const SectorPropertyOptions &options =
-				shape.properties ? *shape.properties : request.properties;
+				shape.inheritModelOnly ?
+					inheritedOnly :
+					(shape.properties ?
+						*shape.properties : request.properties);
 		int model = shape.modelSector;
 		if (model < 0 && doc.isSector(options.modelSector))
 			model = options.modelSector;
@@ -964,7 +1416,13 @@ void ResolveProperties(const Document &doc, const ConfigData &config,
 		int baseFloor = 0;
 		int baseCeiling = 128;
 		int baseLight = 160;
-		if (doc.isSector(model))
+		if (shape.modelShape >= 0)
+		{
+			baseFloor = resolvedFloors[shape.modelShape];
+			baseCeiling = resolvedCeilings[shape.modelShape];
+			baseLight = resolvedLights[shape.modelShape];
+		}
+		else if (doc.isSector(model))
 		{
 			const Sector &sector = *doc.sectors[model];
 			baseFloor = sector.floorh;
@@ -983,18 +1441,26 @@ void ResolveProperties(const Document &doc, const ConfigData &config,
 			ceiling += options.ceilingValue;
 		if (shape.closed)
 			ceiling = floor;
+		resolvedFloors[shapeIndex] = floor;
+		resolvedCeilings[shapeIndex] = ceiling;
 		if (floor > ceiling)
 			AddIssue(plan, SectorDesignIssueSeverity::error,
 					 "A generated sector would have its floor above its ceiling.");
-		else if (shape.role == DesignPreviewRole::stair &&
+		else if (!shape.closed &&
+				 (shape.role == DesignPreviewRole::stair ||
+				  IsArchitecturePreviewRole(shape.role)) &&
 				 ceiling - floor < config.miscInfo.player_h)
 			AddIssue(plan, SectorDesignIssueSeverity::warning,
-					 "A generated stair step has inadequate player clearance.");
+					 shape.role == DesignPreviewRole::stair ?
+						"A generated stair step has inadequate player clearance." :
+						"A generated architectural sector has inadequate "
+						"player clearance.");
 		int light = baseLight;
 		if (options.lightMode == SectorValueMode::absolute)
 			light = options.lightValue;
 		else if (options.lightMode == SectorValueMode::relative)
 			light += options.lightValue;
+		resolvedLights[shapeIndex] = light;
 		if (light < 0 || light > 255)
 			AddIssue(plan, SectorDesignIssueSeverity::error,
 					 "The requested light level is outside 0 through 255.");
@@ -1218,7 +1684,7 @@ void ValidatePath(const Document &doc, const ConfigData &config,
 					 -1, line);
 	}
 
-	v2double_t sample;
+	v2double_t sample{0.0, 0.0};
 	for (const v2double_t &point : path)
 		sample += point;
 	sample /= static_cast<double>(path.size());
@@ -1240,6 +1706,64 @@ void ValidatePath(const Document &doc, const ConfigData &config,
 
 void ValidatePlannedShapeRelations(SectorDesignPlan &plan)
 {
+	auto shapeDescendsFrom = [&](size_t child, size_t ancestor)
+	{
+		std::set<int> visited;
+		int parent = plan.shapes[child].modelShape;
+		while (parent >= 0 &&
+			   parent < static_cast<int>(plan.shapes.size()) &&
+			   visited.insert(parent).second)
+		{
+			if (parent == static_cast<int>(ancestor))
+				return true;
+			parent = plan.shapes[parent].modelShape;
+		}
+		return false;
+	};
+
+	for (size_t child = 0; child < plan.shapes.size(); ++child)
+	{
+		const int parent = plan.shapes[child].modelShape;
+		if (parent < 0 ||
+			parent >= static_cast<int>(plan.shapes.size()) ||
+			plan.shapes[child].outer.empty() ||
+			plan.shapes[parent].outer.empty())
+			continue;
+		bool contained = PointInsidePath(
+				plan.shapes[child].outer.front(),
+				plan.shapes[parent].outer);
+		for (size_t childEdge = 0;
+			 childEdge < plan.shapes[child].outer.size() && contained;
+			 ++childEdge)
+			for (size_t parentEdge = 0;
+				 parentEdge < plan.shapes[parent].outer.size();
+				 ++parentEdge)
+			{
+				const SegmentRelation relation = ClassifySegments(
+						plan.shapes[child].outer[childEdge],
+						plan.shapes[child].outer[
+							(childEdge + 1) %
+							 plan.shapes[child].outer.size()],
+						plan.shapes[parent].outer[parentEdge],
+						plan.shapes[parent].outer[
+							(parentEdge + 1) %
+							 plan.shapes[parent].outer.size()]);
+				if (relation == SegmentRelation::proper ||
+					relation == SegmentRelation::overlap)
+				{
+					contained = false;
+					break;
+				}
+			}
+		if (!contained)
+		{
+			AddIssue(plan, SectorDesignIssueSeverity::error,
+					 "A generated sector leaves its declared parent "
+					 "structure.");
+			return;
+		}
+	}
+
 	for (size_t first = 0; first < plan.shapes.size(); first++)
 	for (size_t second = first + 1; second < plan.shapes.size(); second++)
 	{
@@ -1272,11 +1796,9 @@ void ValidatePlannedShapeRelations(SectorDesignPlan &plan)
 			{
 				const bool ownedContainment =
 						(firstInsideSecond &&
-						 plan.shapes[first].modelShape ==
-								static_cast<int>(second)) ||
+						 shapeDescendsFrom(first, second)) ||
 						(secondInsideFirst &&
-						 plan.shapes[second].modelShape ==
-								static_cast<int>(first));
+						 shapeDescendsFrom(second, first));
 				invalid = !ownedContainment;
 			}
 		}
@@ -1581,32 +2103,23 @@ const char *ArchitectureStyleName(SectorArchitectureStyle style)
 
 const char *ArchitectureElementName(SectorArchitectureElement element)
 {
-	switch (element)
-	{
-		case SectorArchitectureElement::pillar: return "pillar";
-		case SectorArchitectureElement::pairedPillars: return "pillar pair";
-		case SectorArchitectureElement::triumphalArch:
-			return "triumphal arch";
-		case SectorArchitectureElement::cornerPiers:
-			return "corner-pier layout";
-		case SectorArchitectureElement::colonnade: return "colonnade";
-		case SectorArchitectureElement::arcade: return "arcade";
-		case SectorArchitectureElement::cloister: return "cloister";
-		case SectorArchitectureElement::hypostyleHall:
-			return "hypostyle hall";
-		case SectorArchitectureElement::buttressedBay:
-			return "buttressed bay";
-		case SectorArchitectureElement::flyingButtresses:
-			return "flying-buttress array";
-		case SectorArchitectureElement::nave: return "nave";
-		case SectorArchitectureElement::transept: return "transept";
-		case SectorArchitectureElement::apse: return "apse";
-		case SectorArchitectureElement::rotunda: return "rotunda";
-		case SectorArchitectureElement::sanctuary: return "sanctuary";
-		case SectorArchitectureElement::fortifiedKeep:
-			return "fortified keep";
-	}
-	return "structure";
+	return M_ArchitectureDescriptor(element).label;
+}
+
+DesignPreviewRole ArchitecturePreviewRole(
+		SectorArchitectureElement element)
+{
+	return M_ArchitectureDescriptor(element).role;
+}
+
+bool IsArchitecturePreviewRole(DesignPreviewRole role)
+{
+	return role == DesignPreviewRole::architecture ||
+			role == DesignPreviewRole::architectureFloor ||
+			role == DesignPreviewRole::architectureCirculation ||
+			role == DesignPreviewRole::architectureWater ||
+			role == DesignPreviewRole::architectureWall ||
+			role == DesignPreviewRole::architectureCeiling;
 }
 
 double ArchitectureMaximumScale(SectorArchitectureElement element)
@@ -1625,9 +2138,72 @@ double ArchitectureMaximumScale(SectorArchitectureElement element)
 	}
 }
 
+bool ArchitectureUsesSectionStyle(SectorArchitectureElement element)
+{
+	return M_ArchitectureHasControl(
+			element, SectorArchitectureControl::style);
+}
+
+bool ArchitectureUsesBays(SectorArchitectureElement element)
+{
+	return M_ArchitectureHasControl(
+			element, SectorArchitectureControl::bays);
+}
+
+bool ArchitectureUsesHeight(SectorArchitectureElement element)
+{
+	return M_ArchitectureHasControl(
+			element, SectorArchitectureControl::height);
+}
+
+bool UsesLegacySupportBuilder(SectorArchitectureElement element)
+{
+	switch (element)
+	{
+		case SectorArchitectureElement::pillar:
+		case SectorArchitectureElement::pairedPillars:
+		case SectorArchitectureElement::triumphalArch:
+		case SectorArchitectureElement::cornerPiers:
+		case SectorArchitectureElement::colonnade:
+		case SectorArchitectureElement::arcade:
+		case SectorArchitectureElement::cloister:
+		case SectorArchitectureElement::hypostyleHall:
+		case SectorArchitectureElement::buttressedBay:
+		case SectorArchitectureElement::flyingButtresses:
+		case SectorArchitectureElement::nave:
+		case SectorArchitectureElement::transept:
+		case SectorArchitectureElement::apse:
+		case SectorArchitectureElement::rotunda:
+		case SectorArchitectureElement::sanctuary:
+		case SectorArchitectureElement::fortifiedKeep:
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool ArchitectureUsesDirection(SectorArchitectureElement element)
+{
+	switch (element)
+	{
+		case SectorArchitectureElement::grandStair:
+		case SectorArchitectureElement::raisedBridge:
+		case SectorArchitectureElement::splitLevelStage:
+		case SectorArchitectureElement::cornerTerraces:
+		case SectorArchitectureElement::horseshoeAmphitheater:
+		case SectorArchitectureElement::switchbackStair:
+		case SectorArchitectureElement::bifurcatedStair:
+		case SectorArchitectureElement::spiralStair:
+		case SectorArchitectureElement::steppedCascade:
+			return true;
+		default:
+			return false;
+	}
+}
+
 struct ArchitecturalSupport
 {
-	v2double_t center;
+	v2double_t center{0.0, 0.0};
 	double scale = 1.0;
 };
 
@@ -1667,10 +2243,1799 @@ std::vector<v2double_t> StyledPillar(
 	return {};
 }
 
+std::vector<v2double_t> BeveledRectangle(
+		double minX, double minY, double maxX, double maxY,
+		double bevel)
+{
+	bevel = std::clamp(
+			bevel, 0.0,
+			std::max(0.0, std::min(maxX - minX, maxY - minY) * 0.5));
+	if (bevel <= PLAN_EPSILON)
+		return {
+			{minX, minY}, {minX, maxY},
+			{maxX, maxY}, {maxX, minY}
+		};
+	return {
+		{minX + bevel, minY}, {minX, minY + bevel},
+		{minX, maxY - bevel}, {minX + bevel, maxY},
+		{maxX - bevel, maxY}, {maxX, maxY - bevel},
+		{maxX, minY + bevel}, {maxX - bevel, minY}
+	};
+}
+
+std::vector<v2double_t> EllipseProfile(
+		const v2double_t &center, double radiusX, double radiusY,
+		int vertices, double rotation)
+{
+	std::vector<v2double_t> result;
+	vertices = std::clamp(vertices, 8, 64);
+	const double cosine = std::cos(rotation);
+	const double sine = std::sin(rotation);
+	for (int index = 0; index < vertices; ++index)
+	{
+		const double angle =
+				2.0 * std::numbers::pi * index / vertices;
+		const double x = std::cos(angle) * radiusX;
+		const double y = std::sin(angle) * radiusY;
+		result.push_back({
+			center.x + x * cosine - y * sine,
+			center.y + x * sine + y * cosine
+		});
+	}
+	return result;
+}
+
+bool ArchitectureShapeInsideHost(
+		const Document &doc, int host,
+		const std::vector<v2double_t> &outline,
+		std::optional<v2double_t> &firstOutside)
+{
+	if (!doc.isSector(host) || outline.empty())
+		return false;
+
+	auto pointBelongsToHost = [&](const v2double_t &point)
+	{
+		bool inside = false;
+		for (const std::shared_ptr<LineDef> &line : doc.linedefs)
+		{
+			if (!doc.isVertex(line->start) ||
+				!doc.isVertex(line->end))
+				continue;
+			const int right = SectorForSide(doc, line->right);
+			const int left = SectorForSide(doc, line->left);
+			if ((right == host) == (left == host))
+				continue;
+			const v2double_t start = doc.getStart(*line).xy();
+			const v2double_t end = doc.getEnd(*line).xy();
+			// Boundary points belong to the host independent of linedef
+			// direction. This is also the exact seam used to connect a
+			// zero-margin floor to an adjacent existing sector.
+			if (PointOnSegment(point, start, end))
+				return true;
+			if ((start.y > point.y) != (end.y > point.y) &&
+				point.x < (end.x - start.x) *
+						(point.y - start.y) /
+						(end.y - start.y) + start.x)
+				inside = !inside;
+		}
+		if (inside)
+			return true;
+		if (!firstOutside)
+			firstOutside = point;
+		return false;
+	};
+
+	for (size_t index = 0; index < outline.size(); ++index)
+	{
+		const v2double_t &start = outline[index];
+		const v2double_t &end = outline[(index + 1) % outline.size()];
+		if (!pointBelongsToHost(start) ||
+			!pointBelongsToHost((start + end) * 0.5))
+			return false;
+	}
+
+	v2double_t center{0.0, 0.0};
+	for (const v2double_t &point : outline)
+		center += point;
+	center /= static_cast<double>(outline.size());
+	if (!pointBelongsToHost(center))
+		return false;
+
+	// Catch an off-center hole or foreign cell completely enclosed by a
+	// large generated structure. Vertex and centroid samples alone cannot
+	// detect that topology.
+	for (int line = 0; line < doc.numLinedefs(); ++line)
+	{
+		const LineDef &linedef = *doc.linedefs[line];
+		if (!doc.isVertex(linedef.start) ||
+			!doc.isVertex(linedef.end))
+			continue;
+		const int right = SectorForSide(doc, linedef.right);
+		const int left = SectorForSide(doc, linedef.left);
+		if ((right == host) == (left == host))
+			continue;
+		const v2double_t start = doc.getStart(linedef).xy();
+		const v2double_t end = doc.getEnd(linedef).xy();
+		if (PointStrictlyInsidePath(start, outline) ||
+			PointStrictlyInsidePath(end, outline) ||
+			PointStrictlyInsidePath((start + end) * 0.5, outline))
+		{
+			if (!firstOutside)
+				firstOutside = (start + end) * 0.5;
+			return false;
+		}
+		for (size_t edge = 0; edge < outline.size(); ++edge)
+			if (ClassifySegments(
+					outline[edge],
+					outline[(edge + 1) % outline.size()],
+					start, end) == SegmentRelation::proper)
+			{
+				if (!firstOutside)
+					firstOutside = outline[edge];
+				return false;
+			}
+	}
+	return true;
+}
+
+void PlanVolumetricArchitecture(
+		const Document &doc, const ConfigData &config,
+		const SectorDesignRequest &request,
+		SectorDesignPlan &plan, MapFormat format,
+		int host, int hostShape,
+		bool generatedHost, double minX, double minY,
+		double maxX, double maxY)
+{
+	const double margin = request.architectureMargin;
+	const double innerMinX = minX + margin;
+	const double innerMaxX = maxX - margin;
+	const double innerMinY = minY + margin;
+	const double innerMaxY = maxY - margin;
+	const double innerWidth = innerMaxX - innerMinX;
+	const double innerHeight = innerMaxY - innerMinY;
+	const v2double_t center{
+		(innerMinX + innerMaxX) * 0.5,
+		(innerMinY + innerMaxY) * 0.5
+	};
+	if (innerWidth <= PLAN_EPSILON || innerHeight <= PLAN_EPSILON)
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "The edge margin consumes the complete architectural "
+				 "footprint.", host, -1, center);
+		return;
+	}
+
+	const int elevation = std::max(
+			1, static_cast<int>(std::lround(request.architectureHeight)));
+	if (ArchitectureUsesHeight(request.architectureElement) &&
+		std::abs(request.architectureHeight - elevation) > PLAN_EPSILON)
+		AddIssue(plan, SectorDesignIssueSeverity::warning,
+				 SString::printf(
+					 "Structure elevation is quantized from %.3f to %d "
+					 "map units.", request.architectureHeight, elevation),
+				 host, -1, center);
+
+	const bool horizontal = innerWidth >= innerHeight;
+	const double longBegin = horizontal ? innerMinX : innerMinY;
+	const double longEnd = horizontal ? innerMaxX : innerMaxY;
+	const double longSpan = longEnd - longBegin;
+	const double crossCenter = horizontal ? center.y : center.x;
+	const double crossSpan = horizontal ? innerHeight : innerWidth;
+	const double crossExtent = crossSpan * 0.5;
+	auto position = [&](double along, double cross)
+	{
+		return horizontal ?
+				v2double_t{along, crossCenter + cross} :
+				v2double_t{crossCenter + cross, along};
+	};
+	auto localRectangle = [&](double along0, double along1,
+							 double cross0, double cross1)
+	{
+		return std::vector<v2double_t>{
+			position(along0, cross0), position(along0, cross1),
+			position(along1, cross1), position(along1, cross0)
+		};
+	};
+	auto localPath = [&](std::initializer_list<v2double_t> points)
+	{
+		std::vector<v2double_t> result;
+		result.reserve(points.size());
+		for (const v2double_t &point : points)
+			result.push_back(position(point.x, point.y));
+		return result;
+	};
+	const bool forward = horizontal ?
+			request.anchors.back().x >= request.anchors.front().x :
+			request.anchors.back().y >= request.anchors.front().y;
+	auto directedAlong = [&](double distance)
+	{
+		return forward ? longBegin + distance : longEnd - distance;
+	};
+	auto directedRectangle = [&](double distance0, double distance1,
+								 double cross0, double cross1)
+	{
+		const double along0 = directedAlong(distance0);
+		const double along1 = directedAlong(distance1);
+		return localRectangle(
+				std::min(along0, along1), std::max(along0, along1),
+				cross0, cross1);
+	};
+	auto localCross = [&](double armWidth)
+	{
+		const double alongCenter = (longBegin + longEnd) * 0.5;
+		const double half = std::min({
+			armWidth * 0.5, longSpan * 0.48, crossSpan * 0.48
+		});
+		return localPath({
+			{longBegin, -half},
+			{alongCenter - half, -half},
+			{alongCenter - half, -crossExtent},
+			{alongCenter + half, -crossExtent},
+			{alongCenter + half, -half},
+			{longEnd, -half},
+			{longEnd, half},
+			{alongCenter + half, half},
+			{alongCenter + half, crossExtent},
+			{alongCenter - half, crossExtent},
+			{alongCenter - half, half},
+			{longBegin, half}
+		});
+	};
+	auto radialRectangle = [&](double angle, double innerRadius,
+							   double outerRadius, double width)
+	{
+		const v2double_t direction{std::cos(angle), std::sin(angle)};
+		const v2double_t normal{-direction.y, direction.x};
+		const v2double_t inner = center + direction * innerRadius;
+		const v2double_t outer = center + direction * outerRadius;
+		const v2double_t half = normal * (width * 0.5);
+		return std::vector<v2double_t>{
+			inner - half, inner + half, outer + half, outer - half
+		};
+	};
+
+	const size_t firstStructure = plan.shapes.size();
+	const DesignPreviewRole previewRole =
+			ArchitecturePreviewRole(request.architectureElement);
+	int outsideStructures = 0;
+	std::optional<v2double_t> firstOutside;
+	auto addShape = [&](std::vector<v2double_t> outline,
+					 int floorDelta, int ceilingDelta,
+					 bool closed, int parentShape = -2)
+	{
+		MakeClockwise(outline);
+		bool inside = true;
+		if (generatedHost)
+		{
+			const std::vector<v2double_t> &hostOutline =
+					plan.shapes[hostShape].outer;
+			for (const v2double_t &point : outline)
+				if (!PointInsidePath(point, hostOutline))
+				{
+					inside = false;
+					if (!firstOutside)
+						firstOutside = point;
+					break;
+				}
+		}
+		else
+			inside = ArchitectureShapeInsideHost(
+					doc, host, outline, firstOutside);
+
+		PlannedSectorShape shape;
+		shape.outer = std::move(outline);
+		shape.role = inside ?
+				previewRole :
+				DesignPreviewRole::conflict;
+		shape.modelSector = host;
+		shape.modelShape = parentShape == -2 ? hostShape : parentShape;
+		shape.inheritModelOnly = shape.modelShape >= 0;
+		shape.floorDelta = floorDelta;
+		shape.ceilingDelta = ceilingDelta;
+		shape.closed = closed;
+		const int index = static_cast<int>(plan.shapes.size());
+		plan.shapes.push_back(std::move(shape));
+		if (!inside)
+			outsideStructures++;
+		return index;
+	};
+	auto requireDimensions = [&](double width, double height,
+								 const char *explanation)
+	{
+		if (innerWidth + PLAN_EPSILON >= width &&
+			innerHeight + PLAN_EPSILON >= height)
+			return true;
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 SString::printf(
+					 "%s needs at least %.1fx%.1f units inside the edge "
+					 "margin; only %.1fx%.1f are available.",
+					 explanation, width, height,
+					 innerWidth, innerHeight),
+				 host, -1, center);
+		return false;
+	};
+	auto warnNarrowPassage = [&](double passage, const char *name)
+	{
+		const double required =
+				std::max(0, config.miscInfo.player_r * 2);
+		if (required <= 0.0 ||
+			passage + PLAN_EPSILON >= required)
+			return;
+		AddIssue(plan, SectorDesignIssueSeverity::warning,
+				 SString::printf(
+					 "%s leaves %.1f units of passage width, below the "
+					 "configured %.1f-unit player diameter.",
+					 name, passage, required),
+				 host, -1, center);
+	};
+
+	switch (request.architectureElement)
+	{
+		case SectorArchitectureElement::raisedDais:
+			addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					request.architectureSize * 0.25),
+					elevation, 0, false);
+			break;
+
+		case SectorArchitectureElement::sunkenCourt:
+			addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					request.architectureSize * 0.25),
+					-elevation, 0, false);
+			break;
+
+		case SectorArchitectureElement::tieredZiggurat:
+		{
+			const double tread = request.architectureSize;
+			if (!requireDimensions(
+					tread * 4.0 + 2.0, tread * 4.0 + 2.0,
+					"The three-tier ziggurat"))
+				break;
+			const int lower = addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					tread * 0.2), elevation, 0, false);
+			const int middle = addShape(BeveledRectangle(
+					innerMinX + tread, innerMinY + tread,
+					innerMaxX - tread, innerMaxY - tread,
+					tread * 0.15), elevation, 0, false, lower);
+			addShape(BeveledRectangle(
+					innerMinX + tread * 2.0,
+					innerMinY + tread * 2.0,
+					innerMaxX - tread * 2.0,
+					innerMaxY - tread * 2.0,
+					tread * 0.1), elevation, 0, false, middle);
+			break;
+		}
+
+		case SectorArchitectureElement::grandStair:
+		{
+			const int steps = request.architectureBays;
+			const double tread = longSpan / steps;
+			const double halfWidth = std::min(
+					crossExtent,
+					std::max(request.architectureSize,
+							 crossExtent * 0.72));
+			if (tread <= PLAN_EPSILON ||
+				halfWidth <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The grand staircase has no usable tread or width.",
+						 host, -1, center);
+				break;
+			}
+			const bool forward = horizontal ?
+					request.anchors.back().x >=
+						request.anchors.front().x :
+					request.anchors.back().y >=
+						request.anchors.front().y;
+			for (int level = 0; level < steps; ++level)
+			{
+				const int segment = forward ?
+						level : steps - level - 1;
+				addShape(localRectangle(
+						longBegin + segment * tread,
+						longBegin + (segment + 1) * tread,
+						-halfWidth, halfWidth),
+						elevation * (level + 1), 0, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::fountainBasin:
+		{
+			const double radiusX = innerWidth * 0.5;
+			const double radiusY = innerHeight * 0.5;
+			if (!requireDimensions(
+					request.architectureSize * 2.0,
+					request.architectureSize * 2.0,
+					"The fountain basin"))
+				break;
+			const int basin = addShape(EllipseProfile(
+					center, radiusX, radiusY, 32, 0.0),
+					-elevation, 0, false);
+			const double pedestalSize = std::min({
+				request.architectureSize,
+				radiusX,
+				radiusY
+			});
+			addShape(StyledPillar(
+					center, pedestalSize,
+					request.architectureStyle, request.rotation),
+					elevation * 2, 0, true, basin);
+			break;
+		}
+
+		case SectorArchitectureElement::reflectingPool:
+			addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					std::min(request.architectureSize,
+							 std::min(innerWidth, innerHeight) * 0.18)),
+					-elevation, 0, false);
+			break;
+
+		case SectorArchitectureElement::balconyGallery:
+		{
+			const double depth = request.architectureSize;
+			if (!requireDimensions(
+					depth * 2.0 + 2.0, depth * 2.0 + 2.0,
+					"The perimeter balcony"))
+				break;
+			const int gallery = addShape(BeveledRectangle(
+					innerMinX, innerMinY,
+					innerMaxX, innerMaxY, 0),
+					elevation, 0, false);
+			addShape(BeveledRectangle(
+					innerMinX + depth, innerMinY + depth,
+					innerMaxX - depth, innerMaxY - depth, 0),
+					-elevation, 0, false, gallery);
+			break;
+		}
+
+		case SectorArchitectureElement::processionalChannel:
+		{
+			const double channelWidth =
+					std::min(request.architectureSize, crossSpan);
+			addShape(localRectangle(
+					longBegin, longEnd,
+					-channelWidth * 0.5, channelWidth * 0.5),
+					-elevation, 0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::screenWall:
+		{
+			const double thickness =
+					std::min(request.architectureSize, crossSpan);
+			const int cells = request.architectureBays * 2 + 1;
+			const double cellLength = longSpan / cells;
+			if (cellLength <= PLAN_EPSILON ||
+				thickness <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The screen wall bays collapse at this footprint "
+						 "size.", host, -1, center);
+				break;
+			}
+			for (int cell = 0; cell < cells; cell += 2)
+			{
+				const double along0 =
+						longBegin + cell * cellLength;
+				addShape(localRectangle(
+						along0, along0 + cellLength,
+						-thickness * 0.5, thickness * 0.5),
+						0, 0, true);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::cofferedCeiling:
+		{
+			const int columns = request.architectureBays;
+			const int rows = std::clamp((columns + 1) / 2, 1, 6);
+			const double cellLong = longSpan / columns;
+			const double cellCross = crossSpan / rows;
+			const double rib = std::min({
+				request.architectureSize,
+				cellLong * 0.4,
+				cellCross * 0.4
+			});
+			if (cellLong - rib <= PLAN_EPSILON ||
+				cellCross - rib <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The ceiling coffers collapse between their ribs. "
+						 "Reduce Bays or Structure size.",
+						 host, -1, center);
+				break;
+			}
+			for (int column = 0; column < columns; ++column)
+				for (int row = 0; row < rows; ++row)
+				{
+					const double along0 =
+							longBegin + column * cellLong + rib * 0.5;
+					const double along1 =
+							longBegin + (column + 1) * cellLong -
+								rib * 0.5;
+					const double cross0 =
+							-crossExtent + row * cellCross + rib * 0.5;
+					const double cross1 =
+							-crossExtent + (row + 1) * cellCross -
+								rib * 0.5;
+					addShape(localRectangle(
+							along0, along1, cross0, cross1),
+							0, elevation, false);
+				}
+			break;
+		}
+
+		case SectorArchitectureElement::groinVaults:
+		{
+			const int bays = request.architectureBays;
+			const double bayLength = longSpan / bays;
+			const double gap = std::min({
+				request.architectureSize,
+				bayLength * 0.35,
+				crossSpan * 0.25
+			});
+			const double radiusLong = (bayLength - gap) * 0.5;
+			const double radiusCross = (crossSpan - gap) * 0.5;
+			if (radiusLong <= PLAN_EPSILON ||
+				radiusCross <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The vault bays collapse between their ribs. "
+						 "Reduce Bays or Structure size.",
+						 host, -1, center);
+				break;
+			}
+			for (int bay = 0; bay < bays; ++bay)
+			{
+				const double along =
+						longBegin + (bay + 0.5) * bayLength;
+				std::vector<v2double_t> outline;
+				for (int vertex = 0; vertex < 8; ++vertex)
+				{
+					const double angle =
+							2.0 * std::numbers::pi * vertex / 8.0;
+					outline.push_back(position(
+							along + std::cos(angle) * radiusLong,
+							std::sin(angle) * radiusCross));
+				}
+				addShape(std::move(outline), 0, elevation, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::raisedBridge:
+		{
+			const double bridgeWidth =
+					std::min(request.architectureSize, crossSpan);
+			addShape(localRectangle(
+					longBegin, longEnd,
+					-bridgeWidth * 0.5, bridgeWidth * 0.5),
+					elevation, 0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::crossCore:
+		{
+			double styleScale = 1.0;
+			switch (request.architectureStyle)
+			{
+				case SectorArchitectureStyle::classical: styleScale = 1.18; break;
+				case SectorArchitectureStyle::romanesque: styleScale = 1.1; break;
+				case SectorArchitectureStyle::gothic: styleScale = 0.78; break;
+				case SectorArchitectureStyle::industrial: styleScale = 1.3; break;
+				case SectorArchitectureStyle::artDeco: styleScale = 0.9; break;
+				case SectorArchitectureStyle::infernal: styleScale = 0.7; break;
+				default: break;
+			}
+			addShape(localCross(request.architectureSize * styleScale),
+					 0, 0, true);
+			break;
+		}
+
+		case SectorArchitectureElement::hollowTower:
+		{
+			const double thickness = std::min({
+				request.architectureSize,
+				longSpan * 0.18,
+				crossSpan * 0.18
+			});
+			const double cornerSize = std::max(
+					thickness, std::min(
+						thickness * 1.35,
+						std::min(longSpan, crossSpan) * 0.24));
+			const double radius = cornerSize * 0.5;
+			const double entryHalf = std::min(
+					crossExtent - thickness * 1.25,
+					std::max(thickness, crossSpan * 0.16));
+			if (thickness <= PLAN_EPSILON ||
+				entryHalf <= PLAN_EPSILON ||
+				longSpan <= cornerSize * 2.25 ||
+				crossSpan <= cornerSize * 2.25)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The hollow tower needs more room for its shell, "
+						 "corner masses, and opposed entries.",
+						 host, -1, center);
+				break;
+			}
+			warnNarrowPassage(
+					entryHalf * 2.0,
+					"The hollow tower entry");
+			for (double along : {longBegin + radius, longEnd - radius})
+				for (double cross :
+					 {-crossExtent + radius, crossExtent - radius})
+					addShape(StyledPillar(
+							position(along, cross), cornerSize,
+							request.architectureStyle, request.rotation),
+							0, 0, true);
+
+			const double wallBegin = longBegin + cornerSize;
+			const double wallEnd = longEnd - cornerSize;
+			for (double side : {-1.0, 1.0})
+				addShape(localRectangle(
+						wallBegin, wallEnd,
+						side < 0 ? -crossExtent :
+							crossExtent - thickness,
+						side < 0 ? -crossExtent + thickness :
+							crossExtent),
+						0, 0, true);
+			for (double end : {longBegin, longEnd - thickness})
+				for (double side : {-1.0, 1.0})
+					addShape(localRectangle(
+							end, end + thickness,
+							side < 0 ?
+								-crossExtent + cornerSize :
+								entryHalf,
+							side < 0 ?
+								-entryHalf :
+								crossExtent - cornerSize),
+							0, 0, true);
+			break;
+		}
+
+		case SectorArchitectureElement::buttressedTower:
+		{
+			const double diameter = std::min(
+					request.architectureSize,
+					std::min(innerWidth, innerHeight) * 0.42);
+			const double coreRadius = diameter * 0.5;
+			const double outerRadius =
+					std::min(innerWidth, innerHeight) * 0.47;
+			if (outerRadius <= coreRadius + 1.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The buttressed tower needs room beyond its core.",
+						 host, -1, center);
+				break;
+			}
+			addShape(StyledPillar(
+					center, diameter, request.architectureStyle,
+					request.rotation), 0, 0, true);
+			const int buttresses = request.architectureBays;
+			const double width = std::min(
+					diameter * 0.28,
+					2.0 * std::numbers::pi * coreRadius /
+						std::max(8, buttresses * 3));
+			for (int index = 0; index < buttresses; ++index)
+			{
+				const double angle = request.rotation +
+						2.0 * std::numbers::pi * index / buttresses;
+				addShape(radialRectangle(
+						angle, coreRadius + PLAN_EPSILON,
+						outerRadius, std::max(1.0, width)),
+						0, 0, true);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::shearWallPair:
+		{
+			const double wall = std::min(
+					request.architectureSize, crossSpan * 0.24);
+			if (crossSpan - wall * 2.0 <= 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The paired shear walls leave no usable passage.",
+						 host, -1, center);
+				break;
+			}
+			warnNarrowPassage(
+					crossSpan - wall * 2.0,
+					"The shear-wall passage");
+			addShape(localRectangle(
+					longBegin, longEnd,
+					-crossExtent, -crossExtent + wall),
+					0, 0, true);
+			addShape(localRectangle(
+					longBegin, longEnd,
+					crossExtent - wall, crossExtent),
+					0, 0, true);
+			break;
+		}
+
+		case SectorArchitectureElement::steppedMonument:
+		{
+			const int tiers = request.architectureBays;
+			const double outerDiameter =
+					std::min(innerWidth, innerHeight);
+			const double finalDiameter =
+					outerDiameter -
+					2.0 * request.architectureSize * (tiers - 1);
+			if (finalDiameter + PLAN_EPSILON <
+				M_MinimumArchitectureSize(
+						request.architectureStyle,
+						request.architectureElement))
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The monument tiers collapse before reaching the "
+						 "center. Reduce Tiers or Tread.",
+						 host, -1, center);
+				break;
+			}
+			int parent = -2;
+			for (int tier = 0; tier < tiers; ++tier)
+			{
+				const double diameter =
+						outerDiameter -
+						tier * request.architectureSize * 2.0;
+				parent = addShape(StyledPillar(
+						center, diameter,
+						request.architectureStyle, request.rotation),
+						elevation, 0, true, parent);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::centralPlatform:
+		{
+			const int platform = addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					std::min(request.architectureSize * 0.25,
+							 std::min(innerWidth, innerHeight) * 0.2)),
+					elevation, 0, false);
+			if (request.architectureFunction ==
+				SectorArchitectureFunction::smartLift)
+			{
+				plan.shapes[platform].smartLift = true;
+				plan.shapes[platform].role = DesignPreviewRole::lift;
+				plan.plannedLifts = 1;
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::splitLevelStage:
+		{
+			const double halfGap = std::min(
+					request.architectureSize * 0.5,
+					longSpan * 0.12);
+			if (longSpan <= halfGap * 2.0 + 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The split-level stage needs room on both sides "
+						 "of its center gap.", host, -1, center);
+				break;
+			}
+			addShape(directedRectangle(
+					0, longSpan * 0.5 - halfGap,
+					-crossExtent, crossExtent),
+					elevation, 0, false);
+			addShape(directedRectangle(
+					longSpan * 0.5 + halfGap, longSpan,
+					-crossExtent, crossExtent),
+					elevation * 2, 0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::cornerTerraces:
+		{
+			const int tiers = request.architectureBays;
+			const double tread = request.architectureSize;
+			const double extent = tread * (tiers * 2.0 + 1.0);
+			if (!requireDimensions(
+					extent, extent,
+					"The corner terraces"))
+				break;
+			int parent = -2;
+			for (int tier = 0; tier < tiers; ++tier)
+			{
+				const double inset = tier * tread;
+				const double length = extent - inset * 2.0;
+				const double cross0 =
+						request.architectureMirrored ?
+							-crossExtent + inset :
+							crossExtent - inset - length;
+				parent = addShape(directedRectangle(
+						inset, inset + length,
+						cross0, cross0 + length),
+						elevation, 0, false, parent);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::octagonalPodium:
+		{
+			const int tiers = request.architectureBays;
+			const double outerRadius =
+					std::min(innerWidth, innerHeight) * 0.5;
+			const double finalRadius =
+					outerRadius -
+					request.architectureSize * (tiers - 1);
+			if (finalRadius <= 1.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The podium tiers collapse before reaching the "
+						 "center. Reduce Tiers or Tread.",
+						 host, -1, center);
+				break;
+			}
+			std::vector<double> radii(8, 1.0);
+			double inner = 1.0;
+			switch (request.architectureStyle)
+			{
+				case SectorArchitectureStyle::functional: inner = 0.94; break;
+				case SectorArchitectureStyle::classical: inner = 0.98; break;
+				case SectorArchitectureStyle::romanesque: inner = 0.88; break;
+				case SectorArchitectureStyle::gothic: inner = 0.78; break;
+				case SectorArchitectureStyle::industrial: inner = 0.9; break;
+				case SectorArchitectureStyle::artDeco: inner = 0.84; break;
+				case SectorArchitectureStyle::infernal: inner = 0.7; break;
+			}
+			for (size_t index = 1; index < radii.size(); index += 2)
+				radii[index] = inner;
+			int parent = -2;
+			for (int tier = 0; tier < tiers; ++tier)
+			{
+				const double radius =
+						outerRadius -
+						tier * request.architectureSize;
+				parent = addShape(RadialProfile(
+						center, radius, request.rotation, radii),
+						elevation, 0, false, parent);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::horseshoeAmphitheater:
+		{
+			const int rows = request.architectureBays;
+			const double pitch = request.architectureSize;
+			const double seatDepth =
+					std::max(1.0, pitch * 0.68);
+			if (!requireDimensions(
+					pitch * (rows + 1),
+					pitch * (rows * 2 + 1),
+					"The horseshoe amphitheater"))
+				break;
+			for (int row = 0; row < rows; ++row)
+			{
+				const double inset = row * pitch;
+				const double xmin = longBegin + inset;
+				const double xmax = longEnd - inset;
+				const double ymin = -crossExtent + inset;
+				const double ymax = crossExtent - inset;
+				std::vector<v2double_t> u = localPath({
+					{xmin, ymin}, {xmin, ymax},
+					{xmax, ymax}, {xmax, ymin},
+					{xmax - seatDepth, ymin},
+					{xmax - seatDepth, ymax - seatDepth},
+					{xmin + seatDepth, ymax - seatDepth},
+					{xmin + seatDepth, ymin}
+				});
+				if (!forward)
+					for (v2double_t &point : u)
+						point.x = longBegin + longEnd - point.x;
+				addShape(std::move(u),
+						elevation * (row + 1), 0, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::switchbackStair:
+		{
+			const int steps = request.architectureBays;
+			const double landingDepth = longSpan / (steps * 2.0 + 1.0);
+			const double flightLength =
+					longSpan - landingDepth;
+			const double tread = flightLength / steps;
+			const double gap = std::min(
+					std::max(2.0, request.architectureSize * 0.2),
+					crossSpan * 0.15);
+			const double flightWidth = std::min(
+					request.architectureSize,
+					(crossSpan - gap) * 0.5);
+			if (tread <= PLAN_EPSILON || flightWidth <= 1.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The switchback stair has no usable tread or "
+						 "flight width.", host, -1, center);
+				break;
+			}
+			warnNarrowPassage(
+					flightWidth,
+					"Each switchback flight");
+			const double side = request.architectureMirrored ? -1.0 : 1.0;
+			const double first0 = side > 0 ?
+					-gap * 0.5 - flightWidth : gap * 0.5;
+			const double first1 = side > 0 ?
+					-gap * 0.5 : gap * 0.5 + flightWidth;
+			const double second0 = -first1;
+			const double second1 = -first0;
+			for (int step = 0; step < steps; ++step)
+				addShape(directedRectangle(
+						step * tread, (step + 1) * tread,
+						first0, first1),
+						elevation * (step + 1), 0, false);
+			addShape(directedRectangle(
+					flightLength, flightLength + landingDepth,
+					first0, first1),
+					elevation * (steps + 1), 0, false);
+			addShape(directedRectangle(
+					flightLength, flightLength + landingDepth,
+					std::min(first1, second1),
+					std::max(first0, second0)),
+					elevation * (steps + 1), 0, false);
+			addShape(directedRectangle(
+					flightLength, flightLength + landingDepth,
+					second0, second1),
+					elevation * (steps + 1), 0, false);
+			for (int step = 0; step < steps; ++step)
+				addShape(directedRectangle(
+						step * tread, (step + 1) * tread,
+						second0, second1),
+						elevation * (steps * 2 - step + 1),
+						0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::bifurcatedStair:
+		{
+			const int steps = request.architectureBays;
+			const double halfLength = longSpan * 0.5;
+			const double tread = halfLength / steps;
+			const double flightWidth = std::min(
+					request.architectureSize, crossSpan * 0.28);
+			const double gap = std::min(
+					std::max(2.0, flightWidth * 0.2),
+					crossSpan * 0.1);
+			if (tread <= PLAN_EPSILON ||
+				flightWidth * 2.0 + gap > crossSpan + PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The bifurcated stair needs a wider footprint or "
+						 "narrower flights.", host, -1, center);
+				break;
+			}
+			const double leftWidth = flightWidth *
+					(request.architectureMirrored ? 0.82 : 1.18);
+			const double rightWidth = flightWidth *
+					(request.architectureMirrored ? 1.18 : 0.82);
+			warnNarrowPassage(
+					std::min(leftWidth, rightWidth),
+					"The narrower bifurcated flight");
+			const double left0 = -gap * 0.5 - leftWidth;
+			const double left1 = -gap * 0.5;
+			const double right0 = gap * 0.5;
+			const double right1 = gap * 0.5 + rightWidth;
+			for (int step = 0; step < steps; ++step)
+			{
+				addShape(directedRectangle(
+						step * tread, (step + 1) * tread,
+						left0, left1),
+						elevation * (step + 1), 0, false);
+				addShape(directedRectangle(
+						step * tread, (step + 1) * tread,
+						left1, right0),
+						elevation * (step + 1), 0, false);
+				addShape(directedRectangle(
+						step * tread, (step + 1) * tread,
+						right0, right1),
+						elevation * (step + 1), 0, false);
+			}
+			for (int step = 0; step < steps; ++step)
+			{
+				const double distance0 = halfLength + step * tread;
+				const double distance1 = halfLength + (step + 1) * tread;
+				const int level = steps + step + 1;
+				addShape(directedRectangle(
+						distance0, distance1,
+						left0, left1),
+						elevation * level, 0, false);
+				addShape(directedRectangle(
+						distance0, distance1,
+						right0, right1),
+						elevation * level, 0, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::spiralStair:
+		{
+			const int steps = request.architectureBays;
+			const double radiusX = innerWidth * 0.5;
+			const double radiusY = innerHeight * 0.5;
+			const double outerRadius =
+					std::min(radiusX, radiusY);
+			const double innerRadius = std::min(
+					request.architectureSize, outerRadius * 0.58);
+			if (outerRadius - innerRadius <= 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The spiral stair needs more tread outside its "
+						 "central well.", host, -1, center);
+				break;
+			}
+			const double direction =
+					request.architectureMirrored ? 1.0 : -1.0;
+			const double startAngle =
+					(request.anchors.back() -
+					 request.anchors.front()).atan2();
+			const double angleStep =
+					2.0 * std::numbers::pi / (steps + 1);
+			for (int step = 0; step < steps; ++step)
+			{
+				const double angle0 =
+						startAngle + direction * step * angleStep;
+				const double angle1 =
+						startAngle + direction * (step + 1) * angleStep;
+				const auto point = [&](double angle, double radius)
+				{
+					return v2double_t{
+						center.x + std::cos(angle) * radius,
+						center.y + std::sin(angle) * radius
+					};
+				};
+				addShape({
+					point(angle0, innerRadius),
+					point(angle1, innerRadius),
+					point(angle1, outerRadius),
+					point(angle0, outerRadius)
+				}, elevation * (step + 1), 0, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::landingCatwalk:
+		{
+			const double width = std::min(
+					request.architectureSize, crossSpan * 0.6);
+			const double landingLength =
+					std::min(longSpan * 0.22, width * 1.5);
+			if (longSpan <= landingLength * 2.0 + 1.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The catwalk needs room between its end landings.",
+						 host, -1, center);
+				break;
+			}
+			const double landingHalf =
+					std::min(crossExtent, width);
+			auto addLanding = [&](double begin, double end)
+			{
+				if (landingHalf > width * 0.5 + PLAN_EPSILON)
+					addShape(localRectangle(
+							begin, end,
+							-landingHalf, -width * 0.5),
+							elevation, 0, false);
+				addShape(localRectangle(
+						begin, end,
+						-width * 0.5, width * 0.5),
+						elevation, 0, false);
+				if (landingHalf > width * 0.5 + PLAN_EPSILON)
+					addShape(localRectangle(
+							begin, end,
+							width * 0.5, landingHalf),
+							elevation, 0, false);
+			};
+			addLanding(longBegin, longBegin + landingLength);
+			addShape(localRectangle(
+					longBegin + landingLength,
+					longEnd - landingLength,
+					-width * 0.5, width * 0.5),
+					elevation, 0, false);
+			addLanding(longEnd - landingLength, longEnd);
+			break;
+		}
+
+		case SectorArchitectureElement::crossingBridges:
+			addShape(localCross(request.architectureSize),
+					 elevation, 0, false);
+			break;
+
+		case SectorArchitectureElement::perimeterMoat:
+		{
+			const double moat = request.architectureSize;
+			if (!requireDimensions(
+					moat * 2.0 + 2.0, moat * 2.0 + 2.0,
+					"The perimeter moat"))
+				break;
+			const int outer = addShape(BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					std::min(moat * 0.2,
+							 std::min(innerWidth, innerHeight) * 0.1)),
+					-elevation, 0, false);
+			addShape(BeveledRectangle(
+					innerMinX + moat, innerMinY + moat,
+					innerMaxX - moat, innerMaxY - moat,
+					std::min(moat * 0.15,
+							 std::min(innerWidth, innerHeight) * 0.08)),
+					elevation, 0, false, outer);
+			break;
+		}
+
+		case SectorArchitectureElement::crossCanal:
+			addShape(localCross(request.architectureSize),
+					 -elevation, 0, false);
+			break;
+
+		case SectorArchitectureElement::twinCanals:
+		{
+			const double width = std::min(
+					request.architectureSize, crossSpan * 0.28);
+			const double gap = std::min(
+					std::max(2.0, width * 0.5),
+					crossSpan - width * 2.0);
+			if (width * 2.0 + gap > crossSpan + PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The twin canals need a wider footprint or "
+						 "narrower channels.", host, -1, center);
+				break;
+			}
+			addShape(localRectangle(
+					longBegin, longEnd,
+					-gap * 0.5 - width, -gap * 0.5),
+					-elevation, 0, false);
+			addShape(localRectangle(
+					longBegin, longEnd,
+					gap * 0.5, gap * 0.5 + width),
+					-elevation, 0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::steppedCascade:
+		{
+			const int basins = request.architectureBays;
+			const double basinLength = longSpan / basins;
+			const double width = std::min(
+					request.architectureSize, crossSpan);
+			if (basinLength <= PLAN_EPSILON || width <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The stepped cascade has no usable basin length "
+						 "or width.", host, -1, center);
+				break;
+			}
+			for (int basin = 0; basin < basins; ++basin)
+				addShape(directedRectangle(
+						basin * basinLength,
+						(basin + 1) * basinLength,
+						-width * 0.5, width * 0.5),
+						-elevation * (basin + 1), 0, false);
+			break;
+		}
+
+		case SectorArchitectureElement::fountainCourt:
+		{
+			const double gap = std::min({
+				request.architectureSize,
+				innerWidth * 0.22,
+				innerHeight * 0.22
+			});
+			const double cellWidth = (innerWidth - gap) * 0.5;
+			const double cellHeight = (innerHeight - gap) * 0.5;
+			if (cellWidth <= 2.0 || cellHeight <= 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The fountain court needs room for four separate "
+						 "basins.", host, -1, center);
+				break;
+			}
+			const double radiusX = cellWidth * 0.43;
+			const double radiusY = cellHeight * 0.43;
+			for (double x : {-1.0, 1.0})
+				for (double y : {-1.0, 1.0})
+					addShape(EllipseProfile(
+							{center.x + x * (cellWidth + gap) * 0.5,
+							 center.y + y * (cellHeight + gap) * 0.5},
+							radiusX, radiusY, 16, 0.0),
+							-elevation, 0, false);
+			const double centerSize = std::min({
+				request.architectureSize,
+				gap * 0.8,
+				std::min(innerWidth, innerHeight) * 0.2
+			});
+			addShape(StyledPillar(
+					center, std::max(1.0, centerSize),
+					request.architectureStyle, request.rotation),
+					elevation * 2, 0, true);
+			break;
+		}
+
+		case SectorArchitectureElement::partitionWall:
+		{
+			const double thickness =
+					std::min(request.architectureSize, crossSpan);
+			addShape(localRectangle(
+					longBegin, longEnd,
+					-thickness * 0.5, thickness * 0.5),
+					0, 0, true);
+			break;
+		}
+
+		case SectorArchitectureElement::crenellatedWall:
+		{
+			const double thickness =
+					std::min(request.architectureSize, crossSpan * 0.5);
+			const double merlonLength = longSpan /
+					(request.architectureBays * 2.0 + 1.0);
+			for (int segment = 0;
+				 segment < request.architectureBays * 2 + 1;
+				 ++segment)
+			{
+				const double along0 =
+						longBegin +
+						segment * merlonLength;
+				addShape(localRectangle(
+						along0, along0 + merlonLength,
+						-thickness * 0.5, thickness * 0.5),
+						0, 0, true);
+				if ((segment % 2) == 1)
+				{
+					addShape(localRectangle(
+							along0, along0 + merlonLength,
+							-thickness, -thickness * 0.5),
+							0, 0, true);
+					addShape(localRectangle(
+							along0, along0 + merlonLength,
+							thickness * 0.5, thickness),
+							0, 0, true);
+				}
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::buttressedWall:
+		{
+			const double thickness =
+					std::min(request.architectureSize, crossSpan * 0.5);
+			const double station = longSpan /
+					(request.architectureBays + 1.0);
+			const double buttressWidth =
+					std::min(thickness, station * 0.45);
+			auto addWallSegment =
+					[&](double along0, double along1)
+			{
+				if (along1 - along0 <= PLAN_EPSILON)
+					return;
+				addShape(localRectangle(
+						along0, along1,
+						-thickness * 0.5, thickness * 0.5),
+						0, 0, true);
+			};
+			double cursor = longBegin;
+			for (int index = 0;
+				 index < request.architectureBays; ++index)
+			{
+				const double along =
+						longBegin + (index + 1) * station;
+				const double along0 =
+						along - buttressWidth * 0.5;
+				const double along1 =
+						along + buttressWidth * 0.5;
+				addWallSegment(cursor, along0);
+				addWallSegment(along0, along1);
+				addShape(localRectangle(
+						along0, along1,
+						-thickness, -thickness * 0.5),
+						0, 0, true);
+				addShape(localRectangle(
+						along0, along1,
+						thickness * 0.5, thickness),
+						0, 0, true);
+				cursor = along1;
+			}
+			addWallSegment(cursor, longEnd);
+			break;
+		}
+
+		case SectorArchitectureElement::staggeredScreen:
+		{
+			const int panels = request.architectureBays;
+			const double thickness =
+					std::min(request.architectureSize, crossSpan * 0.22);
+			const double cell = longSpan / panels;
+			const double panelLength = cell * 0.72;
+			const double offset = std::min(
+					crossSpan * 0.2, thickness * 1.5);
+			for (int panel = 0; panel < panels; ++panel)
+			{
+				const bool positive =
+						((panel % 2) == 0) !=
+						request.architectureMirrored;
+				const double along =
+						longBegin + (panel + 0.5) * cell;
+				const double cross =
+						positive ? offset : -offset;
+				addShape(localRectangle(
+						along - panelLength * 0.5,
+						along + panelLength * 0.5,
+						cross - thickness * 0.5,
+						cross + thickness * 0.5),
+						0, 0, true);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::gatehousePassage:
+		{
+			const double passage = std::min(
+					request.architectureSize,
+					longSpan * 0.62);
+			const double massLength =
+					(longSpan - passage) * 0.5;
+			if (passage <= 1.0 || massLength <= 1.0 ||
+				crossSpan <= 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The gatehouse needs both a usable passage and "
+						 "flanking wall mass.", host, -1, center);
+				break;
+			}
+			warnNarrowPassage(
+					passage,
+					"The gatehouse opening");
+			const double bevelFactor =
+					request.architectureStyle ==
+						SectorArchitectureStyle::functional ? 0.08 :
+					request.architectureStyle ==
+						SectorArchitectureStyle::classical ? 0.24 :
+					request.architectureStyle ==
+						SectorArchitectureStyle::romanesque ? 0.14 :
+					request.architectureStyle ==
+						SectorArchitectureStyle::gothic ? 0.42 :
+					request.architectureStyle ==
+						SectorArchitectureStyle::industrial ? 0.04 :
+					request.architectureStyle ==
+						SectorArchitectureStyle::artDeco ? 0.32 : 0.48;
+			const double bevel =
+					std::min(massLength, crossSpan) *
+					std::min(0.45, bevelFactor);
+			auto gateMass = [&](double along0, double along1)
+			{
+				std::vector<v2double_t> world = {
+					position(along0 + bevel, -crossExtent),
+					position(along0, -crossExtent + bevel),
+					position(along0, crossExtent - bevel),
+					position(along0 + bevel, crossExtent),
+					position(along1 - bevel, crossExtent),
+					position(along1, crossExtent - bevel),
+					position(along1, -crossExtent + bevel),
+					position(along1 - bevel, -crossExtent)
+				};
+				addShape(std::move(world), 0, 0, true);
+			};
+			const double passage0 =
+					(longBegin + longEnd - passage) * 0.5;
+			const double passage1 = passage0 + passage;
+			gateMass(longBegin, passage0);
+			gateMass(passage1, longEnd);
+			break;
+		}
+
+		case SectorArchitectureElement::trayCeiling:
+		{
+			const double border = request.architectureSize;
+			if (!requireDimensions(
+					border * 2.0 + 2.0, border * 2.0 + 2.0,
+					"The recessed tray ceiling"))
+				break;
+			addShape(BeveledRectangle(
+					innerMinX + border, innerMinY + border,
+					innerMaxX - border, innerMaxY - border,
+					std::min(border * 0.25,
+							 std::min(innerWidth, innerHeight) * 0.1)),
+					0, elevation, false);
+			break;
+		}
+
+		case SectorArchitectureElement::barrelVault:
+		{
+			const int bands = request.architectureBays;
+			const double bandWidth = crossSpan / bands;
+			if (bandWidth <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The barrel-vault bands collapse at this width.",
+						 host, -1, center);
+				break;
+			}
+			for (int band = 0; band < bands; ++band)
+			{
+				const double normalized =
+						std::abs((band + 0.5) / bands * 2.0 - 1.0);
+				const int relief = std::max(
+						1, static_cast<int>(std::lround(
+							elevation *
+							std::sqrt(std::max(
+								0.0, 1.0 - normalized * normalized)))));
+				addShape(localRectangle(
+						longBegin, longEnd,
+						-crossExtent + band * bandWidth,
+						-crossExtent + (band + 1) * bandWidth),
+						0, relief, false);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::ribbedCrossVault:
+		{
+			const double halfRib = std::min(
+					request.architectureSize * 0.5,
+					std::min(longSpan, crossSpan) * 0.22);
+			const double alongCenter =
+					(longBegin + longEnd) * 0.5;
+			if (longSpan <= halfRib * 2.0 + 2.0 ||
+				crossSpan <= halfRib * 2.0 + 2.0)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The ribbed cross vault needs more room around "
+						 "its crossing.", host, -1, center);
+				break;
+			}
+			const int quadrantRelief =
+					std::max(1, elevation / 2);
+			addShape(localRectangle(
+					longBegin, alongCenter - halfRib,
+					-crossExtent, -halfRib),
+					0, quadrantRelief, false);
+			addShape(localRectangle(
+					alongCenter + halfRib, longEnd,
+					-crossExtent, -halfRib),
+					0, quadrantRelief, false);
+			addShape(localRectangle(
+					longBegin, alongCenter - halfRib,
+					halfRib, crossExtent),
+					0, quadrantRelief, false);
+			addShape(localRectangle(
+					alongCenter + halfRib, longEnd,
+					halfRib, crossExtent),
+					0, quadrantRelief, false);
+			addShape(localRectangle(
+					alongCenter - halfRib,
+					alongCenter + halfRib,
+					-halfRib, halfRib),
+					0, elevation, false);
+			break;
+		}
+
+		case SectorArchitectureElement::domedCeiling:
+		{
+			const int rings = request.architectureBays;
+			const double outerDiameter =
+					std::min(innerWidth, innerHeight);
+			const double finalDiameter =
+					outerDiameter -
+					2.0 * request.architectureSize * (rings - 1);
+			if (finalDiameter + PLAN_EPSILON <
+				M_MinimumArchitectureSize(
+						request.architectureStyle,
+						request.architectureElement))
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The dome rings collapse before reaching the "
+						 "center. Reduce Rings or Ring width.",
+						 host, -1, center);
+				break;
+			}
+			int parent = -2;
+			for (int ring = 0; ring < rings; ++ring)
+			{
+				const double diameter =
+						outerDiameter -
+						ring * request.architectureSize * 2.0;
+				parent = addShape(StyledPillar(
+						center, diameter,
+						request.architectureStyle, request.rotation),
+						0, elevation, false, parent);
+			}
+			break;
+		}
+
+		case SectorArchitectureElement::beamLattice:
+		{
+			const int beams = request.architectureBays;
+			const double beam = std::min({
+				request.architectureSize,
+				longSpan / (beams * 2.0 + 1.0),
+				crossSpan / (beams * 2.0 + 1.0)
+			});
+			if (beam <= PLAN_EPSILON)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The beam lattice collapses at this bay count.",
+						 host, -1, center);
+				break;
+			}
+			Paths64 strips;
+			strips.reserve(static_cast<size_t>(beams) * 2);
+			for (int index = 0; index < beams; ++index)
+			{
+				const double along =
+						longBegin +
+						(index + 1.0) * longSpan / (beams + 1.0);
+				strips.push_back(ToClipperPath(
+						localRectangle(
+								along - beam * 0.5,
+								along + beam * 0.5,
+								-crossExtent, crossExtent),
+						format));
+			}
+			for (int index = 0; index < beams; ++index)
+			{
+				const double cross =
+						-crossExtent +
+						(index + 1.0) * crossSpan / (beams + 1.0);
+				strips.push_back(ToClipperPath(
+						localRectangle(
+								longBegin, longEnd,
+								cross - beam * 0.5,
+								cross + beam * 0.5),
+						format));
+			}
+			const size_t before = plan.shapes.size();
+			AppendClipperShapes(
+					plan, Union(strips, FillRule::NonZero),
+					format, previewRole, host);
+			if (plan.shapes.size() == before)
+			{
+				AddIssue(plan, SectorDesignIssueSeverity::error,
+						 "The beam lattice collapses after format "
+						 "quantization.", host, -1, center);
+				break;
+			}
+			for (size_t shapeIndex = before;
+				 shapeIndex < plan.shapes.size(); ++shapeIndex)
+			{
+				PlannedSectorShape &shape = plan.shapes[shapeIndex];
+				shape.modelShape = hostShape;
+				shape.inheritModelOnly = hostShape >= 0;
+				shape.ceilingDelta = -elevation;
+				shape.holesRetainModel = true;
+				plan.plannedRetainedCells +=
+						static_cast<int>(shape.holes.size());
+			}
+			break;
+		}
+
+		default:
+			AddIssue(plan, SectorDesignIssueSeverity::error,
+					 "The selected volumetric architecture is unsupported.");
+			break;
+	}
+
+	if (outsideStructures > 0)
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 SString::printf(
+					 "%d architectural sector%s leave%s host sector #%d "
+					 "or enclose a foreign cell. Increase Margin, reduce "
+					 "Structure size, or use a larger continuous host.",
+					 outsideStructures,
+					 outsideStructures == 1 ? "" : "s",
+					 outsideStructures == 1 ? "s the" : " the",
+					 host),
+				 host, -1, firstOutside);
+
+	plan.plannedStructures =
+			static_cast<int>(plan.shapes.size() - firstStructure);
+	if (plan.plannedStructures == 0)
+		plan.previewPaths.push_back({
+			BeveledRectangle(
+					innerMinX, innerMinY, innerMaxX, innerMaxY,
+					std::min(request.architectureSize * 0.25,
+							 std::min(innerWidth, innerHeight) * 0.2)),
+			DesignPreviewRole::conflict, true, true
+		});
+	if (host >= 0 && doc.isSector(host) &&
+		config.miscInfo.player_h > 0)
+	{
+		const int baseClearance =
+				doc.sectors[host]->ceilh -
+				doc.sectors[host]->floorh;
+		for (size_t shapeIndex = firstStructure;
+			 shapeIndex < plan.shapes.size(); ++shapeIndex)
+		{
+			const PlannedSectorShape &shape =
+					plan.shapes[shapeIndex];
+			if (shape.closed)
+				continue;
+			int floorDelta = shape.floorDelta;
+			int ceilingDelta = shape.ceilingDelta;
+			int parent = shape.modelShape;
+			int guard = 0;
+			while (parent >= static_cast<int>(firstStructure) &&
+				   parent < static_cast<int>(plan.shapes.size()) &&
+				   guard++ < 64)
+			{
+				floorDelta += plan.shapes[parent].floorDelta;
+				ceilingDelta +=
+						plan.shapes[parent].ceilingDelta;
+				parent = plan.shapes[parent].modelShape;
+			}
+			const int clearance =
+					baseClearance + ceilingDelta - floorDelta;
+			if (clearance >= config.miscInfo.player_h)
+				continue;
+			v2double_t warning = center;
+			if (!shape.outer.empty())
+			{
+				warning = {0.0, 0.0};
+				for (const v2double_t &point : shape.outer)
+					warning += point;
+				warning /= shape.outer.size();
+			}
+			AddIssue(plan, SectorDesignIssueSeverity::warning,
+					SString::printf(
+						"This structure leaves %d units of clearance, "
+						"below the configured %d-unit player height.",
+						clearance, config.miscInfo.player_h),
+					host, -1, warning);
+			break;
+		}
+	}
+	if (plan.plannedStructures > 0)
+	{
+		if (ArchitectureUsesDirection(
+				request.architectureElement))
+		{
+			const v2double_t from = request.anchors.front();
+			const v2double_t to = request.anchors.back();
+			plan.previewPaths.push_back({
+				{from, to}, DesignPreviewRole::anchor, false, false
+			});
+			plan.previewLabels.push_back({
+				from + (to - from) * 0.72,
+				request.architectureMirrored ?
+					"forward -> / mirrored" : "forward ->",
+				DesignPreviewRole::anchor
+			});
+		}
+
+		if (ArchitectureUsesHeight(
+				request.architectureElement) &&
+			plan.plannedStructures > 1 &&
+			plan.plannedStructures <= 48)
+		{
+			for (size_t shapeIndex = firstStructure;
+				 shapeIndex < plan.shapes.size(); ++shapeIndex)
+			{
+				const PlannedSectorShape &shape =
+						plan.shapes[shapeIndex];
+				int floorDelta = shape.floorDelta;
+				int ceilingDelta = shape.ceilingDelta;
+				int parent = shape.modelShape;
+				int guard = 0;
+				while (parent >= static_cast<int>(firstStructure) &&
+					   parent < static_cast<int>(plan.shapes.size()) &&
+					   guard++ < 64)
+				{
+					floorDelta += plan.shapes[parent].floorDelta;
+					ceilingDelta +=
+							plan.shapes[parent].ceilingDelta;
+					parent = plan.shapes[parent].modelShape;
+				}
+				SString effect;
+				if (shape.smartLift)
+					effect = "Smart Lift";
+				else if (floorDelta != 0)
+					effect = SString::printf(
+							"floor %c%d",
+							floorDelta > 0 ? '+' : '-',
+							std::abs(floorDelta));
+				else if (ceilingDelta != 0)
+					effect = SString::printf(
+							"ceiling %c%d",
+							ceilingDelta > 0 ? '+' : '-',
+							std::abs(ceilingDelta));
+				if (effect.empty() || shape.outer.empty())
+					continue;
+				v2double_t labelPosition{0.0, 0.0};
+				for (const v2double_t &point : shape.outer)
+					labelPosition += point;
+				labelPosition /= shape.outer.size();
+				plan.previewLabels.push_back({
+					labelPosition,
+					SString::printf(
+							"%zu: %s",
+							shapeIndex - firstStructure + 1,
+							effect.c_str()),
+					shape.role
+				});
+			}
+		}
+
+		SString relief;
+		switch (request.architectureElement)
+		{
+			case SectorArchitectureElement::raisedDais:
+			case SectorArchitectureElement::balconyGallery:
+			case SectorArchitectureElement::raisedBridge:
+				relief = SString::printf(" / floor +%d", elevation);
+				break;
+			case SectorArchitectureElement::sunkenCourt:
+			case SectorArchitectureElement::reflectingPool:
+			case SectorArchitectureElement::processionalChannel:
+				relief = SString::printf(" / floor -%d", elevation);
+				break;
+			case SectorArchitectureElement::tieredZiggurat:
+				relief = SString::printf(
+						" / 3 tiers x +%d", elevation);
+				break;
+			case SectorArchitectureElement::grandStair:
+				relief = SString::printf(
+						" / %d steps x +%d",
+						request.architectureBays, elevation);
+				break;
+			case SectorArchitectureElement::fountainBasin:
+				relief = SString::printf(
+						" / basin -%d / centerpiece +%d",
+						elevation, elevation);
+				break;
+			case SectorArchitectureElement::screenWall:
+				relief = SString::printf(
+						" / %d openings", request.architectureBays);
+				break;
+			case SectorArchitectureElement::cofferedCeiling:
+			case SectorArchitectureElement::groinVaults:
+				relief = SString::printf(
+						" / ceiling +%d", elevation);
+				break;
+			default:
+				break;
+		}
+		plan.previewLabels.push_back({
+			center,
+			SString::printf("%s - %d sector%s%s%s",
+					ArchitectureElementName(request.architectureElement),
+					plan.plannedStructures,
+					plan.plannedStructures == 1 ? "" : "s",
+					relief.c_str(),
+					generatedHost ? " + new hall" : ""),
+			previewRole
+		});
+	}
+}
+
 void PlanArchitecture(const Document &doc, const ConfigData &config,
 						  const SectorDesignRequest &request,
-						  SectorDesignPlan &plan)
+						  SectorDesignPlan &plan, MapFormat format)
 {
+	const SectorArchitectureDescriptor &descriptor =
+			M_ArchitectureDescriptor(request.architectureElement);
+	if (descriptor.element != request.architectureElement)
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "The selected architecture catalog entry is unavailable.");
+		return;
+	}
+	if (static_cast<int>(request.architectureStyle) < 0 ||
+		static_cast<int>(request.architectureStyle) >
+				static_cast<int>(
+						SectorArchitectureStyle::infernal))
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "The selected architecture style is unavailable.");
+		return;
+	}
+	if (!std::isfinite(request.rotation))
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "Architecture rotation must be finite.");
+		return;
+	}
 	if (request.anchors.size() < 2)
 	{
 		AddIssue(plan, SectorDesignIssueSeverity::error,
@@ -1678,27 +4043,60 @@ void PlanArchitecture(const Document &doc, const ConfigData &config,
 				 "void space.");
 		return;
 	}
-	if (request.architectureBays < 1 ||
-		request.architectureBays > 32)
-	{
-		AddIssue(plan, SectorDesignIssueSeverity::error,
-				 "Architecture bays must be between 1 and 32.");
-		return;
-	}
-	const double minimumSize =
-			M_MinimumArchitectureSize(request.architectureStyle);
-	if (request.architectureSize < minimumSize)
+	for (const v2double_t &anchor : request.anchors)
+		if (!std::isfinite(anchor.x) || !std::isfinite(anchor.y))
+		{
+			AddIssue(plan, SectorDesignIssueSeverity::error,
+					 "Architecture anchors must use finite coordinates.");
+			return;
+		}
+	if (ArchitectureUsesBays(request.architectureElement) &&
+		(request.architectureBays < descriptor.minimumBays ||
+		 request.architectureBays > descriptor.maximumBays))
 	{
 		AddIssue(plan, SectorDesignIssueSeverity::error,
 				 SString::printf(
-					 "%s structural sections need at least %.0f map "
+					 "%s must be between %d and %d.",
+					 descriptor.baysLabel,
+					 descriptor.minimumBays,
+					 descriptor.maximumBays));
+		return;
+	}
+	if (!M_ArchitectureSupportsFunction(
+			request.architectureElement,
+			request.architectureFunction))
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "The selected optional function is not supported by this "
+				 "structure.");
+		return;
+	}
+	const double minimumSize =
+			M_MinimumArchitectureSize(
+					request.architectureStyle,
+					request.architectureElement);
+	if (!std::isfinite(request.architectureSize) ||
+		request.architectureSize < minimumSize)
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 SString::printf(
+					 "%s needs at least %.0f map "
 					 "units to remain valid after format quantization. "
 					 "Wheel up to increase Structure size.",
-					 ArchitectureStyleName(request.architectureStyle),
+					 ArchitectureElementName(request.architectureElement),
 					 minimumSize));
 		return;
 	}
-	if (request.architectureMargin < 0.0)
+	if (ArchitectureUsesHeight(request.architectureElement) &&
+		(!std::isfinite(request.architectureHeight) ||
+		 request.architectureHeight <= 0.0))
+	{
+		AddIssue(plan, SectorDesignIssueSeverity::error,
+				 "Structure elevation must be greater than zero.");
+		return;
+	}
+	if (!std::isfinite(request.architectureMargin) ||
+		request.architectureMargin < 0.0)
 	{
 		AddIssue(plan, SectorDesignIssueSeverity::error,
 				 "Architecture margin cannot be negative.");
@@ -1752,9 +4150,20 @@ void PlanArchitecture(const Document &doc, const ConfigData &config,
 			hostOutline, DesignPreviewRole::conflict, true, false
 		});
 		PlannedSectorShape sample;
-		sample.outer = StyledPillar(
-				center, request.architectureSize,
-				request.architectureStyle, request.rotation);
+		if (UsesLegacySupportBuilder(
+				request.architectureElement))
+			sample.outer = StyledPillar(
+					center, request.architectureSize,
+					request.architectureStyle, request.rotation);
+		else
+		{
+			const double radius =
+					std::max(1.0, request.architectureSize * 0.5);
+			sample.outer = BeveledRectangle(
+					center.x - radius, center.y - radius,
+					center.x + radius, center.y + radius,
+					radius * 0.25);
+		}
 		MakeClockwise(sample.outer);
 		sample.role = DesignPreviewRole::conflict;
 		sample.modelSector = host;
@@ -1842,6 +4251,16 @@ void PlanArchitecture(const Document &doc, const ConfigData &config,
 		plan.previewPaths.push_back({
 			hostOutline, DesignPreviewRole::anchor, true, false
 		});
+	}
+
+	if (!UsesLegacySupportBuilder(
+			request.architectureElement))
+	{
+		PlanVolumetricArchitecture(
+				doc, config, request, plan, format,
+				host, hostShape, generatedHost,
+				minX, minY, maxX, maxY);
+		return;
 	}
 
 	const double halfSize = request.architectureSize * 0.5 *
@@ -2056,6 +4475,8 @@ void PlanArchitecture(const Document &doc, const ConfigData &config,
 					crossExtent * 0.35, request.architectureSize * 0.8)));
 			addSupport(position(longBegin, std::min(
 					crossExtent * 0.35, request.architectureSize * 0.8)));
+			break;
+		default:
 			break;
 	}
 
@@ -3206,7 +5627,7 @@ void PlanStairs(const Document &doc, const ConfigData &config,
 					});
 					if (!labelled && !loop.empty())
 					{
-						v2double_t center;
+						v2double_t center{0.0, 0.0};
 						for (const v2double_t &point : loop)
 							center += point;
 						center /= static_cast<double>(loop.size());
@@ -3651,6 +6072,26 @@ void ApplyProperties(EditOperation &op, const ConfigData &config,
 			target.ceilh = target.floorh;
 	}
 
+	if (shape.closed)
+	{
+		const std::set<int> generated(
+				sectors.begin(), sectors.end());
+		for (int line = 0; line < op.doc.numLinedefs(); ++line)
+		{
+			const LineDef &linedef = *op.doc.linedefs[line];
+			const bool right = generated.count(
+					SectorForSide(op.doc, linedef.right)) != 0;
+			const bool left = generated.count(
+					SectorForSide(op.doc, linedef.left)) != 0;
+			if (right == left ||
+				(linedef.flags & MLF_Blocking))
+				continue;
+			op.changeLinedef(
+					line, &LineDef::flags,
+					linedef.flags | MLF_Blocking);
+		}
+	}
+
 	if (!properties.wallTexture.empty())
 	{
 		const StringID texture = BA_InternaliseString(
@@ -3802,6 +6243,240 @@ bool SectorDesignPlan::valid() const
 			});
 }
 
+const std::vector<SectorArchitectureDescriptor> &M_ArchitectureCatalog()
+{
+	return ArchitectureCatalogData();
+}
+
+const SectorArchitectureDescriptor &M_ArchitectureDescriptor(
+		SectorArchitectureElement element)
+{
+	const auto &catalog = ArchitectureCatalogData();
+	auto found = std::find_if(
+			catalog.begin(), catalog.end(),
+			[&](const SectorArchitectureDescriptor &descriptor)
+			{
+				return descriptor.element == element;
+			});
+	if (found != catalog.end())
+		return *found;
+
+	static const SectorArchitectureDescriptor unsupported =
+	{
+		"unsupported", SectorArchitectureElement::pillar,
+		SectorArchitectureFamily::structuralSupports,
+		"Unsupported structure",
+		"The selected architectural structure is unavailable.",
+		DesignPreviewRole::conflict, 0, A_STATIC,
+		"Bays:", "Size:", "Elevation:", 1, 1, 1, 1, 1, 0, 1
+	};
+	return unsupported;
+}
+
+bool M_ArchitectureHasControl(SectorArchitectureElement element,
+		SectorArchitectureControl control)
+{
+	return (M_ArchitectureDescriptor(element).controls &
+			ArchitectureControlBit(control)) != 0;
+}
+
+bool M_ArchitectureSupportsFunction(SectorArchitectureElement element,
+		SectorArchitectureFunction function)
+{
+	const unsigned index = static_cast<unsigned>(function);
+	if (index > static_cast<unsigned>(
+			SectorArchitectureFunction::smartLift))
+		return false;
+	return (M_ArchitectureDescriptor(element).functions &
+			(1u << index)) != 0;
+}
+
+const char *M_ArchitectureFamilyLabel(SectorArchitectureFamily family)
+{
+	switch (family)
+	{
+		case SectorArchitectureFamily::structuralSupports:
+			return "Structural supports";
+		case SectorArchitectureFamily::floorsTerraces:
+			return "Floors and terraces";
+		case SectorArchitectureFamily::circulation:
+			return "Circulation";
+		case SectorArchitectureFamily::waterworks:
+			return "Waterworks";
+		case SectorArchitectureFamily::wallsScreens:
+			return "Walls and screens";
+		case SectorArchitectureFamily::ceilingsVaults:
+			return "Ceilings and vaults";
+	}
+	return "Architecture";
+}
+
+SString M_ArchitectureEffectDescription(
+		const SectorDesignRequest &request)
+{
+	const double height = request.architectureHeight;
+	switch (request.architectureElement)
+	{
+		case SectorArchitectureElement::raisedDais:
+			return SString::printf(
+					"raises one walkable floor by %.1f units", height);
+		case SectorArchitectureElement::sunkenCourt:
+			return SString::printf(
+					"excavates one walkable floor by %.1f units", height);
+		case SectorArchitectureElement::tieredZiggurat:
+			return SString::printf(
+					"builds three nested walkable tiers at %.1f units per tier",
+					height);
+		case SectorArchitectureElement::grandStair:
+			return SString::printf(
+					"builds %d directional steps at %.1f units per step",
+					request.architectureBays, height);
+		case SectorArchitectureElement::fountainBasin:
+			return SString::printf(
+					"excavates a basin and raises its centerpiece with %.1f-unit relief",
+					height);
+		case SectorArchitectureElement::reflectingPool:
+			return SString::printf(
+					"excavates a beveled pool by %.1f units", height);
+		case SectorArchitectureElement::balconyGallery:
+			return SString::printf(
+					"raises a walkable perimeter gallery by %.1f units",
+					height);
+		case SectorArchitectureElement::processionalChannel:
+			return SString::printf(
+					"excavates a longitudinal channel by %.1f units", height);
+		case SectorArchitectureElement::screenWall:
+			return "builds a solid perforated wall mass";
+		case SectorArchitectureElement::cofferedCeiling:
+			return SString::printf(
+					"raises a grid of ceiling recesses by %.1f units", height);
+		case SectorArchitectureElement::groinVaults:
+			return SString::printf(
+					"raises repeated vault cells by %.1f units", height);
+		case SectorArchitectureElement::raisedBridge:
+			return SString::printf(
+					"raises a directional bridge by %.1f units", height);
+
+		case SectorArchitectureElement::crossCore:
+			return "builds one concave floor-to-ceiling cruciform core";
+		case SectorArchitectureElement::hollowTower:
+			return "builds four solid tower-shell masses with opposed entries";
+		case SectorArchitectureElement::buttressedTower:
+			return SString::printf(
+					"builds a solid tower core with %d buttresses",
+					request.architectureBays);
+		case SectorArchitectureElement::shearWallPair:
+			return "builds two solid shear walls around an open passage";
+		case SectorArchitectureElement::steppedMonument:
+			return SString::printf(
+					"builds %d nested solid monument tiers at %.1f units per tier",
+					request.architectureBays, height);
+		case SectorArchitectureElement::centralPlatform:
+			return request.architectureFunction ==
+					SectorArchitectureFunction::smartLift ?
+					SString::printf(
+						"raises a %.1f-unit platform and finishes it as one Smart Lift",
+						height) :
+					SString::printf(
+						"raises one centered walkable platform by %.1f units",
+						height);
+		case SectorArchitectureElement::splitLevelStage:
+			return SString::printf(
+					"builds two ordered stage levels at %.1f-unit intervals",
+					height);
+		case SectorArchitectureElement::cornerTerraces:
+			return SString::printf(
+					"builds %d mirrored corner-anchored terraces at %.1f units per tier",
+					request.architectureBays, height);
+		case SectorArchitectureElement::octagonalPodium:
+			return SString::printf(
+					"builds %d nested polygonal podium tiers at %.1f units per tier",
+					request.architectureBays, height);
+		case SectorArchitectureElement::horseshoeAmphitheater:
+			return SString::printf(
+					"builds %d three-sided seating rows at %.1f units per row",
+					request.architectureBays, height);
+		case SectorArchitectureElement::switchbackStair:
+			return SString::printf(
+					"builds two %d-step flights and a shared landing",
+					request.architectureBays);
+		case SectorArchitectureElement::bifurcatedStair:
+			return SString::printf(
+					"builds one lower and two upper %d-step ceremonial flights",
+					request.architectureBays);
+		case SectorArchitectureElement::spiralStair:
+			return SString::printf(
+					"builds %d %s wedge steps at %.1f units per step",
+					request.architectureBays,
+					request.architectureMirrored ?
+						"counterclockwise" : "clockwise", height);
+		case SectorArchitectureElement::landingCatwalk:
+			return SString::printf(
+					"raises a catwalk and two landings by %.1f units", height);
+		case SectorArchitectureElement::crossingBridges:
+			return SString::printf(
+					"raises two connected crossing bridges by %.1f units",
+					height);
+		case SectorArchitectureElement::perimeterMoat:
+			return SString::printf(
+					"excavates a perimeter moat by %.1f units", height);
+		case SectorArchitectureElement::crossCanal:
+			return SString::printf(
+					"excavates one connected cross canal by %.1f units",
+					height);
+		case SectorArchitectureElement::twinCanals:
+			return SString::printf(
+					"excavates two parallel canals by %.1f units", height);
+		case SectorArchitectureElement::steppedCascade:
+			return SString::printf(
+					"builds %d basins descending %.1f units each",
+					request.architectureBays, height);
+		case SectorArchitectureElement::fountainCourt:
+			return SString::printf(
+					"excavates four basins and raises a centerpiece with %.1f-unit relief",
+					height);
+		case SectorArchitectureElement::partitionWall:
+			return "builds one continuous solid partition wall";
+		case SectorArchitectureElement::crenellatedWall:
+			return SString::printf(
+					"builds a continuous wall with %d projected merlons",
+					request.architectureBays);
+		case SectorArchitectureElement::buttressedWall:
+			return SString::printf(
+					"builds one wall slab with %d solid buttresses",
+					request.architectureBays);
+		case SectorArchitectureElement::staggeredScreen:
+			return SString::printf(
+					"builds %d alternating wall panels around a traversable slalom",
+					request.architectureBays);
+		case SectorArchitectureElement::gatehousePassage:
+			return "builds two gatehouse masses around a centered open passage";
+		case SectorArchitectureElement::trayCeiling:
+			return SString::printf(
+					"raises one broad ceiling tray by %.1f units", height);
+		case SectorArchitectureElement::barrelVault:
+			return SString::printf(
+					"approximates a barrel vault with %d ceiling bands and %.1f units of relief",
+					request.architectureBays, height);
+		case SectorArchitectureElement::ribbedCrossVault:
+			return SString::printf(
+					"raises four ceiling cells toward a %.1f-unit crossing",
+					height);
+		case SectorArchitectureElement::domedCeiling:
+			return SString::printf(
+					"raises %d nested dome rings by %.1f units per ring",
+					request.architectureBays, height);
+		case SectorArchitectureElement::beamLattice:
+			return SString::printf(
+					"lowers a %d by %d beam lattice by %.1f units",
+					request.architectureBays,
+					request.architectureBays, height);
+		default:
+			return M_ArchitectureDescriptor(
+					request.architectureElement).description;
+	}
+}
+
 double M_MinimumArchitectureSize(SectorArchitectureStyle style)
 {
 	switch (style)
@@ -3819,6 +6494,33 @@ double M_MinimumArchitectureSize(SectorArchitectureStyle style)
 		default:
 			return 4.0;
 	}
+}
+
+double M_MinimumArchitectureSize(
+		SectorArchitectureStyle style,
+		SectorArchitectureElement element)
+{
+	const SectorArchitectureDescriptor &descriptor =
+			M_ArchitectureDescriptor(element);
+	return std::max(
+			descriptor.minimumSize,
+			ArchitectureUsesSectionStyle(element) ?
+				M_MinimumArchitectureSize(style) : 1.0);
+}
+
+bool M_ArchitectureUsesSectionStyle(SectorArchitectureElement element)
+{
+	return ArchitectureUsesSectionStyle(element);
+}
+
+bool M_ArchitectureUsesBays(SectorArchitectureElement element)
+{
+	return ArchitectureUsesBays(element);
+}
+
+bool M_ArchitectureUsesHeight(SectorArchitectureElement element)
+{
+	return ArchitectureUsesHeight(element);
 }
 
 std::vector<SectorActionPreset> M_AvailableSectorActionPresets(
@@ -3892,8 +6594,44 @@ SectorDesignPlan M_PlanSectorDesign(const Document &doc,
 		PlanLiftSelection(doc, config, format, request, plan);
 		break;
 	case SectorDesignMode::architecture:
-		PlanArchitecture(doc, config, request, plan);
+		PlanArchitecture(doc, config, request, plan, format);
 		break;
+	}
+
+	if (request.mode == SectorDesignMode::architecture &&
+		request.architectureFunction ==
+				SectorArchitectureFunction::smartLift &&
+		plan.valid())
+	{
+		const std::vector<SectorActionPreset> available =
+				M_AvailableSectorActionPresets(
+						config, SectorActionKind::lift, format);
+		if (available.empty())
+			AddIssue(plan, SectorDesignIssueSeverity::error,
+					 "Smart Lift is unavailable for this game and map "
+					 "format. Choose Static geometry.");
+		else
+		{
+			const SectorActionPreset *preset =
+					FindActionPreset(
+							available, request.actionPresetId);
+			if (!preset)
+			{
+				preset = &available.front();
+				auto repeating = std::find_if(
+						available.begin(), available.end(),
+						[](const SectorActionPreset &candidate)
+						{
+							return candidate.activation ==
+									ActivationPolicy::useRepeat ||
+									candidate.id.noCaseStartsWith(
+											"lower-repeat");
+						});
+				if (repeating != available.end())
+					preset = &*repeating;
+			}
+			plan.resolvedActionPreset = *preset;
+		}
 	}
 
 	std::set<int> retained(
@@ -4099,7 +6837,25 @@ bool M_ApplySectorDesign(Document &doc, const ConfigData &config,
 			std::vector<int> created =
 					doc.objects.insertSectorPolygon(op, shape.outer, format);
 			for (const auto &hole : shape.holes)
-				doc.objects.insertSectorPolygon(op, hole, format);
+			{
+				std::vector<v2double_t> holeOutline = hole;
+				if (shape.holesRetainModel)
+					MakeClockwise(holeOutline);
+				std::vector<int> holeSectors =
+						doc.objects.insertSectorPolygon(
+								op, holeOutline, format);
+				if (shape.holesRetainModel && !holeSectors.empty())
+				{
+					PlannedSectorShape retainedHole;
+					retainedHole.modelSector =
+							resolvedShape.modelSector;
+					retainedHole.inheritModelOnly =
+							resolvedShape.inheritModelOnly;
+					ApplyProperties(
+							op, config, request,
+							retainedHole, holeSectors);
+				}
+			}
 			// Open routed strokes can close an incidental cell against an
 			// existing endpoint wall (notably a U returning to its source
 			// sector). The polygon inserter necessarily discovers both
@@ -4123,9 +6879,11 @@ bool M_ApplySectorDesign(Document &doc, const ConfigData &config,
 			{
 				op.setAbort(false);
 				AddIssue(plan, SectorDesignIssueSeverity::error,
-						 "Format quantization split an architectural section "
-						 "into multiple cells. Increase Structure size or "
-						 "change Style before applying.");
+						 SString::printf(
+							 "Format quantization split architectural "
+							 "section %zu into multiple cells. Increase "
+							 "Structure size or change Style before applying.",
+							 shapeIndex + 1));
 				if (appliedPlan)
 					*appliedPlan = plan;
 				return false;
@@ -4289,7 +7047,9 @@ bool M_ApplySectorDesign(Document &doc, const ConfigData &config,
 			op.setMessage("made %d smart lifts",
 						  std::max(1, plan.plannedLifts));
 		else if (request.mode == SectorDesignMode::architecture)
-			op.setMessage("made %d architectural structures",
+			op.setMessage("made %s (%d architectural sectors)",
+						  ArchitectureElementName(
+								  request.architectureElement),
 						  std::max(1, plan.plannedStructures));
 		else
 			op.setMessage("made %d smart sectors",

@@ -91,6 +91,12 @@ An inline status distinguishes an empty or missing path, a folder, a
 non-executable Unix file, an inaccessible path, and a ready executable.
 Cancelled or unsuccessful rediscovery preserves the existing selection.
 
+Saving before launch does not reset the active document's Undo or Redo
+history.  Test in Game returns keyboard focus to the map canvas, so the tested
+edit can be undone immediately with Ctrl/Cmd+Z.  Edit -> Redo,
+Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y restores an accidental Undo until another edit
+replaces the redo future.
+
 For explicit BiasedDoom/GZDoom/ZDoom projects, Campaign Navigator also labels
 managed runtime ZMAPINFO as current or out of date.  Test in Game compares the
 marker-owned content with the declaration that current in-memory campaign

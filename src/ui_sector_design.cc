@@ -46,7 +46,7 @@ constexpr const char *MODE_HELP[] =
 	"Drag or click endpoints; extra clicks add waypoints. Tab cycles routes; F reverses.",
 	"Drag a new run, or click/Shift-click sectors. Click selected sectors for branch endpoints.",
 	"Click a platform sector, Shift-click a batch, or drag a wall for a new lift alcove.",
-	"Drag in a room to insert supports, or in void to build a complete structural hall. Wheel scales supports."
+	"Choose a Family and Structure, then drag its complete footprint inside a room or in clear void."
 };
 static_assert(std::size(MODE_HELP) == static_cast<size_t>(MODE_COUNT));
 
@@ -101,34 +101,103 @@ constexpr const char *ARCHITECTURE_STYLE_LABELS[] =
 static_assert(std::size(ARCHITECTURE_STYLE_LABELS) ==
 		static_cast<size_t>(SectorArchitectureStyle::infernal) + 1);
 
-constexpr const char *ARCHITECTURE_ELEMENT_LABELS[] =
+constexpr int ARCHITECTURE_FAMILY_COUNT =
+		static_cast<int>(SectorArchitectureFamily::ceilingsVaults) + 1;
+
+int ArchitectureFamilyFor(SectorArchitectureElement element)
 {
-	"Single pillar",
-	"Paired pillars",
-	"Triumphal arch piers",
-	"Four corner piers",
-	"Linear colonnade",
-	"Double-row arcade",
-	"Perimeter cloister",
-	"Hypostyle column hall",
-	"Buttressed bay",
-	"Flying-buttress array",
-	"Four-row nave",
-	"Cruciform transept",
-	"Columned apse",
-	"Radial rotunda",
-	"Complex sanctuary",
-	"Fortified keep"
-};
-static_assert(std::size(ARCHITECTURE_ELEMENT_LABELS) ==
-		static_cast<size_t>(SectorArchitectureElement::fortifiedKeep) + 1);
+	return static_cast<int>(M_ArchitectureDescriptor(element).family);
+}
+
+std::vector<SectorArchitectureElement> ArchitectureFamilyElements(int family)
+{
+	std::vector<SectorArchitectureElement> result;
+	for (const SectorArchitectureDescriptor &descriptor :
+			M_ArchitectureCatalog())
+	{
+		if (static_cast<int>(descriptor.family) == family)
+			result.push_back(descriptor.element);
+	}
+	return result;
+}
+
+const char *ArchitecturePreviewName(DesignPreviewRole role)
+{
+	switch (role)
+	{
+		case DesignPreviewRole::architecture:
+			return "cyan solid-mass";
+		case DesignPreviewRole::architectureFloor:
+			return "gold floor";
+		case DesignPreviewRole::architectureCirculation:
+			return "green circulation";
+		case DesignPreviewRole::architectureWater:
+			return "blue water";
+		case DesignPreviewRole::architectureWall:
+			return "red wall";
+		case DesignPreviewRole::architectureCeiling:
+			return "violet ceiling";
+		case DesignPreviewRole::lift:
+			return "yellow lift";
+		default:
+			return "semantic";
+	}
+}
 
 std::map<SString, SectorDesignRequest> designerMemory;
+
+struct ArchitectureMemory
+{
+	SectorArchitectureStyle style = SectorArchitectureStyle::gothic;
+	int bays = 1;
+	double size = 24.0;
+	double height = 16.0;
+	double margin = 16.0;
+	bool mirrored = false;
+	SectorArchitectureFunction function =
+			SectorArchitectureFunction::staticGeometry;
+};
+
+std::map<SString, ArchitectureMemory> architectureMemory;
 
 SString MemoryKey(const Instance &inst)
 {
 	return SString::printf("%s/%d", inst.loaded.gameName.c_str(),
 						   static_cast<int>(inst.loaded.levelFormat));
+}
+
+SString ArchitectureMemoryKey(const Instance &inst,
+		SectorArchitectureElement element)
+{
+	return SString::printf("%s/%s", MemoryKey(inst).c_str(),
+			M_ArchitectureDescriptor(element).id);
+}
+
+ArchitectureMemory DefaultArchitectureMemory(const Instance &inst,
+		SectorArchitectureElement element)
+{
+	const SectorArchitectureDescriptor &descriptor =
+			M_ArchitectureDescriptor(element);
+	ArchitectureMemory result;
+	result.bays = descriptor.defaultBays;
+	result.size = std::max(
+			descriptor.defaultSize, descriptor.minimumSize);
+	if (descriptor.sizeUsesPlayerClearance)
+		result.size = std::max(
+				result.size,
+				std::min(
+						std::max(1, inst.grid.getStep()) * 0.5,
+						static_cast<double>(
+								std::max(
+										8,
+										inst.conf.miscInfo.player_r * 2))));
+	result.height = descriptor.defaultHeight;
+	result.margin = std::max(
+			0.0, std::min(
+					descriptor.defaultMargin,
+					static_cast<double>(
+							std::max(1, inst.grid.getStep()))));
+	return result;
 }
 
 SString SafeMenuLabel(SString label)
@@ -401,27 +470,69 @@ UI_SectorDesigner::UI_SectorDesigner(Instance &inst, int X, int Y,
 	for (const char *label : ARCHITECTURE_STYLE_LABELS)
 		architectureStyle_->add(SafeMenuLabel(label).c_str());
 	architectureStyle_->tooltip(
-			"Changes the structural section: classical round, Gothic "
-			"clustered, industrial geared, Art Deco sunburst, and more. "
-			"Changing style raises Structure size to its safe minimum when "
-			"needed.");
+			"Changes support and fountain-center sections: classical round, "
+			"Gothic clustered, industrial geared, Art Deco sunburst, and "
+			"more. Floor, wall, ceiling, water, and circulation structures "
+			"use purpose-built geometry instead.");
 	architectureStyle_->callback(optionCallback, this);
 	cy += 28;
+	architectureFamily_ =
+			new Fl_Choice(labelX, cy, inputW, 24, "Family:");
+	for (int family = 0; family < ARCHITECTURE_FAMILY_COUNT; ++family)
+		architectureFamily_->add(SafeMenuLabel(
+				M_ArchitectureFamilyLabel(
+						static_cast<SectorArchitectureFamily>(
+								family))).c_str());
+	architectureFamily_->tooltip(
+			"Choose the architectural system first. The Structure menu "
+			"then shows only relevant tools instead of mixing columns, "
+			"floors, water, walls, and ceilings.");
+	architectureFamily_->callback(connectionCallback, this);
+	cy += 28;
 	architectureElement_ =
-			new Fl_Choice(labelX, cy, inputW, 24, "Element:");
-	for (const char *label : ARCHITECTURE_ELEMENT_LABELS)
-		architectureElement_->add(SafeMenuLabel(label).c_str());
+			new Fl_Choice(labelX, cy, inputW, 24, "Structure:");
+	RebuildArchitectureStructureMenu(0);
 	architectureElement_->tooltip(
-			"Generate one pillar or a complete ordered structural layout.");
+			"Choose one generator from the selected architecture family.");
 	architectureElement_->callback(connectionCallback, this);
 	cy += 28;
+	architectureDescription_ =
+			new Fl_Box(cx, cy, W - 24, 38);
+	architectureDescription_->align(
+			FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
+	architectureDescription_->labelsize(11);
+	cy += 42;
 	addInput(architectureBays_, "Bays:");
 	addInput(architectureSize_, "Struct. size:");
 	architectureSize_->tooltip(
-			"Nominal support diameter. While Architecture owns the canvas, "
-			"the mouse wheel scales this by one quarter of the grid step and "
-			"respects the current style's format-safe minimum.");
+			"Support diameter, wall or gallery thickness, stair width, "
+			"terrace tread, pool bevel, or ceiling-rib width. While "
+			"Architecture owns the canvas, the mouse wheel scales this by "
+			"one quarter of the grid step.");
+	addInput(architectureHeight_, "Elevation:");
+	architectureHeight_->tooltip(
+			"Positive relief per tier: raised-floor height, excavation "
+			"depth, step rise, or ceiling-recess height.");
 	addInput(architectureMargin_, "Margin:");
+	architectureMargin_->tooltip(
+			"Clearance between the dragged footprint and its generated "
+			"structure. Set Margin to 0 and drag to a host boundary to "
+			"split/reuse that boundary as a connected two-sided seam.");
+	architectureMirror_ = new Fl_Check_Button(
+			labelX, cy, inputW, 24, "Mirrored (F)");
+	architectureMirror_->tooltip(
+			"Mirror the structure across the drag's forward axis. F toggles "
+			"this while the designer owns canvas focus.");
+	architectureMirror_->callback(optionCallback, this);
+	cy += 28;
+	architectureFunction_ =
+			new Fl_Choice(labelX, cy, inputW, 24, "Function:");
+	architectureFunction_->add("Static geometry|Smart Lift");
+	architectureFunction_->tooltip(
+			"Central platforms may optionally receive a compatible Smart "
+			"Lift preset, fresh tag, and local triggers in the same Undo.");
+	architectureFunction_->callback(optionCallback, this);
+	cy += 28;
 
 	joinChoice_ = new Fl_Choice(labelX, cy, inputW, 24, "Join:");
 	joinChoice_->add("Miter|Bevel|Segmented round");
@@ -816,12 +927,14 @@ void UI_SectorDesigner::LoadMemory(SectorDesignMode mode)
 		request_.architectureElement = SectorArchitectureElement::pillar;
 		request_.architectureBays = 4;
 		request_.architectureSize = 24;
+		request_.architectureHeight = 16;
 		request_.architectureMargin = 16;
 		request_.stairRise = 8;
 		request_.stairTread = std::max(8, inst_.grid.getStep());
 		request_.doorDepth = std::max(8, inst_.grid.getStep());
 		request_.preserveHeadroom = true;
 	}
+	LoadArchitectureMemory(request_.architectureElement);
 	request_.mode = mode;
 	request_.anchors.clear();
 	request_.anchorLines.clear();
@@ -836,6 +949,7 @@ void UI_SectorDesigner::LoadMemory(SectorDesignMode mode)
 
 void UI_SectorDesigner::SaveMemory()
 {
+	SaveArchitectureMemory();
 	SectorDesignRequest remembered = request_;
 	remembered.anchors.clear();
 	remembered.anchorLines.clear();
@@ -965,6 +1079,174 @@ void UI_SectorDesigner::ClearGesture()
 	availableDoorLines_.clear();
 }
 
+void UI_SectorDesigner::RebuildArchitectureStructureMenu(int family)
+{
+	family = std::clamp(family, 0, ARCHITECTURE_FAMILY_COUNT - 1);
+	architectureFamilyElements_ = ArchitectureFamilyElements(family);
+	architectureElement_->clear();
+	for (SectorArchitectureElement element : architectureFamilyElements_)
+		architectureElement_->add(
+				SafeMenuLabel(
+						M_ArchitectureDescriptor(element).label).c_str());
+}
+
+void UI_SectorDesigner::CaptureArchitectureControls()
+{
+	request_.architectureStyle = static_cast<SectorArchitectureStyle>(
+			std::clamp(
+					architectureStyle_->value(), 0,
+					static_cast<int>(
+							SectorArchitectureStyle::infernal)));
+	request_.architectureBays = ReadInt(
+			architectureBays_, request_.architectureBays);
+	request_.architectureSize = ReadDouble(
+			architectureSize_, request_.architectureSize);
+	request_.architectureHeight = ReadDouble(
+			architectureHeight_, request_.architectureHeight);
+	request_.architectureMargin = ReadDouble(
+			architectureMargin_, request_.architectureMargin);
+	request_.architectureMirrored =
+			architectureMirror_->value() != 0;
+	const int function = architectureFunction_->value();
+	request_.architectureFunction =
+			function >= static_cast<int>(
+					SectorArchitectureFunction::staticGeometry) &&
+			function <= static_cast<int>(
+					SectorArchitectureFunction::smartLift) ?
+				static_cast<SectorArchitectureFunction>(function) :
+				SectorArchitectureFunction::staticGeometry;
+}
+
+void UI_SectorDesigner::WriteArchitectureControls()
+{
+	architectureStyle_->value(
+			static_cast<int>(request_.architectureStyle));
+	const int family =
+			ArchitectureFamilyFor(request_.architectureElement);
+	architectureFamily_->value(family);
+	const bool correctFamily =
+			!architectureFamilyElements_.empty() &&
+			ArchitectureFamilyFor(
+					architectureFamilyElements_.front()) == family;
+	if (!correctFamily)
+		RebuildArchitectureStructureMenu(family);
+	const auto selected = std::find(
+			architectureFamilyElements_.begin(),
+			architectureFamilyElements_.end(),
+			request_.architectureElement);
+	architectureElement_->value(
+			selected == architectureFamilyElements_.end() ?
+				0 :
+				static_cast<int>(std::distance(
+						architectureFamilyElements_.begin(), selected)));
+	SetInt(architectureBays_, request_.architectureBays);
+	SetDouble(architectureSize_, request_.architectureSize);
+	SetDouble(architectureHeight_, request_.architectureHeight);
+	SetDouble(architectureMargin_, request_.architectureMargin);
+	architectureMirror_->value(request_.architectureMirrored);
+	architectureFunction_->value(
+			static_cast<int>(request_.architectureFunction));
+}
+
+void UI_SectorDesigner::SyncArchitectureSelectionFromControls()
+{
+	const int selectedFamily = std::clamp(
+			architectureFamily_->value(), 0,
+			ARCHITECTURE_FAMILY_COUNT - 1);
+	const int displayedFamily =
+			architectureFamilyElements_.empty() ?
+				-1 :
+				ArchitectureFamilyFor(
+						architectureFamilyElements_.front());
+
+	if (selectedFamily != displayedFamily)
+	{
+		// Preserve the complete previous structure state before replacing the
+		// menu. ReadControls also reaches this path if a platform changes a
+		// choice value without delivering its FLTK callback.
+		CaptureArchitectureControls();
+		SaveArchitectureMemory();
+		RebuildArchitectureStructureMenu(selectedFamily);
+		architectureElement_->value(0);
+		LoadArchitectureMemory(
+				architectureFamilyElements_.front());
+		WriteArchitectureControls();
+		return;
+	}
+
+	const int index = architectureElement_->value();
+	if (index < 0 ||
+		index >= static_cast<int>(
+				architectureFamilyElements_.size()))
+	{
+		architectureElement_->value(0);
+	}
+	const int safeIndex = std::clamp(
+			architectureElement_->value(), 0,
+			static_cast<int>(
+					architectureFamilyElements_.size()) - 1);
+	const SectorArchitectureElement selected =
+			architectureFamilyElements_[safeIndex];
+	if (selected != request_.architectureElement)
+	{
+		CaptureArchitectureControls();
+		SaveArchitectureMemory();
+		LoadArchitectureMemory(selected);
+		WriteArchitectureControls();
+		return;
+	}
+
+	CaptureArchitectureControls();
+}
+
+void UI_SectorDesigner::SaveArchitectureMemory()
+{
+	ArchitectureMemory remembered;
+	remembered.style = request_.architectureStyle;
+	remembered.bays = request_.architectureBays;
+	remembered.size = request_.architectureSize;
+	remembered.height = request_.architectureHeight;
+	remembered.margin = request_.architectureMargin;
+	remembered.mirrored = request_.architectureMirrored;
+	remembered.function = request_.architectureFunction;
+	architectureMemory[
+			ArchitectureMemoryKey(
+					inst_, request_.architectureElement)] = remembered;
+}
+
+void UI_SectorDesigner::LoadArchitectureMemory(
+		SectorArchitectureElement element)
+{
+	const SectorArchitectureDescriptor &descriptor =
+			M_ArchitectureDescriptor(element);
+	auto found = architectureMemory.find(
+			ArchitectureMemoryKey(inst_, element));
+	const ArchitectureMemory remembered =
+			found == architectureMemory.end() ?
+				DefaultArchitectureMemory(inst_, element) :
+				found->second;
+	request_.architectureElement = element;
+	request_.architectureStyle = remembered.style;
+	request_.architectureBays = std::clamp(
+			remembered.bays,
+			descriptor.minimumBays, descriptor.maximumBays);
+	request_.architectureSize = std::max(
+			remembered.size,
+			M_MinimumArchitectureSize(
+					remembered.style, element));
+	request_.architectureHeight = remembered.height;
+	request_.architectureMargin = std::max(0.0, remembered.margin);
+	request_.architectureMirrored =
+			M_ArchitectureHasControl(
+					element, SectorArchitectureControl::mirror) &&
+			remembered.mirrored;
+	request_.architectureFunction =
+			M_ArchitectureSupportsFunction(
+					element, remembered.function) ?
+				remembered.function :
+				SectorArchitectureFunction::staticGeometry;
+}
+
 void UI_SectorDesigner::ReadControls()
 {
 	if (updating_)
@@ -985,17 +1267,7 @@ void UI_SectorDesigner::ReadControls()
 	request_.polygonInnerRatio = ReadDouble(
 			polygonInnerInput_, request_.polygonInnerRatio * 100.0) /
 			100.0;
-	request_.architectureStyle = static_cast<SectorArchitectureStyle>(
-			architectureStyle_->value());
-	request_.architectureElement =
-			static_cast<SectorArchitectureElement>(
-					architectureElement_->value());
-	request_.architectureBays = ReadInt(
-			architectureBays_, request_.architectureBays);
-	request_.architectureSize = ReadDouble(
-			architectureSize_, request_.architectureSize);
-	request_.architectureMargin = ReadDouble(
-			architectureMargin_, request_.architectureMargin);
+	SyncArchitectureSelectionFromControls();
 	request_.join = static_cast<SectorDesignJoin>(joinChoice_->value());
 	request_.stairCount = ReadInt(stepCountInput_, request_.stairCount);
 	request_.stairRise = ReadDouble(stepRiseInput_, request_.stairRise);
@@ -1126,13 +1398,7 @@ void UI_SectorDesigner::WriteControls()
 	SetDouble(rotationInput_,
 			request_.rotation * 180.0 / std::numbers::pi);
 	SetDouble(polygonInnerInput_, request_.polygonInnerRatio * 100.0);
-	architectureStyle_->value(
-			static_cast<int>(request_.architectureStyle));
-	architectureElement_->value(
-			static_cast<int>(request_.architectureElement));
-	SetInt(architectureBays_, request_.architectureBays);
-	SetDouble(architectureSize_, request_.architectureSize);
-	SetDouble(architectureMargin_, request_.architectureMargin);
+	WriteArchitectureControls();
 	joinChoice_->value(static_cast<int>(request_.join));
 	SetInt(stepCountInput_, request_.stairCount);
 	SetDouble(stepRiseInput_, request_.stairRise);
@@ -1257,6 +1523,22 @@ SectorDesignRequest UI_SectorDesigner::CurrentRequest() const
 void UI_SectorDesigner::RefreshModeUI()
 {
 	const int mode = static_cast<int>(request_.mode);
+	const SectorArchitectureDescriptor &architecture =
+			M_ArchitectureDescriptor(request_.architectureElement);
+	const bool architectureMode =
+			request_.mode == SectorDesignMode::architecture;
+	const bool architectureMirror =
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::mirror);
+	bool architectureSmartLift =
+			architectureMode &&
+			request_.architectureFunction ==
+					SectorArchitectureFunction::smartLift;
+	architectureDescription_->copy_label(architecture.description);
+	architectureBays_->copy_label(architecture.baysLabel);
+	architectureSize_->copy_label(architecture.sizeLabel);
+	architectureHeight_->copy_label(architecture.heightLabel);
 	if (request_.mode == SectorDesignMode::extrude)
 		instructions_->copy_label(request_.extrudeUseDragDepth ?
 				"Drag a wall, or drag inside a sector through the wall to "
@@ -1269,10 +1551,15 @@ void UI_SectorDesigner::RefreshModeUI()
 				"adds independent platforms. New lift: drag outward from "
 				"a wall. Review travel and yellow trigger portals.");
 	else if (request_.mode == SectorDesignMode::architecture)
-		instructions_->copy_label(
-				"Begin the drag inside a room to lock that host and insert "
-				"supports, or begin in clear void to build a complete hall. "
-				"Wheel scales size; red geometry explains blocked layouts.");
+		instructions_->copy_label(architectureMirror ?
+				"Drag along the structure's forward axis inside a room or "
+				"in clear void. Anchor order controls rise/direction; F "
+				"mirrors this layout. Margin 0 connects eligible touching "
+				"edges; red geometry explains conflicts." :
+				"Drag along the structure's forward axis inside a room or "
+				"in clear void. Anchor order controls rise/direction. "
+				"Margin 0 connects eligible touching edges; red geometry "
+				"explains conflicts.");
 	else
 		instructions_->copy_label(MODE_HELP[mode]);
 	startConnection_->copy_label(
@@ -1305,34 +1592,66 @@ void UI_SectorDesigner::RefreshModeUI()
 			request_.mode == SectorDesignMode::polygon);
 	activeWhen(rotationInput_,
 			request_.mode == SectorDesignMode::polygon ||
-			request_.mode == SectorDesignMode::architecture);
+			(architectureMode &&
+			 M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::style)));
 	const bool concaveProfile =
 			request_.polygonProfile >= SectorPolygonProfile::star5;
 	activeWhen(polygonInnerInput_,
 			request_.mode == SectorDesignMode::polygon &&
 			concaveProfile);
 	activeWhen(architectureStyle_,
-			request_.mode == SectorDesignMode::architecture);
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::style));
+	activeWhen(architectureFamily_,
+			architectureMode);
 	activeWhen(architectureElement_,
-			request_.mode == SectorDesignMode::architecture);
-	const bool architectureUsesBays =
-			request_.architectureElement !=
-				SectorArchitectureElement::pillar &&
-			request_.architectureElement !=
-				SectorArchitectureElement::pairedPillars &&
-			request_.architectureElement !=
-				SectorArchitectureElement::triumphalArch &&
-			request_.architectureElement !=
-				SectorArchitectureElement::cornerPiers &&
-			request_.architectureElement !=
-				SectorArchitectureElement::fortifiedKeep;
+			architectureMode);
+	activeWhen(architectureDescription_, architectureMode);
 	activeWhen(architectureBays_,
-			request_.mode == SectorDesignMode::architecture &&
-			architectureUsesBays);
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::bays));
 	activeWhen(architectureSize_,
-			request_.mode == SectorDesignMode::architecture);
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::size));
+	activeWhen(architectureHeight_,
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::height));
 	activeWhen(architectureMargin_,
-			request_.mode == SectorDesignMode::architecture);
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::margin));
+	activeWhen(architectureMirror_,
+			architectureMode && architectureMirror);
+	const bool compatibleArchitectureLift =
+			M_ArchitectureSupportsFunction(
+					request_.architectureElement,
+					SectorArchitectureFunction::smartLift) &&
+			!liftPresets_.empty();
+	architectureFunction_->mode(
+			static_cast<int>(SectorArchitectureFunction::smartLift),
+			compatibleArchitectureLift ? 0 : FL_MENU_INACTIVE);
+	if (!compatibleArchitectureLift && architectureSmartLift)
+	{
+		request_.architectureFunction =
+				SectorArchitectureFunction::staticGeometry;
+		architectureSmartLift = false;
+	}
+	activeWhen(architectureFunction_,
+			architectureMode &&
+			M_ArchitectureHasControl(
+					request_.architectureElement,
+					SectorArchitectureControl::function));
 	activeWhen(joinChoice_,
 			request_.mode == SectorDesignMode::extrude ||
 			request_.mode == SectorDesignMode::inset ||
@@ -1402,7 +1721,9 @@ void UI_SectorDesigner::RefreshModeUI()
 	activeWhen(doorOffset_, extrudeDoor);
 	activeWhen(doorPlacement_, extrudeDoor);
 	activeWhen(doorSegments_, extrudeDoor && !request_.autoDoorLines);
-	if (liftPresets_.empty() || request_.mode != SectorDesignMode::lift)
+	if (liftPresets_.empty() ||
+		(request_.mode != SectorDesignMode::lift &&
+		 !architectureSmartLift))
 	{
 		liftPreset_->deactivate();
 		liftTriggers_->deactivate();
@@ -1410,9 +1731,11 @@ void UI_SectorDesigner::RefreshModeUI()
 	else
 	{
 		liftPreset_->activate();
-		liftTriggers_->activate();
+		activeWhen(liftTriggers_,
+				request_.mode == SectorDesignMode::lift);
 	}
-	if (request_.mode == SectorDesignMode::lift)
+	if (request_.mode == SectorDesignMode::lift ||
+		architectureSmartLift)
 	{
 		liftGuide_->show();
 		liftStatus_->show();
@@ -1606,10 +1929,17 @@ SString UI_SectorDesigner::WaitingPrompt() const
 					"or drag outward from a wall to build an alcove.";
 
 		case SectorDesignMode::architecture:
+		{
+			const char *label =
+					M_ArchitectureDescriptor(
+							current.architectureElement).label;
 			return current.anchors.empty() ?
-					"Drag an architectural footprint inside a room or in "
-					"clear void." :
+					SString::printf(
+						"%s selected. Press-drag-release its complete "
+						"footprint inside one room (or in clear void).",
+						label) :
 					"Place the opposite architecture footprint corner.";
+		}
 	}
 	return "Begin a Smart Sector gesture.";
 }
@@ -1737,6 +2067,19 @@ void UI_SectorDesigner::PresentPlan(bool planningException)
 			liftStatus = "Review the blocking lift issue";
 		liftStatus_->value(liftStatus.c_str());
 	}
+	else if (request_.mode == SectorDesignMode::architecture &&
+			 request_.architectureFunction ==
+					SectorArchitectureFunction::smartLift)
+	{
+		const SString liftStatus = !plan_.resolvedActionPreset ?
+				"Smart Lift unavailable or blocked" :
+				SString::printf(
+					"Platform lift - %s - fresh tag and local portals",
+					M_SectorActionPresetLabel(
+							inst_.conf,
+							*plan_.resolvedActionPreset).c_str());
+		liftStatus_->value(liftStatus.c_str());
+	}
 
 	const bool waiting = WaitingForGesture();
 	if (planningException || waiting)
@@ -1747,11 +2090,14 @@ void UI_SectorDesigner::PresentPlan(bool planningException)
 	else
 		UI_SetSectorDesignPreview(inst_, plan_, plan_.retainedSectors);
 
+	const size_t plannedSectorCount =
+			plan_.shapes.size() +
+			static_cast<size_t>(plan_.plannedRetainedCells);
 	SString summary = waiting ? WaitingSummary() : SString::printf(
 				"%d sector%s, %d line%s, %d split%s, %d door%s, "
 				"%d step%s, %d lift%s",
-				static_cast<int>(plan_.shapes.size()),
-				plan_.shapes.size() == 1 ? "" : "s",
+				static_cast<int>(plannedSectorCount),
+				plannedSectorCount == 1 ? "" : "s",
 				plan_.plannedLines, plan_.plannedLines == 1 ? "" : "s",
 				plan_.plannedSplits, plan_.plannedSplits == 1 ? "" : "s",
 				plan_.plannedDoors, plan_.plannedDoors == 1 ? "" : "s",
@@ -1948,14 +2294,8 @@ SString UI_SectorDesigner::ReviewText() const
 	else if (request_.mode == SectorDesignMode::architecture &&
 			 plan_.plannedStructures > 0)
 	{
-		const int style = std::clamp(
-				static_cast<int>(request_.architectureStyle), 0,
-				static_cast<int>(std::size(
-						ARCHITECTURE_STYLE_LABELS)) - 1);
-		const int element = std::clamp(
-				static_cast<int>(request_.architectureElement), 0,
-				static_cast<int>(std::size(
-						ARCHITECTURE_ELEMENT_LABELS)) - 1);
+		const SectorArchitectureDescriptor &architecture =
+				M_ArchitectureDescriptor(request_.architectureElement);
 		int lockedHost = -1;
 		for (const PlannedSectorShape &shape : plan_.shapes)
 			if (shape.modelSector >= 0)
@@ -1966,25 +2306,90 @@ SString UI_SectorDesigner::ReviewText() const
 		const SString ownership =
 				plan_.plannedArchitectureHosts > 0 ?
 					"A new walkable host hall is created before its "
-					"supports in this same Undo operation." :
+					"structures in this same Undo operation." :
 				lockedHost >= 0 ?
 					SString::printf(
 						"Host sector #%d is locked from the gesture start "
 						"and retained.", lockedHost) :
 					"The existing host is retained.";
 		text += SString::printf(
-				"Architecture: %s / %s. %d closed structural sector%s, "
-				"%d bay%s, %.1f-unit section, %.1f-unit edge margin. "
-				"%s\n\n",
-				ARCHITECTURE_STYLE_LABELS[style],
-				ARCHITECTURE_ELEMENT_LABELS[element],
+				"Architecture family: %s. Structure: %s. "
+				"%d generated architectural sector%s. ",
+				M_ArchitectureFamilyLabel(architecture.family),
+				architecture.label,
 				plan_.plannedStructures,
-				plan_.plannedStructures == 1 ? "" : "s",
-				request_.architectureBays,
-				request_.architectureBays == 1 ? "" : "s",
+				plan_.plannedStructures == 1 ? "" : "s");
+		if (plan_.plannedRetainedCells > 0)
+			text += SString::printf(
+					"%d opening sector%s retain%s the host room's "
+					"original properties. ",
+					plan_.plannedRetainedCells,
+					plan_.plannedRetainedCells == 1 ? "" : "s",
+					plan_.plannedRetainedCells == 1 ? "s" : "");
+		if (M_ArchitectureUsesSectionStyle(
+				request_.architectureElement))
+		{
+			const int style = std::clamp(
+					static_cast<int>(request_.architectureStyle), 0,
+					static_cast<int>(std::size(
+							ARCHITECTURE_STYLE_LABELS)) - 1);
+			text += SString::printf(
+					"Section style: %s. ",
+					ARCHITECTURE_STYLE_LABELS[style]);
+		}
+		if (M_ArchitectureUsesBays(
+				request_.architectureElement))
+			text += SString::printf(
+					"%d bay%s. ",
+					request_.architectureBays,
+					request_.architectureBays == 1 ? "" : "s");
+		text += SString::printf(
+				"%.1f-unit structure size, %.1f-unit edge margin. ",
 				request_.architectureSize,
-				request_.architectureMargin,
-				ownership.c_str());
+				request_.architectureMargin);
+		if (M_ArchitectureUsesHeight(
+				request_.architectureElement))
+			text += SString::printf(
+					"%.1f-unit elevation/depth. ",
+					request_.architectureHeight);
+		text += SString::printf(
+				"Effect: %s. Preview: %s (%s preview). ",
+				M_ArchitectureEffectDescription(request_).c_str(),
+				ArchitecturePreviewName(
+						plan_.shapes.empty() ?
+							architecture.role :
+							plan_.shapes.back().role),
+				ArchitecturePreviewName(
+						plan_.shapes.empty() ?
+							architecture.role :
+							plan_.shapes.back().role));
+		if (request_.architectureFunction ==
+					SectorArchitectureFunction::smartLift &&
+			plan_.resolvedActionPreset)
+			text += SString::printf(
+					"Function: Smart Lift using %s; the platform receives "
+					"one fresh tag and its usable local portals receive "
+					"the action in this same Undo. ",
+					M_SectorActionPresetLabel(
+							inst_.conf,
+							*plan_.resolvedActionPreset).c_str());
+		if (architecture.family ==
+					SectorArchitectureFamily::structuralSupports ||
+			architecture.family ==
+					SectorArchitectureFamily::wallsScreens)
+			text += "Topology: sector boundaries are integrated with the "
+					"host, while collapsed floor/ceiling height keeps the "
+					"solid mass physically closed. ";
+		else
+			text += "Topology: every generated walkable or overhead cell "
+					"shares open two-sided boundaries with its host or "
+					"plan-local parent. ";
+		if (request_.architectureMargin <= 0.000001)
+			text += "Connection: coincident host edges are split and reused; "
+					"walkable structures receive open two-sided portals "
+					"without changing the neighboring sector's properties. ";
+		text += ownership;
+		text += "\n\n";
 	}
 
 	if (plan_.issues.empty())
@@ -2432,7 +2837,7 @@ void UI_SectorDesigner::CanvasMove(const v2double_t &point,
 	pointerModifiers_ = modifiers;
 	pointerActive_ = IsAnchorMode(request_.mode) &&
 			(!fixedAnchors_.empty() || !endpointLines_.empty());
-	if (anchorPressArmed_ && primaryButtonDown)
+	if (anchorPressArmed_)
 	{
 		const double threshold =
 				std::max(1.0, 4.0 / inst_.grid.getScale());
@@ -2500,8 +2905,12 @@ void UI_SectorDesigner::CanvasRelease(const v2double_t &point,
 
 	if (anchorPressArmed_)
 	{
+		const double threshold =
+				std::max(1.0, 4.0 / inst_.grid.getScale());
 		const bool completeDrag =
-				anchorDragMoved_ && fixedAnchors_.size() == 1;
+				fixedAnchors_.size() == 1 &&
+				(anchorDragMoved_ ||
+				 (point - anchorPressPoint_).hypot() >= threshold);
 		anchorPressArmed_ = false;
 		anchorDragMoved_ = false;
 		if (!completeDrag)
@@ -2524,8 +2933,30 @@ void UI_SectorDesigner::CanvasRelease(const v2double_t &point,
 		pointerActive_ = false;
 		Recompute();
 		if (plan_.valid())
-			inst_.Status_Set(
-					"Gesture locked; Enter, Space, or Make Sectors applies.");
+		{
+			if (request_.mode == SectorDesignMode::architecture)
+			{
+				const char *label =
+						M_ArchitectureDescriptor(
+								request_.architectureElement).label;
+				if (request_.architectureHostSector >= 0)
+					inst_.Status_Set(
+							"%s drag ready in host sector #%d; generated "
+							"boundaries are integrated. Enter or Make "
+							"Sectors applies.",
+							label,
+							request_.architectureHostSector);
+				else
+					inst_.Status_Set(
+							"%s drag ready with a new connected host hall; "
+							"Enter or Make Sectors applies.",
+							label);
+			}
+			else
+				inst_.Status_Set(
+						"Gesture locked; Enter, Space, or Make Sectors "
+						"applies.");
+		}
 		else
 		{
 			auto error = std::find_if(
@@ -2617,27 +3048,36 @@ bool UI_SectorDesigner::CanvasWheel(int deltaY)
 	const int notches = std::max(1, std::abs(deltaY));
 	if (request_.mode == SectorDesignMode::architecture)
 	{
-		// Structural sections need finer control than a room-width gesture.
+		// Structural dimensions need finer control than a room-width gesture.
 		// Quarter-grid scaling keeps a 64-unit grid useful for 8/16/24-unit
-		// piers while still following the editor's active spatial scale.
+		// piers, walls, treads, and ribs while following the active scale.
 		const double scaleStep = std::max(1.0, step * 0.25);
 		const double minimum =
-				M_MinimumArchitectureSize(request_.architectureStyle);
+				M_MinimumArchitectureSize(
+						request_.architectureStyle,
+						request_.architectureElement);
 		const double delta =
 				(deltaY < 0 ? 1.0 : -1.0) * notches * scaleStep;
 		request_.architectureSize =
 				std::max(minimum, request_.architectureSize + delta);
 		SetDouble(architectureSize_, request_.architectureSize);
 		Recompute();
+		const char *label =
+				M_ArchitectureDescriptor(
+						request_.architectureElement).label;
 		SString result = SString::printf(
 				"Architecture structure size %.1f "
 				"(wheel step %.1f; %s minimum %.0f)",
 				request_.architectureSize, scaleStep,
-				ARCHITECTURE_STYLE_LABELS[
-					std::clamp(
-						static_cast<int>(request_.architectureStyle), 0,
-						static_cast<int>(std::size(
-							ARCHITECTURE_STYLE_LABELS)) - 1)],
+				M_ArchitectureUsesSectionStyle(
+						request_.architectureElement) ?
+					ARCHITECTURE_STYLE_LABELS[
+						std::clamp(
+							static_cast<int>(
+									request_.architectureStyle), 0,
+							static_cast<int>(std::size(
+									ARCHITECTURE_STYLE_LABELS)) - 1)] :
+					label,
 				minimum);
 		if (!WaitingForGesture() && !plan_.valid())
 		{
@@ -2924,13 +3364,12 @@ void UI_SectorDesigner::Commit()
 				applied.plannedSteps == 1 ? "" : "s");
 	else if (current.mode == SectorDesignMode::architecture)
 	{
-		const int style = std::clamp(
-				static_cast<int>(current.architectureStyle), 0,
-				static_cast<int>(std::size(
-						ARCHITECTURE_STYLE_LABELS)) - 1);
-		inst_.Status_Set("Built %d %s architectural structure%s%s",
+		const char *label =
+				M_ArchitectureDescriptor(
+						current.architectureElement).label;
+		inst_.Status_Set("Built %s (%d architectural sector%s)%s",
+				label,
 				std::max(1, applied.plannedStructures),
-				ARCHITECTURE_STYLE_LABELS[style],
 				applied.plannedStructures == 1 ? "" : "s",
 				applied.plannedArchitectureHosts > 0 ?
 					" with a new host hall" : "");
@@ -2980,7 +3419,24 @@ void UI_SectorDesigner::Flip()
 		Recompute();
 		return;
 	}
-	inst_.Status_Set("F flips extrusion side or corridor direction");
+	if (request_.mode == SectorDesignMode::architecture &&
+		M_ArchitectureHasControl(
+				request_.architectureElement,
+				SectorArchitectureControl::mirror))
+	{
+		request_.architectureMirrored =
+				!request_.architectureMirrored;
+		WriteControls();
+		Recompute();
+		inst_.Status_Set("%s layout %s",
+				M_ArchitectureDescriptor(
+						request_.architectureElement).label,
+				request_.architectureMirrored ?
+					"mirrored" : "restored");
+		return;
+	}
+	inst_.Status_Set(
+			"F flips extrusion/corridor direction or a mirrorable structure");
 }
 
 void UI_SectorDesigner::Refresh()
@@ -3372,7 +3828,8 @@ void UI_SectorDesigner::optionCallback(Fl_Widget *widget, void *data)
 	{
 		panel->ReadControls();
 		const double minimum = M_MinimumArchitectureSize(
-				panel->request_.architectureStyle);
+				panel->request_.architectureStyle,
+				panel->request_.architectureElement);
 		if (panel->request_.architectureSize < minimum)
 		{
 			panel->request_.architectureSize = minimum;
@@ -3383,11 +3840,29 @@ void UI_SectorDesigner::optionCallback(Fl_Widget *widget, void *data)
 	panel->Recompute();
 }
 
-void UI_SectorDesigner::connectionCallback(Fl_Widget *, void *data)
+void UI_SectorDesigner::connectionCallback(Fl_Widget *widget, void *data)
 {
 	UI_SectorDesigner *panel =
 			static_cast<UI_SectorDesigner *>(data);
+	if (panel->updating_)
+		return;
+	// ReadControls performs the architecture menu transition atomically,
+	// including a defensive resynchronization when FLTK or a platform backend
+	// changes a choice value without delivering the expected callback.
 	panel->ReadControls();
+	if (widget == panel->architectureElement_ ||
+		widget == panel->architectureFamily_)
+	{
+		panel->ClearGesture();
+		const double minimum = M_MinimumArchitectureSize(
+				panel->request_.architectureStyle,
+				panel->request_.architectureElement);
+		if (panel->request_.architectureSize < minimum)
+		{
+			panel->request_.architectureSize = minimum;
+			SetDouble(panel->architectureSize_, minimum);
+		}
+	}
 	panel->RefreshModeUI();
 	panel->Recompute();
 }

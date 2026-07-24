@@ -271,9 +271,19 @@ void UI_Canvas::PointerPos(bool in_event)
 	if (inst.edit.render3d)
 		return;
 
-	// we read current position outside of FLTK's event propagation.
 	int raw_x, raw_y;
-	Fl::get_mouse(raw_x, raw_y);
+	if (in_event)
+	{
+		// Mouse events already carry an authoritative root position. Asking
+		// the window system for the pointer again can lag behind the event
+		// (and is unreliable on some Wayland/XWayland combinations), which
+		// previously made Smart Sector press-drag-release gestures appear
+		// stationary or start in the wrong sector.
+		raw_x = Fl::event_x_root();
+		raw_y = Fl::event_y_root();
+	}
+	else
+		Fl::get_mouse(raw_x, raw_y);
 
 #ifdef NO_OPENGL
 	raw_x -= inst.main_win->x_root();
@@ -1936,6 +1946,16 @@ void UI_Canvas::DrawDesignAssistPreview()
 				return fl_rgb_color(255, 208, 64);
 			case DesignPreviewRole::architecture:
 				return fl_rgb_color(88, 216, 232);
+			case DesignPreviewRole::architectureFloor:
+				return fl_rgb_color(232, 176, 72);
+			case DesignPreviewRole::architectureCirculation:
+				return fl_rgb_color(72, 208, 144);
+			case DesignPreviewRole::architectureWater:
+				return fl_rgb_color(64, 144, 255);
+			case DesignPreviewRole::architectureWall:
+				return fl_rgb_color(232, 112, 80);
+			case DesignPreviewRole::architectureCeiling:
+				return fl_rgb_color(176, 112, 240);
 			case DesignPreviewRole::cut:
 				return fl_rgb_color(235, 92, 160);
 			case DesignPreviewRole::anchor:

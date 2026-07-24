@@ -90,26 +90,49 @@ rectangles, ordered polygon profiles, concave freeform rooms, wall extrusions,
 insets/rings, routed corridors, stair runs, lifts, and architectural layouts.
 Polygon profiles progress from triangle and square through circles, stars,
 crosses, gears, sawblades, foils, rosettes, and 288-vertex grand cathedral
-tracery.  Architecture offers 16 layouts ranging from a single pillar through
-cloisters, hypostyle halls, transepts, apses, sanctuaries, and fortified keeps
-with Functional, Classical, Romanesque, Gothic, Industrial, Art Deco, or
-Infernal support sections.  A footprint inside a room preserves that host; a
-footprint in clear void creates its walkable hall and supports atomically.  It
-locks an existing host from the first press, so holed and concave rooms work
-even when the footprint center is void.  Invalid layouts remain visible in
-red with exact point/line markers instead of disappearing.  It can also finish
-selected sector paths as stairs or platforms.
+tracery.  Architecture offers an ordered library of 58 real structures across
+Structural supports, Floors and terraces, Circulation, Waterworks, Walls and
+screens, and Ceilings and vaults.  Beyond the original support layouts and
+floor/water/ceiling tools, it includes cross cores, tower shells, buttressed
+towers, monuments, platforms, stages, podiums, amphitheaters,
+switchback/bifurcated/spiral stairs, catwalks, crossing bridges, moats, canals,
+cascades, fountain courts, partitions, crenellated and buttressed walls,
+privacy screens, gatehouses, tray/barrel/cross vaults, domes, and downstand
+beams.  These create real walkable, closed, depressed, or overhead sectors
+rather than pillar substitutes.  Structure shows only the focused family
+instead of one long mixed list.
+
+A footprint inside a room preserves that host; one in clear void creates its
+walkable hall and structures atomically.  It locks an existing host from the
+first press, so holed and concave rooms work even when the footprint center is
+void.  Cyan, gold, green, blue, warm-red, and violet fills distinguish
+supports, floor forms, circulation, waterworks, wall mass, and ceiling work
+while dragging; Review states the exact height effect.  Invalid layouts remain
+visible in red with exact point/line markers instead of disappearing.  It can
+also finish selected sector paths as stairs or platforms.
+
+Architecture reads the press, drag, and release coordinates from the canvas
+event itself, including Wayland/XWayland, and accepts a displaced release when
+an intermediate drag event is coalesced.  Generated walkable cells share open
+two-sided boundaries with their retained host.  Set Margin to 0 and touch a
+host boundary to split/reuse it as a portal to an existing neighboring sector;
+that neighbor's heights, flats, light, special, and tag remain unchanged.
+Walls and screens span the drag's long axis while Thickness controls the short
+axis.  Repeated panels, merlons, and buttresses run along the wall, and a
+gatehouse reserves its exact centered passage.  Ribbed cross vaults use four
+half-relief quadrants and a full-relief crossing.  A downstand beam lattice is
+one connected two-axis ceiling sector whose openings retain the host room's
+properties instead of becoming void.
 
 View / Snap to Grid controls both ordinary sector drawing and every Smart
 Sector anchor or drag.  With snapping off, geometry is still quantized for
 the active Doom, Hexen, or UDMF format before it is previewed.  The last
 explicit Snap to Grid choice is restored on the next launch.  Blue outlines
-show proposed geometry; distinct
-opening, door, track, stair, lift, architecture, cut, warning, and conflict
-roles make the result readable before applying.  Auto properties inherit
-context, while the
-panel offers absolute/relative heights and light, explicit textures, and
-optional sector Special and Tag values.
+show proposed geometry; distinct opening, door, track, stair, lift, semantic
+architecture, cut, warning, and conflict roles make the result readable
+before applying.  Auto properties inherit context, while the panel offers
+absolute/relative heights and light, explicit textures, and optional sector
+Special and Tag values.
 Floor, ceiling, and wall resources have searchable loaded-resource selectors,
 live preview tiles, and contextual Auto controls; Inset preserves separate
 Ring and Inner choices.  Special can be entered manually or chosen from the
@@ -121,21 +144,28 @@ wall-alcove Lift also support direct press-drag-release.  Inset and Lift accept
 canvas sector targets, while Shift/Ctrl-click builds a batch and selected
 Stairs use plain clicks for explicit path endpoints.  Right-click removes the
 last anchor, Enter or Space commits, Tab cycles corridor routes, f or F flips
-an extrusion or corridor, Shift+G toggles Snap to Grid, and double Escape
-clears then exits.  The canvas mouse wheel changes Corridor width or
-Inset / Ring thickness by the current grid step; Inset preserves its explicit
-inward or outward direction.  In Architecture it changes Structure size by a
-quarter grid step and respects the selected style's safe minimum.  Other modes
-retain normal zoom.  Returning U routes preserve their empty middle.  Extrude
-supports a real press-drag-release gesture without
-preselection: grab a wall directly, or begin inside a sector
-and drag through the wall that should be extruded.  The filled preview,
-normal-depth ruler, numeric depth, and visible Opposite side control show
-exactly where it will go.  The tool remains active after each commit, selects
-the resulting sectors, and creates exactly one Undo record per gesture.
-Existing actions, recognized doors and lifts, ambiguous overlaps, slivers,
-and invalid topology block a commit unless protected replacement is explicitly
-requested.
+an extrusion/corridor or mirrors a supported structure, Shift+G toggles Snap
+to Grid, and double Escape clears then exits.  The canvas mouse wheel changes
+Corridor width or Inset / Ring thickness by the current grid step; Inset
+preserves its explicit inward or outward direction.  In Architecture it
+changes the relevant Structure size by a quarter grid step and respects the
+selected generator's safe minimum.  Bays controls repeated
+cells/openings/steps, Elevation controls vertical relief or depth, and Margin
+protects circulation.  These fields are relabelled for the selected structure
+as tiers, rows, rings, buttresses, panels, tread, passage, well radius, recess,
+or drop.  Anchor order controls rises and cascades; F mirrors supported
+structures.  A central platform can optionally become a Smart Lift with its
+fresh tag and local triggers in the same Undo operation.  Other modes retain
+normal zoom.  Returning U routes preserve their empty middle.
+
+Extrude supports a real press-drag-release gesture without preselection: grab
+a wall directly, or begin inside a sector and drag through the wall that
+should be extruded.  The filled preview, normal-depth ruler, numeric depth, and
+visible Opposite side control show exactly where it will go.  The tool remains
+active after each commit, selects the resulting sectors, and creates exactly
+one Undo record per gesture.  Existing actions, recognized doors and lifts,
+ambiguous overlaps, slivers, and invalid topology block a commit unless
+protected replacement is explicitly requested.
 
 Open, Wall, and Door connections are semantic choices.  Door connections use
 the Smart Door presets and texture inference in the same atomic edit.

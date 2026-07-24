@@ -20,7 +20,15 @@ enum class DesignPreviewRole
 	track,
 	stair,
 	lift,
+	// Legacy support-layout role retained for Smart Door/architecture
+	// compatibility. Purpose-built structures use the semantic roles below
+	// so their plan is immediately legible in the 2D canvas.
 	architecture,
+	architectureFloor,
+	architectureCirculation,
+	architectureWater,
+	architectureWall,
+	architectureCeiling,
 	cut,
 	anchor,
 	warning,

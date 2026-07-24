@@ -268,7 +268,8 @@ For BiasedDoom projects, use the `biaseddoom` source-port profile. Test in Game 
 find either BiasedDoom or GZDoom. When a marker-owned runtime ZMAPINFO no longer matches current
 campaign metadata, launch preflight can cancel, launch with it unchanged, or open the exact
 preview and regenerate it before starting the engine. Missing and user-authored declarations do
-not prompt.
+not prompt. Saving and launching preserve the active map's Undo and Redo histories, and keyboard
+focus returns to the canvas after the engine starts.
 """
 ChangeTestSettings = """
 Opens Test Settings to configure the game engine and custom parameters. The engine path can be
@@ -559,7 +560,8 @@ Reviews and converts the selected sectors, or one highlighted sector, into local
 The TARGET box names the exact sectors that will become the doors, while a heavy orange hatch
 marks them on the map. Activating portals are orange and track walls are green. Door face is the
 moving slab texture; Track wall is the narrow side-wall texture. Choose a semantic preset, use
-the searchable Browse picker or preview tiles for loaded textures, or retain Auto inference.
+the searchable Browse picker or preview tiles for loaded textures, or use Auto to clear an
+explicit override and immediately re-infer the resolved texture.
 The review also shows every warning or blocking error.
 
 Selected door sectors must be nonadjacent and each must already have at least two two-sided
@@ -584,39 +586,50 @@ manual numeric input and the active configuration's searchable described list.
 
 Polygon Profile is ordered from basic convex rooms through fine circles,
 stars, crosses, gears, sawblades, foils, rosettes, and 288-vertex grand
-cathedral tracery. Architecture offers 16 closed-sector layouts from pillars
-and arch piers through cloisters, hypostyle halls, buttress arrays, transepts,
-apses, sanctuaries, and fortified keeps. A footprint inside one ordinary room
-retains that host; a footprint wholly in clear void creates a walkable host
-hall before inserting its supports in the same Undo operation. Functional,
-Classical, Romanesque, Gothic, Industrial, Art Deco, and Infernal sections are
-available in Doom, Hexen, and UDMF. The first unsnapped Architecture press
-locks an existing host, allowing layouts around holes and through concave
-footprints whose center is void. Blocked layouts retain red intent geometry
-and exact invalid-point or conflicting-linedef markers.
+cathedral tracery. Architecture offers 58 catalogued structures across
+supports, floors/terraces, circulation, waterworks, walls/screens, and
+ceilings/vaults. The library includes towers, monuments, stages, podiums,
+amphitheaters, switchback/bifurcated/spiral stairs, catwalks, bridges, moats,
+canals, cascades, fountain courts, gatehouses, vaults, domes, and beam
+lattices. A footprint inside one ordinary room retains that host; a footprint
+wholly in clear void creates a walkable host hall before inserting every
+structure in the same Undo operation. Contextual Bays, Size, and Elevation
+labels, safe limits, mirroring, semantic colors, and effect text come from the
+selected catalog descriptor. Functional, Classical, Romanesque, Gothic,
+Industrial, Art Deco, and Infernal styles appear only where they change the
+outline. The first unsnapped Architecture press locks an existing host,
+allowing layouts around holes and through concave footprints whose center is
+void. Blocked layouts retain red intent geometry and exact invalid-point or
+conflicting-linedef markers. A central platform may optionally become one
+Smart Lift, including its fresh tag and local triggers, when the format
+provides a compatible preset.
+Walls and screens span the gesture's long axis while Thickness controls the
+short axis. Ribbed cross vaults use four rising quadrants and a distinct
+crossing; downstand beam lattices are connected two-axis ceiling sectors whose
+reported opening sectors retain the host room instead of becoming void.
 
 Left-click places gesture anchors, right-click removes the last anchor,
 Enter or Space commits a valid plan, Tab cycles automatic corridor routes,
-and either f or F toggles the visible Opposite side state or reverses a
-corridor. While Corridor owns the canvas, the mouse wheel adjusts its width by
-the current grid step; in Inset / Ring it adjusts ring thickness without
-changing inward/outward direction; in Architecture it adjusts Structure size
-by a quarter grid step and respects the selected style's safe minimum. A
-returning U route preserves its empty middle. Room, Polygon, Corridor,
-generated Stairs, and Architecture accept both
-press-drag-release and click-to-place. Extrude supports press-drag-release
-without preselection. Press a wall directly, or start inside a sector and drag
-through the wall to extrude; an interior drag chooses the first crossed
-boundary instead of an unrelated nearby hover line.
+and either f or F toggles the visible Opposite side state, reverses a
+corridor, or mirrors a supported architecture layout. Anchor order controls
+architecture rise/cascade direction. While Corridor owns the canvas, the
+mouse wheel adjusts its width by the current grid step; in Inset / Ring it
+adjusts ring thickness without changing inward/outward direction; in
+Architecture it adjusts Structure size by a quarter grid step and respects
+the selected generator's safe minimum. A returning U route preserves its
+empty middle. Room, Polygon, Corridor, generated Stairs, and Architecture
+accept both press-drag-release and click-to-place. Extrude supports
+press-drag-release without preselection. Press a wall directly, or start
+inside a sector and drag through the wall to extrude; an interior drag chooses
+the first crossed boundary instead of an unrelated nearby hover line.
 Direction is locked to the chosen chain seam and follows the pointer regardless
 of linedef winding. A normal ruler, numeric depth, filled preview, and panel
 toggle make the side explicit.
 Shift+G toggles Snap to Grid without conflicting with F; lowercase g only
 shows or hides the grid.
 Escape clears the current gesture; Escape again exits the designer. Each
-commit is revalidated and
-applied as one Undo operation, selects its result, and leaves the designer
-active for the next gesture.
+commit is revalidated and applied as one Undo operation, selects its result,
+and leaves the designer active for the next gesture.
 
 Inset, existing-stair, and lift modes consume the current sector selection or
 accept sector targets directly on the canvas. Shift/Ctrl-click toggles batch

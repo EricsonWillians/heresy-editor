@@ -10,6 +10,7 @@
 #include "m_game.h"
 #include "m_vector.h"
 
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -95,7 +96,111 @@ enum class SectorArchitectureElement
 	apse,
 	rotunda,
 	sanctuary,
-	fortifiedKeep
+	fortifiedKeep,
+
+	// Volumetric structures. Unlike the support layouts above, these own
+	// walkable floor, wall, ceiling, or water-shaped sector geometry.
+	raisedDais,
+	sunkenCourt,
+	tieredZiggurat,
+	grandStair,
+	fountainBasin,
+	reflectingPool,
+	balconyGallery,
+	processionalChannel,
+	screenWall,
+	cofferedCeiling,
+	groinVaults,
+	raisedBridge,
+
+	// Stage 25 additions. Keep these appended: the ordered descriptor catalog
+	// and transient per-element UI memory use the existing enum order.
+	crossCore,
+	hollowTower,
+	buttressedTower,
+	shearWallPair,
+	steppedMonument,
+	centralPlatform,
+	splitLevelStage,
+	cornerTerraces,
+	octagonalPodium,
+	horseshoeAmphitheater,
+	switchbackStair,
+	bifurcatedStair,
+	spiralStair,
+	landingCatwalk,
+	crossingBridges,
+	perimeterMoat,
+	crossCanal,
+	twinCanals,
+	steppedCascade,
+	fountainCourt,
+	partitionWall,
+	crenellatedWall,
+	buttressedWall,
+	staggeredScreen,
+	gatehousePassage,
+	trayCeiling,
+	barrelVault,
+	ribbedCrossVault,
+	domedCeiling,
+	beamLattice
+};
+
+enum class SectorArchitectureFamily
+{
+	structuralSupports,
+	floorsTerraces,
+	circulation,
+	waterworks,
+	wallsScreens,
+	ceilingsVaults
+};
+
+enum class SectorArchitectureFunction
+{
+	staticGeometry,
+	smartLift
+};
+
+enum class SectorArchitectureControl : std::uint32_t
+{
+	none = 0,
+	style = 1u << 0,
+	bays = 1u << 1,
+	size = 1u << 2,
+	height = 1u << 3,
+	margin = 1u << 4,
+	mirror = 1u << 5,
+	function = 1u << 6
+};
+
+struct SectorArchitectureDescriptor
+{
+	const char *id = "";
+	SectorArchitectureElement element = SectorArchitectureElement::pillar;
+	SectorArchitectureFamily family =
+			SectorArchitectureFamily::structuralSupports;
+	const char *label = "";
+	const char *description = "";
+	DesignPreviewRole role = DesignPreviewRole::architecture;
+	std::uint32_t controls = 0;
+	std::uint32_t functions = 1;
+	const char *baysLabel = "Bays:";
+	const char *sizeLabel = "Struct. size:";
+	const char *heightLabel = "Elevation:";
+	int defaultBays = 4;
+	int minimumBays = 1;
+	int maximumBays = 32;
+	double defaultSize = 24.0;
+	double defaultHeight = 16.0;
+	double defaultMargin = 16.0;
+	double minimumSize = 1.0;
+	// Width-like controls that must start at a traversable player clearance.
+	// Thicknesses, treads, borders, radii, and ornamental relief deliberately
+	// retain their descriptor default instead of inheriting an unsuitable
+	// player diameter.
+	bool sizeUsesPlayerClearance = false;
 };
 
 enum class SectorDesignJoin
@@ -186,7 +291,11 @@ struct SectorDesignRequest
 	int architectureHostSector = -1;
 	int architectureBays = 4;
 	double architectureSize = 24.0;
+	double architectureHeight = 16.0;
 	double architectureMargin = 16.0;
+	bool architectureMirrored = false;
+	SectorArchitectureFunction architectureFunction =
+			SectorArchitectureFunction::staticGeometry;
 
 	SectorConnection startConnection = SectorConnection::open;
 	SectorConnection endConnection = SectorConnection::open;
@@ -232,11 +341,17 @@ struct PlannedSectorShape
 	int ceilingDelta = 0;
 	bool smartDoor = false;
 	bool smartLift = false;
-	// Architectural inserts such as pillars are real sectors whose ceiling
-	// is collapsed to their resolved floor during the atomic apply.
+	// Closed architectural inserts such as supports or screen walls collapse
+	// their ceiling to their resolved floor. Walkable and ceiling structures
+	// leave this false and use the explicit deltas above.
 	bool closed = false;
 	bool inheritModelOnly = false;
 	std::optional<SectorPropertyOptions> properties;
+	// Most generated holes preserve void. Overhead lattices instead cut the
+	// connected beam sector into the host room and retain that room's
+	// properties in every opening. Kept at the aggregate tail so existing
+	// plan builders retain source compatibility.
+	bool holesRetainModel = false;
 };
 
 struct PlannedSectorChange
@@ -298,6 +413,7 @@ struct SectorDesignPlan
 	int plannedLifts = 0;
 	int plannedStructures = 0;
 	int plannedArchitectureHosts = 0;
+	int plannedRetainedCells = 0;
 
 	bool valid() const;
 };
@@ -308,9 +424,26 @@ SString M_SectorActionPresetLabel(const ConfigData &config,
 								  const SectorActionPreset &preset);
 
 // Small intricate sections can collapse into ambiguous loops after map-format
-// quantization. The planner and canvas wheel share this style-aware lower
-// bound so preview and apply agree about usable structural dimensions.
+// quantization. The compatibility overload retains the section-style bound;
+// the element-aware overload also serves purpose-built structures. The
+// planner and canvas wheel share it so preview and apply agree.
 double M_MinimumArchitectureSize(SectorArchitectureStyle style);
+double M_MinimumArchitectureSize(
+		SectorArchitectureStyle style,
+		SectorArchitectureElement element);
+bool M_ArchitectureUsesSectionStyle(SectorArchitectureElement element);
+bool M_ArchitectureUsesBays(SectorArchitectureElement element);
+bool M_ArchitectureUsesHeight(SectorArchitectureElement element);
+const std::vector<SectorArchitectureDescriptor> &M_ArchitectureCatalog();
+const SectorArchitectureDescriptor &M_ArchitectureDescriptor(
+		SectorArchitectureElement element);
+bool M_ArchitectureHasControl(SectorArchitectureElement element,
+		SectorArchitectureControl control);
+bool M_ArchitectureSupportsFunction(SectorArchitectureElement element,
+		SectorArchitectureFunction function);
+const char *M_ArchitectureFamilyLabel(SectorArchitectureFamily family);
+SString M_ArchitectureEffectDescription(
+		const SectorDesignRequest &request);
 
 SectorDesignPlan M_PlanSectorDesign(const Document &doc,
 		const ConfigData &config, const ImageSet *images, MapFormat format,

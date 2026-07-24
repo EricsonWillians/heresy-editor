@@ -29,9 +29,10 @@ Final Doom, Freedoom, HacX, Heretic, Hexen, and Strife game families.
   layouts through one live, format-quantized workflow.
 - **Smart Doors** — turn existing sectors or extrusion seams into verified
   local doors with inferred face/track textures and format-correct activation.
-- **Architecture that fits the map** — place pillars, arcades, cloisters,
-  naves, apses, rotundas, sanctuaries, and more inside ordinary, concave, or
-  holed sectors with visible validation before committing.
+- **58 architectural structures** — build supports and towers, stages and
+  amphitheaters, stairs and catwalks, canals and fountain courts, gatehouses,
+  domes, vaults, and beam lattices inside ordinary, concave, or holed sectors
+  with visible validation before committing.
 - **Campaign-scale editing** — manage WAD and PK3 projects, map order, titles,
   episodes, normal/secret routes, entry points, and generated runtime ZMAPINFO.
 - **Preservation first** — protect existing specials, doors, lifts, extended
@@ -84,12 +85,46 @@ offers:
 - generated or existing-sector stairs;
 - tagged lift platforms and wall alcoves;
 - Open, Wall, or Smart Door endpoint semantics;
-- 16 architectural layouts and seven structural styles.
+- an ordered catalog of 58 generators across structural supports, floors and
+  terraces, circulation, waterworks, walls and screens, and ceilings and
+  vaults.
+
+Architecture is organized as a two-level catalog: choose Structural supports,
+Floors and terraces, Circulation, Waterworks, Walls and screens, or Ceilings
+and vaults, then choose a focused Structure. The catalog includes the original
+support layouts and real sector generators for cross cores, accessible tower
+shells, buttressed towers, monuments, platforms, stages, podiums,
+amphitheaters, switchback/bifurcated/spiral stairs, catwalks, bridge
+crossings, moats, canals, cascades, fountain courts, partitions, crenellated
+and buttressed walls, privacy screens, gatehouses, tray/barrel/cross vaults,
+domes, and downstand beams.
 
 Architecture locks the sector under the first unsnapped press. That makes
 layouts reliable inside deeply concave rooms and around holes even when the
 footprint center is void. Valid structures remain visible in their dedicated
-preview role; blocked intent remains red with exact point/line diagnostics.
+semantic preview color: cyan supports, gold floors, green circulation, blue
+water, red wall mass, and violet ceilings. The review states the exact
+floor/ceiling effect before commit; blocked intent remains red with exact
+point/line diagnostics.
+
+Architecture drags consume the canvas event coordinates directly, making
+press-drag-release reliable across X11, Wayland/XWayland, and software/OpenGL
+canvas paths. Generated walkable cells have open two-sided boundaries to their
+host. Set Margin to `0` and touch a host boundary to split/reuse it as a portal
+to an existing neighboring sector without replacing that neighbor's
+properties.
+
+Structure-specific Bays, Size, Elevation, and Margin controls drive real
+walkable or overhead sectors rather than disguising every option as a pillar.
+Their labels and safe ranges come from the selected catalog entry. Anchor
+order controls directional rises and cascades; <kbd>F</kbd> mirrors supported
+layouts. A central platform can optionally become a format-correct Smart Lift
+with its fresh tag and local triggers in the same Undo operation.
+
+Walls and screens span the drag's long axis, with thickness on the short axis.
+Cross vaults use four rising quadrants and a distinct center crossing; beam
+lattices are connected two-axis ceiling sectors whose openings retain the
+host room instead of becoming void.
 
 Read the complete [Smart Sector Designer guide](docs/SmartSectors.txt).
 
@@ -97,8 +132,9 @@ Read the complete [Smart Sector Designer guide](docs/SmartSectors.txt).
 
 Smart Door reviews all selected sectors as a batch, resolves compatible
 configuration-declared presets, infers loaded textures deterministically, and
-shows portal/track geometry before changing the map. The same semantics are
-available directly from the Extrude pipeline.
+shows portal/track geometry before changing the map. Face and Track Auto
+controls clear explicit overrides and immediately show the re-inferred
+textures. The same semantics are available directly from the Extrude pipeline.
 
 Read the [Smart Door guide](docs/SmartDoors.txt).
 

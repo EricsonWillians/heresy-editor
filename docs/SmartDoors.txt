@@ -72,6 +72,12 @@ portal lower textures, and unrelated line flags are preserved.  Only affected
 shared sidedefs are copied.  The whole batch is one Undo step, and Redo restores
 it.  Cancel or closing the dialog makes no edit and does not alter selection.
 
+Saving the map, saving the project, or launching Test in Game does not clear
+the active map's Undo or Redo history.  After the engine launch, keyboard focus
+returns to the map canvas, so Ctrl/Cmd+Z can immediately undo the tested door.
+Recover an accidental Undo with Edit -> Redo, Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y
+before starting a different edit.
+
 Boundaries
 ----------
 
@@ -93,7 +99,9 @@ independent doors on explicitly selected segments of a nonbranching chain.
 Auto width reserves track walls at chain bends; the remaining extrusion seam
 stays a blocking wall.  The embedded Preset, Face, and Track controls have
 identical Auto and compatibility behavior, and the embedded face/track preview
-tiles and Choose buttons open the same loaded-texture picker.
+tiles and Choose buttons open the same loaded-texture picker.  Pressing Auto
+clears the explicit override, lights the control, and immediately recomputes
+the resolved texture from the current source geometry.
 Generated geometry, portal orientation, textures, special, arguments,
 activation, and collapsed ceiling commit as one Undo step; if either geometry
 or door revalidation fails, none of the combined operation is retained.  See

@@ -394,6 +394,13 @@ selection.  Regression tests cover preset parsing and availability, geometry
 validation and inference, Doom/Hexen/UDMF application, preservation, selective
 isolation, atomic failure, undo/redo, dialog cancellation, and overlay cleanup.
 
+The completed Smart Door hardening gives Face and Track Auto controls an
+explicit lit state, clears typed overrides before deterministic re-inference,
+and exercises the same behavior through the complete Smart Sector Extrude
+pipeline.  Save Map, Save Project, and Test in Game preserve the active
+document's Undo and Redo histories; focus returns to the canvas after launch,
+and Edit / Redo, Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y recovers an accidental Undo.
+
 Stage 24 is complete: Smart Sector Designer provides a persistent right-side
 workspace for rectangles, regular polygons, concave freeform rooms,
 extrusions, inset/rings, routed corridors, generated or existing stairs, and
@@ -461,37 +468,58 @@ explicit start/end picking plus numbered order for existing Stairs.  Endpoint
 line ownership survives void-to-wall routes, stale references are pruned after
 map changes, and selection-driven tools require a fresh target after commit.
 
-Stage 25 is complete: the designer now exposes a progressive construction
-vocabulary.  Polygon profiles are ordered from simple convex primitives
-through fine circles, stars, crosses, gears, sawblades, foils, rosettes, and
-288-vertex grand cathedral tracery, with deterministic format quantization and
-focused controls for regular sides, rotation, and concave inner radius.
-Inset / Ring consumes the mouse wheel in its active canvas mode to change
-thickness by exact grid steps without silently reversing inward/outward
-intent.
+Stage 25 is complete: Smart Sector Architecture is now an authoritative,
+ordered library of 58 generators.  Stable descriptors declare each tool's
+family, semantic preview role, one-line purpose, contextual controls, safe
+defaults and limits, mirroring, and optional functions.  Planner and sidebar
+consume the same catalog; compatibility helpers no longer infer behavior from
+enum ordering or line-special descriptions.
 
-Lift mode now documents its existing-platform and wall-alcove workflows in the
-panel itself.  Its live status and expanded review identify connected
-platforms, inferred adjacent-floor stops, travel, fresh tags, semantic
-behavior, and exact local trigger portals before the atomic apply.
+The 30 additions cover five substantial generators in every family:
+cross/tower/shear-wall/monument structural masses; platforms, stages, corner
+terraces, podiums, and amphitheaters; switchback, bifurcated, and spiral
+stairs, catwalks, and bridge crossings; moats, cross/twin canals, cascades,
+and fountain courts; partitions, crenellated/buttressed walls, staggered
+screens, and gatehouses; and tray/barrel/cross vaults, domes, and downstand
+beam lattices.  Supports and walls are closed blocking cells, floor and
+circulation cells remain walkable, waterworks lower floors, and ceiling tools
+leave floors untouched.
 
-Architecture mode creates reusable, host-safe structural layouts rather than
-merely decorative preview marks.  Its 16 elements range from individual
-pillars and arch piers through colonnades, arcades, cloisters, hypostyle halls,
-buttress arrays, naves, transepts, apses, rotundas, sanctuaries, and fortified
-keeps using Functional, Classical, Romanesque, Gothic clustered, Industrial
-geared, Art Deco sunburst, or Infernal support sections.  A footprint inside a
-room retains its host; one wholly in clear void creates a walkable host hall
-before inserting supports through plan-local references.  Existing-room
-ownership locks from the first unsnapped press instead of the footprint
-center, which supports holed and strongly concave sectors.  Invalid footprint,
-support, point, and linedef intent remains visible with conflict roles and
-precise issue navigation.  The mouse wheel
-scales structural sections by quarter-grid increments with style-aware safe
-minimums.  Every support is a closed inherited sector, previewed in its own
-role and applied with the complete hall as one Undo operation.  Existing
-geometry contact, invalid host crossings, protected functional geometry,
-overlapping supports, and format-quantized topology remain blocking.
+An oriented local footprint makes the drag's long axis forward.  Anchor order
+controls rises and cascades; F mirrors supported corner, stair, spiral, and
+screen layouts.  Styles appear only for cores, towers, monuments, podiums,
+fountain centerpieces, gatehouses, and domes where they change the actual
+outline.  Bays, Size, and Elevation are relabelled as the selected generator's
+tiers, rows, steps, rings, buttresses, panels, bands, beams, tread, passage,
+well radius, relief, recess, depth, or drop.  Values and optional functions
+are remembered independently per structure, game, and map format.
+
+Wall and screen footprints span the oriented long axis, while their Thickness
+controls the short axis; repeated panels, merlons, and buttresses therefore
+follow the wall, and gatehouse masses preserve their exact centered passage.
+The ribbed cross vault creates four half-relief quadrants around a full-relief
+crossing.  The downstand beam lattice is one connected two-axis ceiling sector
+whose retained opening sectors preserve the host room's floor, ceiling,
+textures, light, special, tag, and traversable two-sided boundaries.  Preview
+statistics include those openings, so review and applied topology agree.
+
+The central platform remains static by default and offers Smart Lift only
+when the active configuration can represent one.  Its fresh tag, chosen
+preset, local triggers, geometry, and selection are applied in one Undo
+operation.  Gatehouse passages remain exact geometric openings and protect
+existing door/lift/action topology rather than fabricating invalid door
+tracks.
+
+All structures retain the established side-effect-free, format-quantized
+preview and revalidated atomic apply pipeline.  Complete host containment,
+holes, foreign sectors, protected functional geometry, sibling overlap,
+minimum wall/tread/beam sizes, player clearance, unsafe coordinates, and
+stale plans are checked before mutation.  Margin 0 reuses eligible neighboring
+boundaries for open walkable/water portals across either winding, while solid
+masses remain blocking.  Focused tests exercise all additions inside retained
+hosts and new void halls in Doom, Hexen, and UDMF, all seven style profiles,
+both mirrored directions, real FLTK press-drag-release, optional lift
+semantics, bystander preservation, and one-step undo/redo.
 
 Stages 1 through 25 now form the completed project roadmap described here.
 Future work can extend this foundation without leaving a known staged item

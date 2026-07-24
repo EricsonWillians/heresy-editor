@@ -82,6 +82,29 @@ Completed BiasedDoom roadmap
 -  DONE: lock Architecture hosts from the first unsnapped press so elements
    work in ordinary, holed, and concave sectors; keep invalid intent visible
    with conflict supports, exact point/line markers, and precise navigation
+-  DONE: replace the pillar-only architectural vocabulary with 12 genuine
+   floor, wall, ceiling, water, terrace, stair, gallery, and bridge generators;
+   add purpose-aware Bays/Size/Elevation controls, nested-sector ownership,
+   hole protection, directional stairs, and atomic cross-format apply/undo
+-  DONE: reorganize Architecture into explicit structural, floor, circulation,
+   water, wall, and ceiling families; add semantic preview colors and
+   effect-first review text; verify every purpose-built family through the
+   real existing-sector press-drag-release/apply/undo panel path
+-  DONE: route Architecture drags from authoritative canvas event coordinates
+   with displaced-release fallback; allow winding-independent coincident host
+   seams; certify all 12 purpose-built structures through real FLTK drag events,
+   cross-format open boundaries, unaffected bystanders, and adjacent-floor
+   portal connections
+-  DONE: complete the Stage 25 Expanded Architectural Pattern Library with 58
+   ordered catalog descriptors and 30 new gameplay-oriented structures across
+   all six families; add contextual controls, per-structure memory, directional
+   and mirrored layouts, semantic/effect labels, blocking solid masses,
+   descriptor limits and clearance warnings, optional atomic Smart Lift
+   platforms, and Doom/Hexen/UDMF real-event/apply/undo coverage
+-  DONE: correct every wall/screen to span the gesture's long axis; replace
+   placeholder cross-vault and one-crossbeam output with purposeful stepped
+   vault and connected two-axis lattice topology; preserve lattice openings as
+   host sectors and report their exact preview/apply counts
 
 See docs/Projects.txt and docs/BiasedDoom.txt for the maintained roadmap.
 
