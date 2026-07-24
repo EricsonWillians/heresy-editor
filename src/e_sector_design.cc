@@ -2382,11 +2382,11 @@ std::vector<v2double_t> OffsetChain(
 }
 
 std::vector<v2double_t> ChainStrip(
-		const std::vector<v2double_t> &near,
-		const std::vector<v2double_t> &far)
+		const std::vector<v2double_t> &nearEdge,
+		const std::vector<v2double_t> &farEdge)
 {
-	std::vector<v2double_t> result = near;
-	result.insert(result.end(), far.rbegin(), far.rend());
+	std::vector<v2double_t> result = nearEdge;
+	result.insert(result.end(), farEdge.rbegin(), farEdge.rend());
 	return result;
 }
 
@@ -2513,9 +2513,9 @@ void PlanExtrude(const Document &doc, const SectorDesignRequest &request,
 		return;
 	}
 
-	std::vector<v2double_t> far = OffsetChain(
+	std::vector<v2double_t> farEdge = OffsetChain(
 			source, distance, side, request.join, request.roundSegments);
-	if (far.empty())
+	if (farEdge.empty())
 	{
 		AddIssue(plan, SectorDesignIssueSeverity::error,
 				 "The extrusion offset could not be constructed.");
@@ -2547,7 +2547,7 @@ void PlanExtrude(const Document &doc, const SectorDesignRequest &request,
 		DesignPreviewRole::anchor
 	});
 
-	std::vector<v2double_t> fullOutline = ChainStrip(source, far);
+	std::vector<v2double_t> fullOutline = ChainStrip(source, farEdge);
 	MakeClockwise(fullOutline);
 	if (request.startConnection == SectorConnection::door)
 	{
