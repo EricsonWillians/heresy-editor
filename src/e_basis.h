@@ -83,7 +83,9 @@ using Field = std::variant<
 	int      LineDef::*,
 	unsigned LineDef::*,
 	double   Thing::*,
-	double   Vertex::*
+	double   Vertex::*,
+	double   Sector::*,
+	double   SideDef::*
 >;
 using Value = std::variant<int, unsigned, double>;
 
@@ -339,8 +341,10 @@ private:
 	bool changeVertex(int vert, double Vertex::*field, double value);
 	bool changeSector(int sec, Sector::IntAddress field, int value);
 	bool changeSector(int sec, Sector::StringIDAddress field, StringID value);
+	bool changeSector(int sec, double Sector::*field, double value);
 	bool changeSidedef(int side, SideDef::IntAddress field, int value);
 	bool changeSidedef(int side, SideDef::StringIDAddress field, StringID value);
+	bool changeSidedef(int side, double SideDef::*field, double value);
 	bool changeLinedef(int line, int LineDef::*field, int value);
 	bool changeLinedef(int line, unsigned LineDef::*field, unsigned value);
 	void changeLump(LumpType lumpType, std::vector<byte> &&newData);
@@ -418,12 +422,20 @@ public:
 	{
 		return basis.changeSector(sec, field, value);
 	}
+	bool changeSector(int sec, double Sector::*field, double value)
+	{
+		return basis.changeSector(sec, field, value);
+	}
 
 	bool changeSidedef(int side, SideDef::IntAddress field, int value)
 	{
 		return basis.changeSidedef(side, field, value);
 	}
 	bool changeSidedef(int side, SideDef::StringIDAddress field, StringID value)
+	{
+		return basis.changeSidedef(side, field, value);
+	}
+	bool changeSidedef(int side, double SideDef::*field, double value)
 	{
 		return basis.changeSidedef(side, field, value);
 	}

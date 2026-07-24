@@ -25,6 +25,7 @@
 #include "e_sector_design.h"
 #include "m_game.h"
 #include "m_loadsave.h"
+#include "m_surface_transform.h"
 
 #include <algorithm>
 
@@ -214,6 +215,8 @@ TEST(MGame, BiasedDoomProfileCoversProceduralGeneratorIdentifiers)
 	ConfigData config;
 	readConfiguration(parseVars, GAMES_DIR, loading.gameName, config);
 	readConfiguration(parseVars, PORTS_DIR, loading.portName, config);
+	EXPECT_EQ(config.features.udmf_surface_transforms,
+			kSurfaceTransformWallUDMF | kSurfaceTransformPlaneUDMF);
 
 	// Every thing the 4.15.7 generator can emit is a stock Doom/Doom II type.
 	const int thingTypes[] = {

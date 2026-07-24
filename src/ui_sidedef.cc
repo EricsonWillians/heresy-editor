@@ -32,6 +32,7 @@
 #include "r_render.h"
 #include "Sector.h"
 #include "SideDef.h"
+#include "ui_surface_transform.h"
 #include "w_rawdef.h"
 #include "w_texture.h"
 
@@ -79,6 +80,12 @@ UI_SideBox::UI_SideBox(Instance &inst, int X, int Y, int W, int H, int _side) :
 	del_button = new Fl_Button(X + W - 65, Y, 50, 20, "DEL");
 	del_button->labelcolor(labelcolor());
 	del_button->callback(delete_callback, this);
+
+	transform_button = new Fl_Button(X + W - 188, Y, 60, 20, "Xform");
+	transform_button->tooltip(
+			"Pan or scale this sidedef's selected texture surfaces");
+	transform_button->callback(transform_callback, this);
+	transform_button->hide();
 
 
 	X += 6;
@@ -368,6 +375,23 @@ void UI_SideBox::delete_callback(Fl_Widget *w, void *data)
 	box->inst.main_win->line_box->UpdateSides();
 }
 
+void UI_SideBox::transform_callback(Fl_Widget *, void *data)
+{
+	auto *box = static_cast<UI_SideBox *>(data);
+	if (box->obj < 0)
+		return;
+
+	int parts = box->GetSelectedPics();
+	if (parts == 0)
+		parts = box->GetHighlightedPics();
+	if (parts == 0)
+		parts = PART_RT_ALL;
+	if (!box->is_front)
+		parts <<= 4;
+
+	UI_RunSurfaceTransform(box->inst, box->obj, parts);
+}
+
 
 void UI_SideBox::offset_callback(Fl_Widget *w, void *data)
 {
@@ -550,6 +574,11 @@ void UI_SideBox::UpdateAddDel()
 		add_button->hide();
 		del_button->show();
 	}
+
+	if (inst.level.isSidedef(obj))
+		transform_button->show();
+	else
+		transform_button->hide();
 }
 
 //

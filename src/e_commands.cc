@@ -41,8 +41,10 @@
 #include "Thing.h"
 #include "ui_about.h"
 #include "ui_door.h"
+#include "ui_grid.h"
 #include "ui_misc.h"
 #include "ui_sector_design.h"
+#include "ui_surface_transform.h"
 #include "Vertex.h"
 
 
@@ -208,6 +210,11 @@ void Instance::CMD_SEC_SmartSector()
 	}
 }
 
+void Instance::CMD_SurfaceTransform()
+{
+	UI_RunSurfaceTransform(*this);
+}
+
 
 void Instance::CMD_MetaKey()
 {
@@ -269,6 +276,44 @@ void Instance::CMD_SelectAll()
 	edit.Selected->frob_range(0, total-1, BitOp::add);
 
 	RedrawMap();
+}
+
+void Instance::CMD_InspectAllLines3D()
+{
+	if (edit.lineInspection)
+	{
+		Render3D_Enable(*this, false);
+		Status_Set("returned from all-linedef 3D inspection");
+		return;
+	}
+	if (edit.render3d)
+	{
+		Render3D_Enable(*this, false);
+		Status_Set("returned to the 2D view");
+		return;
+	}
+	if (level.numLinedefs() == 0)
+	{
+		Beep("No linedefs to inspect");
+		return;
+	}
+
+	edit.lineInspection.emplace(edit.mode, *edit.Selected,
+			edit.sector_render_mode, edit.error_mode);
+	Editor_ClearAction();
+	edit.error_mode = false;
+	edit.mode = ObjType::linedefs;
+	edit.highlight.clear();
+	edit.clicked.clear();
+	edit.dragged.clear();
+	edit.Selected.emplace(ObjType::linedefs, true);
+	edit.Selected->frob_range(
+			0, level.numLinedefs() - 1, BitOp::add);
+	if (main_win)
+		main_win->NewEditMode(ObjType::linedefs);
+	Render3D_Enable(*this, true);
+	Status_Set("inspecting all %d linedefs in 3D — Tab or Shift+Tab returns",
+			level.numLinedefs());
 }
 
 
@@ -501,6 +546,36 @@ void Instance::CMD_ToggleVar()
 	{
 		Beep("Toggle: unknown var: %s", var_name.c_str());
 	}
+}
+
+void Instance::CMD_CycleRenderMode()
+{
+	int delta = atoi(EXEC_Param[0]);
+	delta = delta < 0 ? -1 : 1;
+	constexpr int modeCount = 8;
+	const int current = edit.render3d ? 7 :
+			std::clamp(edit.sector_render_mode, 0, 6);
+	const int next = (current + delta + modeCount) % modeCount;
+
+	if (next == 7)
+	{
+		Render3D_Enable(*this, true);
+		Status_Set("rendering mode: 3D View");
+		return;
+	}
+	if (edit.render3d)
+		Render3D_Enable(*this, false);
+	edit.sector_render_mode = next;
+	if (next == SREND_SoundProp && edit.mode != ObjType::sectors)
+		Editor_ChangeMode('s');
+	if (main_win)
+		main_win->info_bar->UpdateSecRend();
+	static const char *names[] = {
+			"Plain", "Floor", "Ceiling", "Lighting",
+			"Floor Brightness", "Ceiling Brightness",
+			"Sound Propagation"};
+	Status_Set("rendering mode: %s", names[next]);
+	RedrawMap();
 }
 
 
@@ -1365,14 +1440,25 @@ void Instance::CMD_GRID_Bump()
 	grid.AdjustStep(delta);
 }
 
+void Instance::CMD_GRID_Configure()
+{
+	if (edit.render3d)
+	{
+		Beep("Mathematical Grid is configured in the 2D view");
+		return;
+	}
+	UI_RunMathematicalGrid(*this);
+}
+
 
 void Instance::CMD_GRID_Set()
 {
 	int step = atoi(EXEC_Param[0]);
 
-	if (step < 2 || step > 4096)
+	if (step < ::grid::kMinimumStep || step > ::grid::kMaximumStep)
 	{
-		Beep("Bad grid step");
+		Beep("Grid step must be from %d to %d",
+				::grid::kMinimumStep, ::grid::kMaximumStep);
 		return;
 	}
 
@@ -1551,6 +1637,10 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_GRID_Bump
 	},
 
+	{	"GRID_Configure",  "2D View",
+		&Instance::CMD_GRID_Configure
+	},
+
 	{	"GRID_Set",  "2D View",
 		&Instance::CMD_GRID_Set
 	},
@@ -1604,6 +1694,10 @@ static editor_command_t  command_table[] =
 
 	{	"GenerateRuntimeMapInfo",  "File",
 		&Instance::CMD_GenerateRuntimeMapInfo
+	},
+
+	{	"ImportSurfaceTextures",  "File",
+		&Instance::CMD_ImportSurfaceTextures
 	},
 
 	{	"PackageMetadata",  "File",
@@ -1747,6 +1841,10 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_ScaleObjects_Dialog
 	},
 
+	{	"SurfaceTransform",   "Edit",
+		&Instance::CMD_SurfaceTransform
+	},
+
 	{	"RotateObjectsDialog",   "Edit",
 		&Instance::CMD_RotateObjects_Dialog
 	},
@@ -1786,6 +1884,14 @@ static editor_command_t  command_table[] =
 	{	"PlaceCamera",  "View",
 		&Instance::CMD_PlaceCamera,
 		/* flags */ "/open3d"
+	},
+
+	{	"CycleRenderMode", "View",
+		&Instance::CMD_CycleRenderMode
+	},
+
+	{	"InspectAllLines3D", "View",
+		&Instance::CMD_InspectAllLines3D
 	},
 
 	{	"JumpToObject",  "View",

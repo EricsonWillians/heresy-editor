@@ -138,6 +138,11 @@ sector
 	texturefloor = "FLOOR0_1";
 	textureceiling = "CEIL1_1";
 	lightlevel = 160;
+	xpanningfloor = 4096.5;
+	ypanningfloor = -2048.25;
+	xscalefloor = 32.0;
+	yscalefloor = 0.125;
+	rotationfloor = 37.5;
 	lightcolor = 16755200;
 	fadecolor = 1122867;
 	damageamount = 7;
@@ -186,8 +191,16 @@ linedef
 	ASSERT_NE(lockNumber, nullptr);
 	EXPECT_EQ(*lockNumber, "3");
 	EXPECT_EQ(document.linedefs[0]->udmf_properties.size(), 2u);
-	EXPECT_EQ(document.sidedefs[0]->udmf_properties.size(), 3u);
+	EXPECT_TRUE(document.sidedefs[0]->udmf_properties.empty());
 	EXPECT_EQ(document.sectors[0]->udmf_properties.size(), 7u);
+	EXPECT_DOUBLE_EQ(document.sidedefs[0]->scaley_top, 0.75);
+	EXPECT_DOUBLE_EQ(document.sidedefs[0]->scalex_mid, 1.25);
+	EXPECT_DOUBLE_EQ(document.sidedefs[0]->scaley_mid, 0.5);
+	EXPECT_DOUBLE_EQ(document.sectors[0]->xpanningfloor, 4096.5);
+	EXPECT_DOUBLE_EQ(document.sectors[0]->ypanningfloor, -2048.25);
+	EXPECT_DOUBLE_EQ(document.sectors[0]->xscalefloor, 32.0);
+	EXPECT_DOUBLE_EQ(document.sectors[0]->yscalefloor, 0.125);
+	EXPECT_DOUBLE_EQ(document.sectors[0]->rotationfloor, 37.5);
 
 	// Model ordinary editor changes to recognized fields before saving.
 	document.linedefs[0]->type = 12;
@@ -204,8 +217,11 @@ linedef
 
 	for (const char *expected : {
 			"locknumber = 3;", "blockplayers = false;",
-			"scaley_top = 0.750000;",
-			"scalex_mid = 1.250000;", "scaley_mid = 0.500000;",
+			"scaley_top = 0.75;",
+			"scalex_mid = 1.25;", "scaley_mid = 0.5;",
+			"xpanningfloor = 4096.5;", "ypanningfloor = -2048.25;",
+			"xscalefloor = 32;", "yscalefloor = 0.125;",
+			"rotationfloor = 37.5;",
 			"lightcolor = 16755200;", "fadecolor = 1122867;",
 			"damageamount = 7;", "damageinterval = 16;",
 			"damagetype = \"Fire\";", "leakiness = 256;",
@@ -227,8 +243,16 @@ linedef
 	ASSERT_EQ(reloaded.numSidedefs(), 1);
 	ASSERT_EQ(reloaded.numSectors(), 1);
 	EXPECT_EQ(reloaded.linedefs[0]->udmf_properties.size(), 2u);
-	EXPECT_EQ(reloaded.sidedefs[0]->udmf_properties.size(), 3u);
+	EXPECT_TRUE(reloaded.sidedefs[0]->udmf_properties.empty());
 	EXPECT_EQ(reloaded.sectors[0]->udmf_properties.size(), 7u);
+	EXPECT_DOUBLE_EQ(reloaded.sidedefs[0]->scaley_top, 0.75);
+	EXPECT_DOUBLE_EQ(reloaded.sidedefs[0]->scalex_mid, 1.25);
+	EXPECT_DOUBLE_EQ(reloaded.sidedefs[0]->scaley_mid, 0.5);
+	EXPECT_DOUBLE_EQ(reloaded.sectors[0]->xpanningfloor, 4096.5);
+	EXPECT_DOUBLE_EQ(reloaded.sectors[0]->ypanningfloor, -2048.25);
+	EXPECT_DOUBLE_EQ(reloaded.sectors[0]->xscalefloor, 32.0);
+	EXPECT_DOUBLE_EQ(reloaded.sectors[0]->yscalefloor, 0.125);
+	EXPECT_DOUBLE_EQ(reloaded.sectors[0]->rotationfloor, 37.5);
 
 	auto expectProperty = [](const UdmfProperties &properties,
 			const char *name, const char *value)
@@ -239,11 +263,6 @@ linedef
 	};
 	expectProperty(reloaded.linedefs[0]->udmf_properties, "locknumber", "3");
 	expectProperty(reloaded.linedefs[0]->udmf_properties, "blockplayers", "false");
-	for (const auto &[name, value] : {
-			std::pair{"scaley_top", "0.750000"},
-			std::pair{"scalex_mid", "1.250000"},
-			std::pair{"scaley_mid", "0.500000"}})
-		expectProperty(reloaded.sidedefs[0]->udmf_properties, name, value);
 	for (const auto &[name, value] : {
 			std::pair{"lightcolor", "16755200"},
 			std::pair{"fadecolor", "1122867"},
@@ -266,7 +285,12 @@ TEST_F(UdmfTest, ClassicSerializersIgnoreUdmfProperties)
 		sector->ceil_tex = BA_InternaliseString("CEIL1_1");
 		sector->light = 160;
 		if (withProperties)
+		{
 			sector->udmf_properties.push_back({"lightcolor", "16755200"});
+			sector->xpanningfloor = 4096.5;
+			sector->xscalefloor = 32.0;
+			sector->rotationfloor = 37.5;
+		}
 		document.sectors.push_back(std::move(sector));
 
 		auto side = std::make_shared<SideDef>();
@@ -275,7 +299,11 @@ TEST_F(UdmfTest, ClassicSerializersIgnoreUdmfProperties)
 		side->mid_tex = BA_InternaliseString("STARTAN3");
 		side->lower_tex = BA_InternaliseString("-");
 		if (withProperties)
+		{
 			side->udmf_properties.push_back({"scalex_mid", "1.25"});
+			side->offsetx_mid = 12.5;
+			side->scalex_mid = 64.0;
+		}
 		document.sidedefs.push_back(std::move(side));
 
 		auto line = std::make_shared<LineDef>();

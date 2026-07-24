@@ -313,6 +313,16 @@ UI_Browser_Box::UI_Browser_Box(Instance &inst, int X, int Y, int W, int H, const
 	hide_button->labelsize(14);
 	add(hide_button);
 
+	if (kind == BrowserMode::textures || kind == BrowserMode::flats)
+	{
+		Fl_Button *importButton =
+				new Fl_Button(X + W - 82, cy + 2, 74, 22, "Import...");
+		importButton->callback(import_callback, this);
+		importButton->tooltip(
+				"Import images into the current WAD or PK3 project");
+		add(importButton);
+	}
+
 	cy += title->h() + 6;
 
 
@@ -453,6 +463,12 @@ void UI_Browser_Box::hide_callback(Fl_Widget *w, void *data)
 {
 	auto box = static_cast<const UI_Browser_Box *>(data);
 	box->inst.main_win->BrowserMode(BrowserMode::hide);
+}
+
+void UI_Browser_Box::import_callback(Fl_Widget *w, void *data)
+{
+	auto *box = static_cast<UI_Browser_Box *>(data);
+	box->inst.ExecuteCommand("ImportSurfaceTextures");
 }
 
 
@@ -735,6 +751,15 @@ SString TidyLineDesc(const char *name)
 
 void UI_Browser_Box::Populate_Images(BrowserMode imkind, const std::map<SString, Img_c> & img_list)
 {
+	std::map<SString, const Img_c *> images;
+	for (const auto &[name, image] : img_list)
+		images.emplace(name, &image);
+	Populate_SurfaceImages(imkind, images);
+}
+
+void UI_Browser_Box::Populate_SurfaceImages(BrowserMode imkind,
+		const std::map<SString, const Img_c *> &images)
+{
 	/* Note: the side-by-side packing is done in Filter() method */
 
 	pic_mode = true;
@@ -743,18 +768,16 @@ void UI_Browser_Box::Populate_Images(BrowserMode imkind, const std::map<SString,
 	scroll->resize_horiz(false);
 	scroll->Line_size(98);
 
-	std::map<SString, Img_c>::const_iterator TI;
-
 	int cx = scroll->x() + SBAR_W;
 	int cy = scroll->y();
 
 	char full_desc[256];
 
-	for (TI = img_list.begin() ; TI != img_list.end() ; TI++)
+	for (const auto &[name, imagePointer] : images)
 	{
-		const SString &name = TI->first;
-
-		const Img_c &image = TI->second;
+		if (!imagePointer)
+			continue;
+		const Img_c &image = *imagePointer;
 
 		if ((false)) /* NO PICS */
 			snprintf(full_desc, sizeof(full_desc), "%-8s : %3dx%d", name.c_str(),
@@ -985,15 +1008,21 @@ void UI_Browser_Box::Populate()
 	{
 		case BrowserMode::textures:
 			if (config::browser_combine_tex)
+			{
 				Populate_Images(BrowserMode::flats, inst.wad.images.getFlats());
-
-			Populate_Images(BrowserMode::textures, inst.wad.images.getTextures());
+				Populate_Images(BrowserMode::textures,
+						inst.wad.images.getTextures());
+			}
+			else
+				Populate_SurfaceImages(BrowserMode::textures,
+						inst.wad.images.getWallSurfaceImages(inst.conf));
 			break;
 
 		case BrowserMode::flats:
 			// the flat browser is never used when combine-tex is enabled
 			if (! config::browser_combine_tex)
-				Populate_Images(BrowserMode::flats, inst.wad.images.getFlats());
+				Populate_SurfaceImages(BrowserMode::flats,
+						inst.wad.images.getPlaneSurfaceImages(inst.conf));
 			break;
 
 		case BrowserMode::things:

@@ -252,6 +252,12 @@ struct SectorDesignRequest
 	std::vector<v2double_t> anchors;
 	std::vector<int> anchorLines;
 	std::vector<int> targetSectors;
+	// Transient construction axes supplied by the UI when mathematical grid
+	// snapping is active. Room planning uses them to build a rotated rectangle
+	// or oblique parallelogram instead of snapping only two opposite corners.
+	bool useConstructionBasis = false;
+	v2double_t constructionPrimary = {1.0, 0.0};
+	v2double_t constructionSecondary = {0.0, 1.0};
 
 	double width = 64.0;
 	double depth = 128.0;

@@ -1869,7 +1869,37 @@ void PlanRectangle(const Document &doc, const SectorDesignRequest &request,
 	const v2double_t a = request.anchors[0];
 	const v2double_t b = request.anchors[1];
 	PlannedSectorShape shape;
-	shape.outer = {{a.x, a.y}, {a.x, b.y}, {b.x, b.y}, {b.x, a.y}};
+	if (request.useConstructionBasis)
+	{
+		const v2double_t &primary = request.constructionPrimary;
+		const v2double_t &secondary = request.constructionSecondary;
+		const double determinant =
+				primary.x * secondary.y - primary.y * secondary.x;
+		if (!std::isfinite(primary.x) || !std::isfinite(primary.y) ||
+				!std::isfinite(secondary.x) ||
+				!std::isfinite(secondary.y) ||
+				std::abs(determinant) <= PLAN_EPSILON)
+		{
+			AddIssue(plan, SectorDesignIssueSeverity::error,
+					"The active construction grid has invalid room axes.");
+			return;
+		}
+		const v2double_t delta = b - a;
+		const double alongPrimary =
+				(delta.x * secondary.y - delta.y * secondary.x) /
+				determinant;
+		const double alongSecondary =
+				(primary.x * delta.y - primary.y * delta.x) /
+				determinant;
+		const v2double_t primaryCorner =
+				a + primary * alongPrimary;
+		const v2double_t secondaryCorner =
+				a + secondary * alongSecondary;
+		shape.outer = {a, secondaryCorner, b, primaryCorner};
+	}
+	else
+		shape.outer = {
+				{a.x, a.y}, {a.x, b.y}, {b.x, b.y}, {b.x, a.y}};
 	MakeClockwise(shape.outer);
 	plan.shapes.push_back(std::move(shape));
 }

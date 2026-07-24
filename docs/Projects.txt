@@ -43,7 +43,9 @@ same payload at
 is retained for compatibility with existing WADs and older editor versions.
 Flat, sprite, and texture files at any depth below their conventional PK3
 namespace directory are projected into the resource view by basename; this
-view is read-only and never flattens or rewrites their archive paths.
+projection never flattens or rewrites their archive paths. The Surface Texture
+Importer has a separate, explicit mutation path for reviewed
+`textures/<name>.<extension>` and `flats/<name>.<extension>` destinations.
 The separate File -> PK3 Metadata inventory reads central-directory sizes and
 only decompresses recognized text candidates within a 512 KiB per-entry and
 4 MiB aggregate safety bound.  The same view reports projected-name collisions
@@ -521,7 +523,88 @@ hosts and new void halls in Doom, Hexen, and UDMF, all seven style profiles,
 both mirrored directions, real FLTK press-drag-release, optional lift
 semantics, bystander preservation, and one-step undo/redo.
 
-Stages 1 through 25 now form the completed project roadmap described here.
+Stage 26 is complete: File -> Import Surface Textures and the Texture/Flat
+Browser import actions accept one or many PNG, JPEG, TGA, Doom-patch, or raw
+flat sources. A pure planner detects content from bytes, fully decodes preview
+metadata, applies 256 MiB file, 1 GiB batch, and 8192-square dimension bounds,
+and resolves Walls, Floors/Ceilings, or All Surfaces before enabling a write.
+Doom patches remain wall-only, traditional 4096-byte flats remain plane-only,
+and modern encoded images require a compatible standalone-image port profile.
+
+The planner examines classic composite texture names and standalone image
+names throughout the ordered IWAD, external resources, and project, across
+both surface namespaces. Review exposes exact ownership, package and entry
+paths, precedence, namespace, duplicate count, active-map usage, and explicit
+Rename Imported, Override Loaded, Replace Project, or Skip behavior. Safe
+rename produces deterministic `_2`, `_3`, and later names. Overrides add a
+later project definition without mutating an IWAD or external resource;
+project replacement requires one unambiguous entry for every destination.
+Intentional overrides and replacements receive a second exact-impact
+confirmation.
+
+WAD writes reuse valid TX_START/TX_END and F_START/F_END pairs or create
+isolated pairs outside map groups. PK3 writes target `textures/` and `flats/`;
+All Surfaces writes both. The operation re-reads sources, recomputes the
+complete plan, rejects stale packages and unresolved collisions, creates the
+normal backup, validates one same-directory temporary package, and atomically
+replaces the original. Unrelated maps, lumps, metadata, and archive records
+remain intact.
+
+After commit, only wall and plane image catalogs are reloaded. The browser
+jumps to the first imported name, and linedef, sector, Smart Door, and Smart
+Sector selectors see the same effective wall/plane resolution as rendering.
+Intrinsic dimensions feed ordinary texture-height, tiling, pegging, offset,
+split correction, and alignment paths. Active/cached documents, dirty state,
+selection, canvas position, project metadata, and complete Undo/Redo histories
+remain unchanged. See `docs/SurfaceTextures.txt`.
+
+Surface Texture Transform builds on those intrinsic resources. Edit menu,
+Alt+T, sidedef Xform, and sector Transform entry points operate on exact 3D
+surface selections or 2D objects. The review exposes exact/relative batch
+application, proportional native and 64/128/256-unit sizing, panning,
+mirroring, and plane rotation while reporting source and rendered dimensions.
+Fit Both/Width/Height use actual wall-part or sector bounds. Every numeric
+field has holdable minus/plus controls with coarse and fine modifiers. The
+independent window is movable and responsively resizable without resizing the
+main editor, remembers its size, and projects every valid change live with no
+optional preview-off state. Invalid input, Cancel, Escape, and window close
+restore complete object properties without dirtying the map or touching
+Undo/Redo. Apply removes the projection and revalidates against the real map.
+
+Doom and Hexen retain serializable integer wall offsets. A writable project
+using a modern standalone-image port also enables Size, Fit, and Mirror by
+creating safely renamed, bilinearly resized project texture/flat copies in the
+correct namespace. Sources are preserved and the package is backed up; map
+Undo/Redo restores/reapplies the assignment while an unused fitted resource
+may remain after Undo.
+The ZDoom/BiasedDoom and Eternity UDMF profiles explicitly declare per-part
+wall and plane transforms; unknown namespaces are never guessed.
+
+Recognized UDMF transform fields are typed map properties with one-step
+Undo/Redo and lossless load/save. OpenGL and software rendering consume the
+same offset, scale, mirror, rotation, intrinsic dimension, and non-power-of-
+two wrapping rules. Scaled auto-alignment resolves the effective phase at
+shared wall endpoints. See `docs/SurfaceTransforms.txt`.
+
+The construction-grid and inspection workflow is also complete. Shift+Tab
+temporarily selects every linedef and enters 3D, with Tab/Shift+Tab restoring
+the prior edit mode, selection, and sector-rendering overlay exactly.
+Shift+F8 and Ctrl/Cmd+F8 cycle forward/backward through all 2D overlays and 3D,
+and the F8 operation menu exposes both direct 3D and whole-linedef inspection.
+
+Alt+G opens a live, non-attached Mathematical Grid & Snapping tool. Its 30
+geometry presets cover orthogonal/proportional/rotated, oblique, triangular,
+hexagonal, projection, and polar layouts. The authoritative state includes
+primary/secondary spacing, origin, rotation, axis angle, angular divisions,
+major interval, and five rounding policies. The info-bar menu adds 75 grouped
+spacing presets plus arbitrary 1-65536 input. Ordinary editing, paste/move,
+Quantize, and Smart Sector gestures share vector snapping; drawing and apply
+consume the same format-quantized coordinates. UDMF large positive coordinates
+now retain correct document/subdivision bounds and untruncated status display.
+See `docs/MathematicalGrid.txt`.
+
+Stages 1 through 26, surface transforms, and the mathematical construction
+workflow now form the completed project roadmap described here.
 Future work can extend this foundation without leaving a known staged item
 partially implemented.
 
@@ -573,3 +656,8 @@ Known limitations of the current foundation
   names.  File -> PK3 Metadata reports collisions and the current source-order
   outcome, but intentionally does not rename entries, reorder resources, or
   choose a replacement policy for ambiguous sprite frames.
+* Surface import is deliberately limited to standalone wall and plane
+  resources. Classic PNAMES/TEXTURE1 composition, palette conversion, sprites,
+  resource deletion, directory watching, and package-level import Undo remain
+  outside Stage 26. Map Undo/Redo remains independent and is preserved across
+  import.

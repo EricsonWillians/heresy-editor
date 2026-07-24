@@ -34,6 +34,26 @@ struct Sector
 	int type = 0;
 	int tag = 0;
 
+	// UDMF plane texture transforms.  Scale values use the UDMF convention:
+	// 1 is native 1:1 mapping and larger magnitudes make a tile repeat more
+	// frequently.  Rotation is clockwise in degrees.
+	double xpanningfloor = 0.0;
+	double ypanningfloor = 0.0;
+	double xscalefloor = 1.0;
+	double yscalefloor = 1.0;
+	double rotationfloor = 0.0;
+
+	double xpanningceiling = 0.0;
+	double ypanningceiling = 0.0;
+	double xscaleceiling = 1.0;
+	double yscaleceiling = 1.0;
+	double rotationceiling = 0.0;
+
+	// Transient editor-only projections used for always-live transform review.
+	// They are deliberately absent from every map serializer.
+	bool preview_floor_transform = false;
+	bool preview_ceiling_transform = false;
+
 	// Unrecognized UDMF extension fields, retained verbatim across saves.
 	UdmfProperties udmf_properties;
 

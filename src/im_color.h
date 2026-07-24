@@ -101,6 +101,22 @@ public:
 	bool updateGamma(int usegamma, int panel_gamma);
 	void decodePixel(img_pixel_t p, byte &r, byte &g, byte &b) const;
 	void decodePixelMedium(img_pixel_t p, byte &r, byte &g, byte &b) const noexcept;
+	void decodePixelRaw(img_pixel_t pixel, byte &r, byte &g,
+			byte &b) const noexcept
+	{
+		if (pixel & 0x8000)
+		{
+			r = static_cast<byte>((((pixel >> 10) & 31) * 255 + 15) / 31);
+			g = static_cast<byte>((((pixel >> 5) & 31) * 255 + 15) / 31);
+			b = static_cast<byte>(((pixel & 31) * 255 + 15) / 31);
+			return;
+		}
+
+		const int index = static_cast<int>(pixel & 255);
+		r = raw_palette[index][0];
+		g = raw_palette[index][1];
+		b = raw_palette[index][2];
+	}
 	void createBrightMap();
 
 	rgb_color_t getPaletteColor(int index) const

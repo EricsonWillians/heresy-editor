@@ -106,7 +106,7 @@ private:
 
 	void IB_String(int& cx, int& cy, const char *str);
 	void IB_Number(int& cx, int& cy, const char *label, int value, int size);
-	void IB_Coord (int& cx, int& cy, const char *label, float value);
+	void IB_Coord (int& cx, int& cy, const char *label, double value);
 	void IB_Flag  (int& cx, int& cy, bool value, const char *label_on, const char *label_off);
 };
 

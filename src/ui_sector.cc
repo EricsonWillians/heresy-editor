@@ -32,6 +32,7 @@
 #include "m_game.h"
 #include "r_render.h"
 #include "Sector.h"
+#include "ui_surface_transform.h"
 #include "w_rawdef.h"
 #include "w_texture.h"
 
@@ -71,7 +72,14 @@ UI_SectorBox::UI_SectorBox(Instance &inst, int X, int Y, int W, int H, const cha
 	H -= 10;
 
 
-	which = new UI_Nombre(X+NOMBRE_INSET, Y, W-2*NOMBRE_INSET, NOMBRE_HEIGHT, "Sector");
+	which = new UI_Nombre(X+NOMBRE_INSET, Y,
+			W-2*NOMBRE_INSET-92, NOMBRE_HEIGHT, "Sector");
+	surface_transform = new Fl_Button(
+			which->x() + which->w() + 8, Y, 82, NOMBRE_HEIGHT,
+			"Transform");
+	surface_transform->tooltip(
+			"Pan, scale, mirror, or rotate selected floor/ceiling surfaces");
+	surface_transform->callback(surface_transform_callback, this);
 
 	Y += which->h() + 4;
 
@@ -639,6 +647,21 @@ void UI_SectorBox::button_callback(Fl_Widget *w, void *data)
 		box->inst.ExecuteCommand("SEC_Floor", SString(-mv_step));
 		return;
 	}
+}
+
+void UI_SectorBox::surface_transform_callback(Fl_Widget *, void *data)
+{
+	auto *box = static_cast<UI_SectorBox *>(data);
+	int parts = box->GetSelectedPics();
+	if (parts == 0)
+		parts = box->GetHighlightedPics();
+	if (parts == 0)
+	{
+		parts = box->inst.edit.sector_render_mode == SREND_Ceiling ?
+				PART_CEIL : PART_FLOOR;
+	}
+
+	UI_RunSurfaceTransform(box->inst, box->obj, parts);
 }
 
 

@@ -35,6 +35,8 @@ FEATURES
    extrusions, rings, corridors, stairs, lifts, architecture, and door-aware
    connections
 -  Browser for textures, flats, things (etc)
+-  Multi-file wall, floor/ceiling, and all-surface texture import for WAD/PK3
+-  Format-aware wall, floor, and ceiling panning/scaling/rotation
 -  Key binding system
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
@@ -48,6 +50,107 @@ FEATURES
 -  Read-only PK3 declaration, runtime-source, and resource inventory
 -  Per-map autosave with validated, rotating startup recovery
 -  Portable project sessions with recent-project and IWAD restoration
+-  Mathematical rotated, oblique, triangular/hexagonal, and polar grids
+-  Temporary all-linedef 3D inspection with exact selection restoration
+
+
+RELEASE 2.4.0
+
+Heresy Editor 2.4.0 adds professional surface-resource authoring and
+large-map construction.  Import one or many wall, floor/ceiling, or dual-use
+textures into WAD/PK3 projects with decoded review, explicit conflict policy,
+backed-up atomic writes, and immediate availability throughout the editor.
+Then pan, fit, scale, mirror, rotate, and align selected surfaces through an
+always-live transform review shared by OpenGL and software rendering.
+
+The release also provides 30 mathematical construction grids, 75 grouped
+spacings, custom pivots and directional rounding, fast whole-linedef 3D
+inspection, large-coordinate UDMF safety, and an expanded catalog of 58 Smart
+Sector architectural structures.  Complete release notes are in
+changelogs/2.4.0.md.
+
+
+MATHEMATICAL GRID AND FAST 3D INSPECTION
+
+Press Alt+G or choose View / Mathematical Grid & Snapping.  The live tool
+provides 30 geometry presets: square and proportional rectangles, rotated
+diamonds, triangular and hexagonal axial lattices, isometric/dimetric/oblique
+projections, and polar grids from 8 through 360 directions.  Primary and
+secondary spacing, rotation, the angle between axes, radial divisions, major
+line interval, and the construction origin remain editable.
+
+Snap direction can use nearest, lower, upper, toward-origin, or away-from-
+origin intersections.  Set the origin to world 0,0, the pointer, selection
+center, or the 3D camera.  The information-bar Grid menu has 75 grouped size
+presets covering ordinary detail, Doom architecture, 2048-65536-unit large-map
+planning, decimal engineering, Fibonacci, and powers of three.  A custom
+whole-number primary spacing from 1 through 65536 is also valid.
+
+The same mathematical intersections drive ordinary drawing, insert, move,
+paste, Quantize, and Smart Sector gestures.  Doom and Hexen candidates are
+quantized to integer map coordinates; UDMF retains 16.16 coordinates.  The
+mathematical grid is stored with map editor state.  See
+docs/MathematicalGrid.txt.
+
+Shift+Tab is the inspect-every-wall shortcut.  From 2D it saves the current
+mode, selection, and sector-rendering overlay, selects every linedef, and
+enters 3D.  Tab or Shift+Tab returns and restores that exact state.
+Shift+F8 cycles forward through Plain, Floor, Ceiling, Lighting, Floor Bright,
+Ceiling Bright, Sound, and 3D; Ctrl/Cmd+F8 cycles backward.  F8 still opens the
+rendering menu, which also contains 3D and whole-linedef inspection entries.
+
+
+SURFACE TEXTURE IMPORT
+
+Choose File / Import Surface Textures, use Import in the Texture or Flat
+Browser, or open Import from a searchable wall/floor/ceiling chooser.  Select
+one or many PNG, JPEG, TGA, or LMP files.  Modern images default to All
+Surfaces, valid Doom patches to Walls, and traditional 4096-byte raw flats to
+Floors / Ceilings.
+
+Review decodes every source and shows its intrinsic dimensions, alpha, exact
+WAD namespace lumps or PK3 paths, complete loaded owner and precedence, and
+active-map references.  Portable names use uppercase eight-character
+identifiers.  Rename Imported safely generates _2, _3, and later suffixes;
+Override Loaded adds a later project definition without changing the IWAD or
+external resource; Replace Project requires one unambiguous existing entry;
+Skip excludes that item.  Override and Replace receive a final exact impact
+confirmation.
+
+The valid batch is re-read, backed up, and written through one validated atomic
+package replacement.  Wall and plane catalogs and rendering caches refresh
+immediately without changing map selection, dirty resident maps, canvas
+position, or Undo/Redo history.  Imported resources retain their real pixel
+dimensions, so tiling, texture height, offsets, pegging, split correction, and
+alignment behave exactly like loaded IWAD images.  See
+docs/SurfaceTextures.txt.
+
+
+SURFACE TEXTURE TRANSFORMS
+
+Select or highlight walls, floors, or ceilings and choose Edit / Surface
+Texture Transform, press Alt+T, or use the Xform/Transform panel button.  The
+independently movable and resizable tool previews every valid field, holdable
+plus/minus step, preset, Fit command, scope, and mirror change immediately.
+Live display is always active.  Invalid input, Cancel, Escape, and window
+close restore the exact original map without affecting dirty state or
+Undo/Redo.
+
+The dialog reports intrinsic image dimensions and rendered tile dimensions.
+Set Exact produces consistent batch values; Adjust applies relative pan, size,
+mirror, and rotation changes without flattening different existing values.
+Fit Both fits one tile to the selected surface's actual width and height;
+Fit Width and Fit Height constrain one axis.  Native and proportional
+64/128/256 quick sizes remain available.  Hold a minus or plus button for
+continuous live adjustment, with Shift for coarse and Ctrl for fine steps.
+
+Doom and Hexen maps keep native integer wall offsets.  In writable modern-port
+projects, size/fit/mirror creates a safely renamed, bilinearly resized project
+texture or flat and assigns it without overwriting the source.  ZDoom/
+BiasedDoom and Eternity UDMF maps store per-part wall pan/scale plus independent
+floor/ceiling pan, scale, mirror, and clockwise rotation directly.  Both 3D
+renderers, save/load, scaled wall alignment, and one-step map Undo/Redo use the
+same reviewed result.  See docs/SurfaceTransforms.txt.
 
 
 SMART DOORS
@@ -393,6 +496,7 @@ cursor keys : scroll the map
 F1 : operation menu
 
 TAB : toggle the 3D preview on or off
+SHIFT-TAB : inspect every linedef in 3D; press again to restore prior state
 ESC : cancel the current operation
 
 t : enter Thing mode
@@ -403,6 +507,7 @@ v : enter Vertex mode
 b : toggle the Browser on or off
 
 1..9 : select the grid size (smallest to largest)
+ALT-G : configure mathematical grid geometry, origin, and snapping
 
 CTRL-Z : undo (can be used multiple times)
 CTRL-Y : redo (i.e. undo the previous undo)
@@ -446,6 +551,8 @@ u  : popup menu to set ratio lock
 z  : popup menu to set current scale
 B  : popup menu to set browser mode
 F8 : popup menu to set sector rendering mode
+SHIFT-F8 : cycle to the next 2D/3D rendering mode
+CTRL/CMD-F8 : cycle to the previous 2D/3D rendering mode
 
 ; : make the next key pressed META
 

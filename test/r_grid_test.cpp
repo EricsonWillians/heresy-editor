@@ -20,6 +20,10 @@
 #include "m_config.h"
 #include "gtest/gtest.h"
 
+#include <cmath>
+#include <set>
+#include <sstream>
+
 class GridStateFixture : public ::testing::Test, public grid::Listener
 {
 public:
@@ -96,7 +100,7 @@ TEST_F(GridStateFixture, InitNormalGrid)
 	ASSERT_GE(redrawMapCounts, 1);
 }
 
-TEST_F(GridStateFixture, InitNonPowerOf2Grid)
+TEST_F(GridStateFixture, InitArchitecturalNonPowerOfTwoGrid)
 {
 	grid::State grid(*this);
 
@@ -105,14 +109,14 @@ TEST_F(GridStateFixture, InitNonPowerOf2Grid)
 
 	grid.Init();
 	ASSERT_TRUE(grid.isShown());
-	ASSERT_EQ(grid.getStep(), 16);
+	ASSERT_EQ(grid.getStep(), 12);
 	ASSERT_GE(gridSettings.size(), 1);
-	ASSERT_EQ(gridSettings.back(), 16);
+	ASSERT_EQ(gridSettings.back(), 12);
 	
 	ASSERT_GE(redrawMapCounts, 1);
 }
 
-TEST_F(GridStateFixture, InitUnderflowGridCapsAt2)
+TEST_F(GridStateFixture, InitUnderflowGridCapsAt1)
 {
 	{
 		grid::State grid(*this);
@@ -122,9 +126,9 @@ TEST_F(GridStateFixture, InitUnderflowGridCapsAt2)
 		
 		grid.Init();
 		ASSERT_TRUE(grid.isShown());
-		ASSERT_EQ(grid.getStep(), 2);
+		ASSERT_EQ(grid.getStep(), 1);
 		ASSERT_GE(gridSettings.size(), 1);
-		ASSERT_EQ(gridSettings.back(), 2);
+		ASSERT_EQ(gridSettings.back(), 1);
 		
 		ASSERT_GE(redrawMapCounts, 1);
 	}
@@ -136,15 +140,15 @@ TEST_F(GridStateFixture, InitUnderflowGridCapsAt2)
 		
 		grid.Init();
 		ASSERT_TRUE(grid.isShown());
-		ASSERT_EQ(grid.getStep(), 2);
+		ASSERT_EQ(grid.getStep(), 1);
 		ASSERT_GE(gridSettings.size(), 1);
-		ASSERT_EQ(gridSettings.back(), 2);
+		ASSERT_EQ(gridSettings.back(), 1);
 		
 		ASSERT_GE(redrawMapCounts, 2);
 	}
 }
 
-TEST_F(GridStateFixture, InitOverflowGridCapsAt1024)
+TEST_F(GridStateFixture, InitSupportsLargeMapSteps)
 {
 	{
 		grid::State grid(*this);
@@ -168,9 +172,9 @@ TEST_F(GridStateFixture, InitOverflowGridCapsAt1024)
 		
 		grid.Init();
 		ASSERT_TRUE(grid.isShown());
-		ASSERT_EQ(grid.getStep(), 1024);
+		ASSERT_EQ(grid.getStep(), 2048);
 		ASSERT_GE(gridSettings.size(), 1);
-		ASSERT_EQ(gridSettings.back(), 1024);
+		ASSERT_EQ(gridSettings.back(), 2048);
 		
 		ASSERT_GE(redrawMapCounts, 2);
 	}
@@ -528,6 +532,170 @@ TEST_F(GridStateFixture, NearestScaleTiny)	// check we don't overflow
 	ASSERT_EQ(redrawMapCounts, redrawMapBefore + 1);
 	ASSERT_EQ(scaleSettings.size(), scaleSettingsBefore + 1);
 	ASSERT_EQ(scaleSettings.back(), 1.0 / 64.0);
+}
+
+TEST_F(GridStateFixture, MathematicalCatalogIsBroadStableAndValid)
+{
+	const auto &steps = grid::StepPresets();
+	EXPECT_GE(steps.size(), 75u);
+	std::set<std::string> stepPaths;
+	std::set<std::string> groups;
+	for (const grid::StepPreset &preset : steps)
+	{
+		EXPECT_GE(preset.step, grid::kMinimumStep);
+		EXPECT_LE(preset.step, grid::kMaximumStep);
+		groups.insert(preset.group);
+		EXPECT_TRUE(stepPaths.insert(std::string(preset.group) + "/" +
+				preset.label).second);
+	}
+	EXPECT_GE(groups.size(), 6u);
+
+	const auto &geometry = grid::GeometryPresets();
+	EXPECT_GE(geometry.size(), 30u);
+	std::set<std::string> ids;
+	for (const grid::GeometryPreset &preset : geometry)
+	{
+		EXPECT_TRUE(ids.insert(preset.id).second);
+		SString reason;
+		EXPECT_TRUE(grid::MathSettingsValid(
+				preset.settings, &reason)) << preset.id << ": " << reason;
+	}
+}
+
+TEST_F(GridStateFixture, RotatedOriginAwareOrthogonalSnapping)
+{
+	grid::State state(*this);
+	config::grid_default_size = 16;
+	state.Init();
+
+	grid::MathSettings settings;
+	settings.origin = {10.0, -6.0};
+	state.SetMathSettings(settings);
+	v2double_t snapped = state.ForceSnap({25.2, 10.1});
+	EXPECT_NEAR(snapped.x, 26.0, 1e-8);
+	EXPECT_NEAR(snapped.y, 10.0, 1e-8);
+
+	settings.origin = {};
+	settings.rotation = 45.0;
+	state.SetMathSettings(settings);
+	snapped = state.ForceSnap({11.1, 11.4});
+	EXPECT_NEAR(snapped.x, std::sqrt(128.0), 1e-8);
+	EXPECT_NEAR(snapped.y, std::sqrt(128.0), 1e-8);
+	EXPECT_TRUE(state.OnGrid(snapped.x, snapped.y));
+}
+
+TEST_F(GridStateFixture, ObliqueTriangularLatticeSnapsIntersections)
+{
+	grid::State state(*this);
+	config::grid_default_size = 64;
+	state.Init();
+	const auto &preset = grid::GeometryPresets().at(9);
+	ASSERT_STREQ(preset.id, "triangular_60");
+	state.SetMathSettings(preset.settings);
+
+	const v2double_t snapped = state.ForceSnap({95.0, 56.0});
+	EXPECT_NEAR(snapped.x, 96.0, 1e-8);
+	EXPECT_NEAR(snapped.y, 32.0 * std::sqrt(3.0), 1e-8);
+	EXPECT_TRUE(state.OnGrid(snapped.x, snapped.y));
+	EXPECT_FALSE(state.isDefaultOrthogonal());
+}
+
+TEST_F(GridStateFixture, PolarSnappingSupportsRadiusAngleAndOrigin)
+{
+	grid::State state(*this);
+	config::grid_default_size = 32;
+	state.Init();
+	grid::MathSettings settings;
+	settings.pattern = grid::Pattern::polar;
+	settings.angularDivisions = 8;
+	settings.origin = {100.0, -50.0};
+	state.SetMathSettings(settings);
+
+	const v2double_t snapped =
+			state.ForceSnap({149.0, -1.0});
+	EXPECT_NEAR(snapped.x, 100.0 + 32.0 * std::sqrt(2.0), 1e-8);
+	EXPECT_NEAR(snapped.y, -50.0 + 32.0 * std::sqrt(2.0), 1e-8);
+	EXPECT_TRUE(state.OnGrid(snapped.x, snapped.y));
+	EXPECT_GE(state.SnapCandidates({149.0, -1.0}).size(), 4u);
+}
+
+TEST_F(GridStateFixture, DirectedRoundingModesAreDeterministic)
+{
+	grid::State state(*this);
+	config::grid_default_size = 64;
+	state.Init();
+	grid::MathSettings settings;
+	settings.rounding = grid::Rounding::lower;
+	state.SetMathSettings(settings);
+	v2double_t snapped = state.ForceSnap({63.0, -1.0});
+	EXPECT_DOUBLE_EQ(snapped.x, 0.0);
+	EXPECT_DOUBLE_EQ(snapped.y, -64.0);
+
+	settings.rounding = grid::Rounding::towardOrigin;
+	state.SetMathSettings(settings);
+	snapped = state.ForceSnap({63.0, -1.0});
+	EXPECT_NEAR(snapped.x, 0.0, 1e-10);
+	EXPECT_NEAR(snapped.y, 0.0, 1e-10);
+
+	settings.rounding = grid::Rounding::awayFromOrigin;
+	state.SetMathSettings(settings);
+	snapped = state.ForceSnap({1.0, -1.0});
+	EXPECT_DOUBLE_EQ(snapped.x, 64.0);
+	EXPECT_DOUBLE_EQ(snapped.y, -64.0);
+}
+
+TEST_F(GridStateFixture, RatioLockCannotBreakMathematicalGridIntersection)
+{
+	grid::State state(*this);
+	config::grid_default_size = 32;
+	config::grid_default_snap = true;
+	state.Init();
+	grid::MathSettings settings;
+	settings.pattern = grid::Pattern::oblique;
+	settings.rotation = 17.0;
+	settings.axisAngle = 60.0;
+	state.SetMathSettings(settings);
+	state.configureRatio(2, false);
+
+	v2double_t endpoint{111.0, 73.0};
+	state.RatioSnapXY(endpoint, {0.0, 0.0});
+	EXPECT_TRUE(state.OnGrid(endpoint.x, endpoint.y));
+}
+
+TEST_F(GridStateFixture, MathematicalStateRoundTripsThroughMapUserState)
+{
+	grid::State source(*this);
+	config::grid_default_size = 48;
+	source.Init();
+	grid::MathSettings settings;
+	settings.pattern = grid::Pattern::oblique;
+	settings.rounding = grid::Rounding::awayFromOrigin;
+	settings.origin = {123.5, -987.25};
+	settings.rotation = 17.5;
+	settings.secondaryRatio = 1.61803398875;
+	settings.axisAngle = 72.0;
+	settings.angularDivisions = 72;
+	settings.majorEvery = 12;
+	source.SetMathSettings(settings);
+
+	std::ostringstream output;
+	source.writeUser(output);
+	const std::string written = output.str();
+	EXPECT_NE(written.find("math_grid 1 4"), std::string::npos);
+
+	grid::State restored(*this);
+	restored.Init();
+	ASSERT_TRUE(restored.parseUser({"math_grid", "1", "4",
+			"123.5", "-987.25", "17.5", "1.61803398875",
+			"72", "72", "12"}));
+	const grid::MathSettings &actual = restored.getMathSettings();
+	EXPECT_EQ(actual.pattern, grid::Pattern::oblique);
+	EXPECT_EQ(actual.rounding, grid::Rounding::awayFromOrigin);
+	EXPECT_DOUBLE_EQ(actual.origin.x, 123.5);
+	EXPECT_DOUBLE_EQ(actual.origin.y, -987.25);
+	EXPECT_DOUBLE_EQ(actual.rotation, 17.5);
+	EXPECT_DOUBLE_EQ(actual.axisAngle, 72.0);
+	EXPECT_EQ(actual.majorEvery, 12);
 }
 
 TEST_F(GridStateFixture, ForceStep)

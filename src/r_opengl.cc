@@ -35,6 +35,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_surface_transform.h"
 #include "m_bitvec.h"
 #include "Sector.h"
 #include "SideDef.h"
@@ -608,6 +609,28 @@ public:
 		if(!img_h)
 			img_h = 64;
 
+		const SurfaceTransform transform =
+				M_EffectivePlaneSurfaceTransform(*sec,
+				znormal > 0 ? PlaneSurfacePart::floor :
+						PlaneSurfacePart::ceiling,
+				inst.loaded.levelFormat, inst.conf);
+		const double radians =
+				transform.rotation * M_PI / 180.0;
+		const double cosine = std::cos(radians);
+		const double sine = std::sin(radians);
+		auto textureCoords = [&](float x, float y)
+		{
+			// Sampling coordinates rotate counter-clockwise so the visible
+			// texture rotates clockwise, matching the UDMF convention.
+			const double rotatedX = cosine * x + sine * y;
+			const double rotatedY = -sine * x + cosine * y;
+			return std::pair<float, float>{
+				static_cast<float>((rotatedX * transform.scaleX +
+						transform.offsetX) / img_w),
+				static_cast<float>((rotatedY * transform.scaleY +
+						transform.offsetY) / img_h)};
+		};
+
 		float r = r0 / 255.0f;
 		float g = g0 / 255.0f;
 		float b = b0 / 255.0f;
@@ -626,20 +649,17 @@ public:
 				float ax = poly->mx[0];
 				float ay = poly->my[0];
 				float az = static_cast<float>(plane ? plane->SlopeZ(ax, ay) : z);
-				float atx = ax / static_cast<float>(img_w);
-				float aty = ay / static_cast<float>(img_h);
+				auto [atx, aty] = textureCoords(ax, ay);
 
 				float bx = poly->mx[1];
 				float by = poly->my[1];
 				float bz = static_cast<float>(plane ? plane->SlopeZ(bx, by) : z);
-				float btx = bx / static_cast<float>(img_w);
-				float bty = by / static_cast<float>(img_h);
+				auto [btx, bty] = textureCoords(bx, by);
 
 				float cx = poly->mx[2];
 				float cy = poly->my[2];
 				float cz = static_cast<float>(plane ? plane->SlopeZ(cx, cy) : z);
-				float ctx = cx / static_cast<float>(img_w);
-				float cty = cy / static_cast<float>(img_h);
+				auto [ctx, cty] = textureCoords(cx, cy);
 
 				LightClippedTriangle(ax, ay, az, atx, aty,
 									 bx, by, bz, btx, bty,
@@ -651,8 +671,7 @@ public:
 					float dx = poly->mx[3];
 					float dy = poly->my[3];
 					float dz = static_cast<float>(plane ? plane->SlopeZ(dx, dy) : z);
-					float dtx = dx / static_cast<float>(img_w);
-					float dty = dy / static_cast<float>(img_h);
+					auto [dtx, dty] = textureCoords(dx, dy);
 
 					LightClippedTriangle(ax, ay, az, atx, aty,
 										 cx, cy, cz, ctx, cty,
@@ -673,7 +692,8 @@ public:
 
 					if (img)
 					{
-						glTexCoord2f(px / static_cast<float>(img_w), py / static_cast<float>(img_h));
+						auto [tx, ty] = textureCoords(px, py);
+						glTexCoord2f(tx, ty);
 					}
 
 					glVertex3f(px, py, pz);
@@ -718,9 +738,20 @@ public:
 
 		if (img)
 		{
+			const WallSurfacePart part =
+					where == 'U' ? WallSurfacePart::upper :
+					where == 'L' ? WallSurfacePart::lower :
+							WallSurfacePart::middle;
+			const SurfaceTransform transform =
+					M_EffectiveWallSurfaceTransform(*sd, part,
+							inst.loaded.levelFormat, inst.conf);
+
 			float img_w  = static_cast<float>(img->width());
 			float img_h  = static_cast<float>(img->height());
 			float img_tw, img_th;
+			const float renderedHeight =
+					img_h / static_cast<float>(
+							std::abs(transform.scaleY));
 
 			if (global::use_npot_textures)
 			{
@@ -740,7 +771,8 @@ public:
 
 			if (where == 'W' && (ld->flags & MLF_LowerUnpegged))
 			{
-				tex_top = static_cast<float>(front->floorh) + img_h;
+				tex_top = static_cast<float>(front->floorh) +
+						renderedHeight;
 			}
 
 			if (where == 'L')
@@ -760,16 +792,26 @@ public:
 
 			if (where == 'U' && (0 == (ld->flags & MLF_UpperUnpegged)))
 			{
-				tex_top = static_cast<float>(back->ceilh) + img_h;
+				tex_top = static_cast<float>(back->ceilh) +
+						renderedHeight;
 			}
 
-			tx1 = (tx1 + static_cast<float>(sd->x_offset)) / img_tw;
-			tx2 = (tx2 + static_cast<float>(sd->x_offset)) / img_tw;
+			const float xOffset = static_cast<float>(
+					sd->x_offset + transform.offsetX);
+			const float yOffset = static_cast<float>(
+					sd->y_offset + transform.offsetY);
+			tx1 = (tx1 + xOffset) *
+					static_cast<float>(transform.scaleX) / img_tw;
+			tx2 = (tx2 + xOffset) *
+					static_cast<float>(transform.scaleX) / img_tw;
 
-			tex_top  += (img_th - img_h);
-			tex_top  += static_cast<float>(sd->y_offset);
+			// The GL fallback pads images to a power of two. Compensate in
+			// map units so scaling does not magnify the padding correction.
+			tex_top  += (img_th - img_h) /
+					static_cast<float>(transform.scaleY);
+			tex_top  += yOffset;
 
-			tex_scale = 1.0f / img_th;
+			tex_scale = static_cast<float>(transform.scaleY) / img_th;
 		}
 
 		glDisable(GL_ALPHA_TEST);
@@ -811,6 +853,11 @@ public:
 		if (img == NULL)
 			return;
 
+		const SurfaceTransform transform =
+				M_EffectiveWallSurfaceTransform(*sd,
+						WallSurfacePart::middle,
+						inst.loaded.levelFormat, inst.conf);
+
 		float img_w  = static_cast<float>(img->width());
 		float img_h  = static_cast<float>(img->height());
 		float img_tw, img_th;
@@ -836,18 +883,26 @@ public:
 		float tx1 = 0.0;
 		float tx2 = tx1 + ld_length;
 
-		tx1 = (tx1 + static_cast<float>(sd->x_offset)) / img_tw;
-		tx2 = (tx2 + static_cast<float>(sd->x_offset)) / img_tw;
+		const float xOffset = static_cast<float>(
+				sd->x_offset + transform.offsetX);
+		const float yOffset = static_cast<float>(
+				sd->y_offset + transform.offsetY);
+		tx1 = (tx1 + xOffset) *
+				static_cast<float>(transform.scaleX) / img_tw;
+		tx2 = (tx2 + xOffset) *
+				static_cast<float>(transform.scaleX) / img_tw;
+		const float renderedHeight =
+				img_h / static_cast<float>(std::abs(transform.scaleY));
 
 		if (ld->flags & MLF_LowerUnpegged)
 		{
-			z1 = z1 + static_cast<float>(sd->y_offset);
-			z2 = z1 + img_h;
+			z1 = z1 + yOffset;
+			z2 = z1 + renderedHeight;
 		}
 		else
 		{
-			z2 = z2 + static_cast<float>(sd->y_offset);
-			z1 = z2 - img_h;
+			z2 = z2 + yOffset;
+			z1 = z2 - renderedHeight;
 		}
 
 		glEnable(GL_ALPHA_TEST);
@@ -859,7 +914,8 @@ public:
 		double g0 = (double)g / 255.0;
 		double b0 = (double)b / 255.0;
 
-		float tex_scale = 1.0f / img_th;
+		float tex_scale =
+				static_cast<float>(transform.scaleY) / img_th;
 
 		if (inst.r_view.lighting && !fullbright)
 		{

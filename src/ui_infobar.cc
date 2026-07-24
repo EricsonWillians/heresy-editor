@@ -31,7 +31,10 @@
 #include "r_grid.h"
 #include "r_render.h"
 #include "SideDef.h"
+#include "ui_grid.h"
 #include "Vertex.h"
+
+#include <cstdint>
 
 
 #define SNAP_COLOR  (config::gui_scheme == 2 ? fl_rgb_color(255,96,0) : fl_rgb_color(255, 96, 0))
@@ -107,9 +110,26 @@ UI_InfoBar::UI_InfoBar(Instance &inst, int X, int Y, int W, int H, const char *l
 	grid_size = new Fl_Menu_Button(X+44, Y, 72, H, "OFF");
 
 	grid_size->align(FL_ALIGN_INSIDE);
-	grid_size->add(grid::getValuesFLTKMenuString().c_str());
+	for (const grid::StepPreset &preset : grid::StepPresets())
+	{
+		const SString path = SString(preset.group) + "/" + preset.label;
+		grid_size->add(path.c_str(), 0, nullptr,
+				reinterpret_cast<void *>(
+						static_cast<intptr_t>(preset.step)));
+	}
+	grid_size->add("Actions/Mathematical Grid...", 0, nullptr,
+			reinterpret_cast<void *>(static_cast<intptr_t>(-2)),
+			FL_MENU_DIVIDER);
+	grid_size->add("Actions/Origin at pointer", 0, nullptr,
+			reinterpret_cast<void *>(static_cast<intptr_t>(-3)));
+	grid_size->add("Actions/Origin at world 0,0", 0, nullptr,
+			reinterpret_cast<void *>(static_cast<intptr_t>(-4)));
+	grid_size->add("Actions/Grid off", 0, nullptr,
+			reinterpret_cast<void *>(static_cast<intptr_t>(-1)));
 	grid_size->callback(grid_callback, this);
 	grid_size->labelsize(16);
+	grid_size->tooltip(
+			"Choose grouped grid sequences or open Mathematical Grid (Alt+G)");
 
 	X = grid_size->x() + grid_size->w() + 12;
 
@@ -148,6 +168,9 @@ UI_InfoBar::UI_InfoBar(Instance &inst, int X, int Y, int W, int H, const char *l
 	sec_rend->add("PLAIN|Floor|Ceiling|Lighting|Floor Bright|Ceil Bright|Sound|3D VIEW");
 	sec_rend->callback(rend_callback, this);
 	sec_rend->labelsize(16);
+	sec_rend->tooltip(
+			"F8 opens render modes · Shift+F8 / Ctrl/Cmd+F8 cycle · "
+			"Shift+Tab inspects every linedef in 3D");
 
 	X = sec_rend->x() + rend_lab->w() + 10;
 
@@ -245,9 +268,18 @@ void UI_InfoBar::grid_callback(Fl_Widget *w, void *data)
 	auto bar = static_cast<UI_InfoBar *>(data);
 	Fl_Menu_Button *gsize = (Fl_Menu_Button *)w;
 
-	int new_step = grid::values[gsize->value()];
+	if (!gsize->mvalue())
+		return;
+	const int new_step = static_cast<int>(
+			gsize->mvalue()->argument());
 
-	if (new_step < 0)
+	if (new_step == -2)
+		UI_RunMathematicalGrid(bar->inst);
+	else if (new_step == -3)
+		bar->inst.grid.SetOrigin(bar->inst.edit.map.xy);
+	else if (new_step == -4)
+		bar->inst.grid.SetOrigin({});
+	else if (new_step < 0)
 		bar->inst.grid.SetShown(false);
 	else
 		bar->inst.grid.ForceStep(new_step);
@@ -473,14 +505,9 @@ void UI_StatusBar::draw()
 	}
 	else  // 2D view
 	{
-		float mx = static_cast<float>(inst.grid.SnapX(inst.edit.map.x));
-		float my = static_cast<float>(inst.grid.SnapY(inst.edit.map.y));
-
-		mx = clamp(-32767.f, mx, 32767.f);
-		my = clamp(-32767.f, my, 32767.f);
-
-		IB_Coord(cx, cy, "x", mx);
-		IB_Coord(cx, cy, "y", my);
+		const v2double_t snapped = inst.grid.Snap(inst.edit.map.xy);
+		IB_Coord(cx, cy, "x", snapped.x);
+		IB_Coord(cx, cy, "y", snapped.y);
 		cx += 10;
 #if 0
 		IB_Number(cx, cy, "gamma", usegamma, 1);
@@ -677,7 +704,7 @@ void UI_StatusBar::IB_Number(int& cx, int& cy, const char *label, int value, int
 }
 
 
-void UI_StatusBar::IB_Coord(int& cx, int& cy, const char *label, float value)
+void UI_StatusBar::IB_Coord(int& cx, int& cy, const char *label, double value)
 {
 	char buffer[256];
 	snprintf(buffer, sizeof(buffer), "%s:%-8.2f ", label, value);

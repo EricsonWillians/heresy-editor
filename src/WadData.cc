@@ -92,3 +92,24 @@ void WadData::reloadResources(const std::shared_ptr<Wad_file> &gameWad, const Co
 	// Commit
 	*this = newWad;
 }
+
+void WadData::reloadSurfaceImages(
+		const std::shared_ptr<Wad_file> &gameWad, const ConfigData &config,
+		const std::vector<std::shared_ptr<Wad_file>> &resourceWads)
+		noexcept(false)
+{
+	WadData refreshed = *this;
+	try
+	{
+		refreshed.master.setGameWad(gameWad);
+		refreshed.master.setResources(resourceWads);
+		refreshed.W_LoadFlats();
+		refreshed.W_LoadTextures(config);
+	}
+	catch (const std::runtime_error &error)
+	{
+		gLog.printf("Failed reloading surface images: %s", error.what());
+		throw;
+	}
+	*this = std::move(refreshed);
+}

@@ -473,8 +473,30 @@ void ImageSet::W_AddFlat(const SString &name, Img_c &&img)
 }
 
 
-static Img_c LoadFlatImage(const WadData &wad, const SString &name, const Lump_c *lump)
+static Img_c LoadFlatImage(const WadData &wad, const SString &name,
+		const Lump_c *lump)
 {
+	// Modern ports accept ordinary image files in the flat namespace.  Keep
+	// recognizable encoded images intact even when their compressed byte size
+	// happens to be 4096, then retain the classic raw fallback.
+	switch (W_DetectImageFormat(*lump))
+	{
+		case ImageFormat::png:
+			if (std::optional<Img_c> image = LoadImage_PNG(*lump, name))
+				return std::move(*image);
+			break;
+		case ImageFormat::jpeg:
+			if (std::optional<Img_c> image = LoadImage_JPEG(*lump, name))
+				return std::move(*image);
+			break;
+		case ImageFormat::tga:
+			if (std::optional<Img_c> image = LoadImage_TGA(*lump, name))
+				return std::move(*image);
+			break;
+		default:
+				break;
+	}
+
 	// TODO: check size == 64*64
 
 	Img_c img(64, 64, false);
@@ -581,6 +603,30 @@ bool ImageSet::W_FlatIsKnown(const ConfigData &config, const SString &name) cons
 	}
 
 	return false;
+}
+
+ImageSet::SurfaceImageCatalog ImageSet::getWallSurfaceImages(
+		const ConfigData &config) const
+{
+	SurfaceImageCatalog result;
+	for (const auto &[name, image] : textures)
+		result.emplace(name, &image);
+	if (config.features.mix_textures_flats)
+		for (const auto &[name, image] : flats)
+			result.emplace(name, &image);
+	return result;
+}
+
+ImageSet::SurfaceImageCatalog ImageSet::getPlaneSurfaceImages(
+		const ConfigData &config) const
+{
+	SurfaceImageCatalog result;
+	for (const auto &[name, image] : flats)
+		result.emplace(name, &image);
+	if (config.features.mix_textures_flats)
+		for (const auto &[name, image] : textures)
+			result.emplace(name, &image);
+	return result;
 }
 
 

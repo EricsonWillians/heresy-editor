@@ -363,6 +363,11 @@ struct port_features_t
 
 	// for Hexen format, allows the extra 2 player-use-passthru activations
 	int player_use_passthru_activation;
+
+	// UDMF texture transforms: +1 per-part wall transforms, +2 plane
+	// panning/scaling/rotation.  The map must still be UDMF for these to
+	// apply; declaring this explicitly avoids guessing from a port name.
+	int udmf_surface_transforms;
 };
 
 //

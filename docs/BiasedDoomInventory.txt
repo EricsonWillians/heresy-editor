@@ -89,16 +89,19 @@ Round-trip preservation
 -----------------------
 
 Heresy Editor preserves unrecognized linedef, sidedef, and sector properties
-as validated UDMF tokens when loading and saving a UDMF map.  This includes the
-relevant generator output:
+as validated UDMF tokens when loading and saving a UDMF map. Established
+surface-transform fields are recognized as typed, undoable properties. This
+includes the relevant generator output:
 
 * sector `lightcolor`, `fadecolor`, `damageamount`, `damageinterval`,
   `damagetype`, `leakiness`, and `damageterraineffect`;
-* sidedef `scaley_top`, `scalex_mid`, and `scaley_mid`; and
+* sidedef `scaley_top`, `scalex_mid`, and `scaley_mid` (plus the remaining
+  standard per-part pan/scale fields supported by Surface Transform); and
 * linedef `locknumber`.
 
 These values remain attached to their map objects during ordinary edits,
-clipboard operations, line splits, saves, and reloads.  Doom and Hexen binary
-serializers ignore the UDMF-only property store, with regression coverage
-proving their output is unchanged.  This is property preservation, not
-evidence of new BiasedDoom identifiers.
+clipboard operations, line splits, saves, and reloads. Doom and Hexen binary
+serializers ignore both the UDMF-only property store and typed transforms,
+with regression coverage proving their output is unchanged. This is
+established ZDoom namespace support, not evidence of new BiasedDoom
+identifiers.

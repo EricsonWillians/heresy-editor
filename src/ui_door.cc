@@ -20,6 +20,17 @@ SmartDoorDialogOverride UI_SmartDoorDialog_Override;
 LoadedImageChooserOverride UI_LoadedImageChooser_Override;
 
 std::vector<SString> UI_FilterDoorTextures(
+		const ImageSet &images, const ConfigData &config,
+		const SString &filter)
+{
+	std::vector<SString> result;
+	for (const auto &[name, image] : images.getWallSurfaceImages(config))
+		if (filter.empty() || name.findNoCase(filter.c_str()) != SString::npos)
+			result.push_back(name);
+	return result;
+}
+
+std::vector<SString> UI_FilterDoorTextures(
 		const ImageSet &images, const SString &filter)
 {
 	std::vector<SString> result;
@@ -124,6 +135,11 @@ public:
 		autoButton->tooltip("Clear the override and infer this texture.");
 		autoButton->callback(autoCallback, this);
 
+		importButton = new Fl_Button(144, 454, 150, 32, "Import...");
+		importButton->tooltip(
+				"Import one or more wall, floor, or all-surface images.");
+		importButton->callback(importCallback, this);
+
 		cancelButton = new Fl_Button(374, 454, 100, 32, "Cancel");
 		cancelButton->callback(cancelCallback, this);
 
@@ -154,9 +170,10 @@ private:
 	void populate()
 	{
 		visible.clear();
-		const auto &images = kind == UI_ImageSelectionKind::flat ?
-				inst.wad.images.getFlats() :
-				inst.wad.images.getTextures();
+		const ImageSet::SurfaceImageCatalog images =
+				kind == UI_ImageSelectionKind::flat ?
+				inst.wad.images.getPlaneSurfaceImages(inst.conf) :
+				inst.wad.images.getWallSurfaceImages(inst.conf);
 		for (const auto &[name, image] : images)
 			if (SString(search->value()).empty() ||
 				name.findNoCase(search->value()) != SString::npos)
@@ -240,6 +257,14 @@ private:
 		chooser->closed = true;
 	}
 
+	static void importCallback(Fl_Widget *, void *data)
+	{
+		UI_DoorTextureChooser *chooser =
+				static_cast<UI_DoorTextureChooser *>(data);
+		chooser->inst.ExecuteCommand("ImportSurfaceTextures");
+		chooser->populate();
+	}
+
 	static void useCallback(Fl_Widget *, void *data)
 	{
 		UI_DoorTextureChooser *chooser =
@@ -263,6 +288,7 @@ private:
 	UI_Pic *preview = nullptr;
 	Fl_Box *selectedLabel = nullptr;
 	Fl_Button *autoButton = nullptr;
+	Fl_Button *importButton = nullptr;
 	Fl_Button *cancelButton = nullptr;
 	Fl_Button *useButton = nullptr;
 	bool closed = false;

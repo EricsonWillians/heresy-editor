@@ -59,6 +59,11 @@ static void file_do_package_metadata(Fl_Widget *w, void *data)
 	static_cast<Instance *>(data)->ExecuteCommand("PackageMetadata");
 }
 
+static void file_do_import_surface_textures(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("ImportSurfaceTextures");
+}
+
 static void file_do_open(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("OpenMap");
@@ -216,6 +221,11 @@ static void edit_do_scale(Fl_Widget *w, void * data)
 	static_cast<Instance *>(data)->ExecuteCommand("ScaleObjectsDialog");
 }
 
+static void edit_do_surface_transform(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("SurfaceTransform");
+}
+
 static void edit_do_rotate(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("RotateObjectsDialog");
@@ -274,6 +284,34 @@ static void view_do_camera_pos(Fl_Widget *w, void * data)
 static void view_do_toggle_3d(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("Toggle", "3d");
+}
+
+static void view_do_inspect_all_lines(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand(
+			"InspectAllLines3D");
+}
+
+static void view_do_render_next(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand(
+			"CycleRenderMode", "+1");
+}
+
+static void view_do_render_previous(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand(
+			"CycleRenderMode", "-1");
+}
+
+static void view_do_grid_configure(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("GRID_Configure");
+}
+
+static void view_do_toggle_grid(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("Toggle", "grid");
 }
 
 static void view_do_object_nums(Fl_Widget *w, void * data)
@@ -494,6 +532,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{file_do_campaign_navigator, {"CampaignNavigator"} },
 	{file_do_generate_runtime_mapinfo, {"GenerateRuntimeMapInfo"} },
 	{file_do_package_metadata, {"PackageMetadata"} },
+	{file_do_import_surface_textures, {"ImportSurfaceTextures"} },
 	{file_do_open, {"OpenMap"} },
 	{file_do_save, {"SaveMap"} },
 	{file_do_save_project, {"SaveProject"} },
@@ -520,6 +559,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{edit_do_op_menu, {"OpMenu"} },
 	{edit_do_move, {"MoveObjectsDialog"} },
 	{edit_do_scale, {"ScaleObjectsDialog"} },
+	{edit_do_surface_transform, {"SurfaceTransform"} },
 	{edit_do_rotate, {"RotateObjectsDialog"} },
 	{edit_do_smart_sector, {"SEC_SmartSector", {"room"}} },
 	{edit_do_make_door, {"SEC_MakeDoor"} },
@@ -532,6 +572,11 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{view_do_whole_selection, {"ZoomSelection"} },
 	{view_do_camera_pos, {"GoToCamera"} },
 	{view_do_toggle_3d, {"Toggle", {"3d"}} },
+	{view_do_inspect_all_lines, {"InspectAllLines3D"} },
+	{view_do_render_next, {"CycleRenderMode", {"+1"}} },
+	{view_do_render_previous, {"CycleRenderMode", {"-1"}} },
+	{view_do_grid_configure, {"GRID_Configure"} },
+	{view_do_toggle_grid, {"Toggle", {"grid"}} },
 	{view_do_object_nums, {"Toggle", {"obj_nums"}} },
 	{view_do_sprites, {"Toggle", {"sprites"}} },
 	{view_do_gamma, {"Toggle", {"gamma"}} },
@@ -595,6 +640,8 @@ static Fl_Menu_Item menu_items[] =
 		{ "Campaign Na&vigator", 0, FCAL file_do_campaign_navigator },
 		{ "Generate Runtime MAP&INFO...", 0, FCAL file_do_generate_runtime_mapinfo },
 		{ "PK3 &Metadata...", 0, FCAL file_do_package_metadata },
+		{ "Import Surface &Textures...", 0,
+				FCAL file_do_import_surface_textures },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
@@ -649,6 +696,8 @@ static Fl_Menu_Item menu_items[] =
 		{ "&Move Objects...",  0, FCAL edit_do_move },
 		{ "&Scale Objects...", 0, FCAL edit_do_scale },
 		{ "Rotate Objects...", 0, FCAL edit_do_rotate },
+		{ "Surface Texture &Transform...", 0,
+				FCAL edit_do_surface_transform },
 		{ "Smart Sector &Designer...", 0, FCAL edit_do_smart_sector },
 		{ "Make Smart &Door...", 0, FCAL edit_do_make_door },
 
@@ -666,8 +715,11 @@ static Fl_Menu_Item menu_items[] =
 		{ "Toggle S&prites",     0, FCAL view_do_sprites },
 		{ "Toggle &Gamma",       0, FCAL view_do_gamma },
 		{ "Toggle Object Nums",  0, FCAL view_do_object_nums },
+		{ "Show / Hide Grid",    0, FCAL view_do_toggle_grid },
 		{ "Snap to &Grid",       0, FCAL view_do_snap_to_grid, 0,
 								  FL_MENU_TOGGLE },
+		{ "Mathematical Grid && Snapping...\tAlt+G", 0,
+				FCAL view_do_grid_configure },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
@@ -679,6 +731,11 @@ static Fl_Menu_Item menu_items[] =
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
 		{ "&Default Props  ",  0, FCAL view_do_default_props },
+		{ "Previous Rendering Mode\tCtrl/Cmd+F8", 0,
+				FCAL view_do_render_previous },
+		{ "Next Rendering Mode\tShift+F8", 0, FCAL view_do_render_next },
+		{ "Inspect All Linedefs in 3D\tShift+Tab", 0,
+				FCAL view_do_inspect_all_lines },
 		{ "Toggle &3D View",  0, FCAL view_do_toggle_3d },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },

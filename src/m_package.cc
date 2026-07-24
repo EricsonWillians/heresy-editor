@@ -13,8 +13,10 @@
 #include <array>
 #include <fstream>
 #include <initializer_list>
+#include <limits>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 
 namespace
@@ -235,6 +237,138 @@ SString ProjectedLumpNameForEntry(const std::string &entryName)
 	fs::path resourcePath(entryName);
 	return SString(resourcePath.filename().replace_extension().u8string()).
 			asUpper().substr(0, 8);
+}
+
+WadNamespace WadNamespaceForResource(PackageResourceKind kind) noexcept
+{
+	return kind == PackageResourceKind::flat ? WadNamespace::Flats :
+			WadNamespace::TextureLumps;
+}
+
+bool ResourceKindForNamespace(WadNamespace nameSpace,
+		PackageResourceKind &kind) noexcept
+{
+	if (nameSpace == WadNamespace::Flats)
+	{
+		kind = PackageResourceKind::flat;
+		return true;
+	}
+	if (nameSpace == WadNamespace::TextureLumps)
+	{
+		kind = PackageResourceKind::wallTexture;
+		return true;
+	}
+	return false;
+}
+
+bool ResourceKindForEntry(const std::string &entryName,
+		PackageResourceKind &kind) noexcept
+{
+	const std::optional<WadNamespace> nameSpace =
+			ResourceNamespaceForEntry(entryName);
+	return nameSpace && ResourceKindForNamespace(*nameSpace, kind);
+}
+
+const char *StartMarker(PackageResourceKind kind) noexcept
+{
+	return kind == PackageResourceKind::flat ? "F_START" : "TX_START";
+}
+
+const char *EndMarker(PackageResourceKind kind) noexcept
+{
+	return kind == PackageResourceKind::flat ? "F_END" : "TX_END";
+}
+
+bool IsStartMarker(const SString &name, PackageResourceKind kind) noexcept
+{
+	if (kind == PackageResourceKind::flat)
+		return name.noCaseEqual("F_START") || name.noCaseEqual("FF_START");
+	return name.noCaseEqual("TX_START");
+}
+
+bool IsEndMarker(const SString &name, PackageResourceKind kind) noexcept
+{
+	if (kind == PackageResourceKind::flat)
+		return name.noCaseEqual("F_END") || name.noCaseEqual("FF_END");
+	return name.noCaseEqual("TX_END");
+}
+
+void ValidateResourceName(const SString &name)
+{
+	if (name.empty() || name.length() > 8)
+		throw std::runtime_error("Package resource names must contain 1-8 characters.");
+	for (char character : name)
+	{
+		const unsigned char value = static_cast<unsigned char>(character);
+		if (!(value == '_' || value == '-' ||
+				(value >= '0' && value <= '9') ||
+				(value >= 'A' && value <= 'Z')))
+		{
+			throw std::runtime_error("Package resource names must use portable "
+					"uppercase ASCII characters.");
+		}
+	}
+}
+
+std::string CanonicalResourceEntry(const PackageResourceWrite &write)
+{
+	std::string extension = write.extension.c_str();
+	if (extension.empty() || extension.front() != '.')
+		throw std::runtime_error("A PK3 resource requires a detected extension.");
+	for (char &character : extension)
+	{
+		if (character >= 'A' && character <= 'Z')
+			character = static_cast<char>(character - 'A' + 'a');
+		if (!(character == '.' ||
+				(character >= 'a' && character <= 'z') ||
+				(character >= '0' && character <= '9')))
+		{
+			throw std::runtime_error("Invalid PK3 resource extension.");
+		}
+	}
+	const char *prefix = write.kind == PackageResourceKind::flat ?
+			"flats/" : "textures/";
+	return prefix + std::string(write.editorName.c_str()) + extension;
+}
+
+int FindNamespaceEnd(const Wad_file &wad, PackageResourceKind kind)
+{
+	int open = -1;
+	int lastEnd = -1;
+	for (int index = 0; index < wad.NumLumps(); ++index)
+	{
+		const Lump_c *lump = wad.GetLump(index);
+		if (!lump)
+			continue;
+		if (IsStartMarker(lump->Name(), kind))
+		{
+			if (open >= 0)
+				throw std::runtime_error("The package has nested or duplicate "
+						"resource namespace markers.");
+			open = index;
+		}
+		else if (IsEndMarker(lump->Name(), kind))
+		{
+			if (open < 0)
+				throw std::runtime_error("The package has a stray resource "
+						"namespace end marker.");
+			for (int level = 0; level < wad.LevelCount(); ++level)
+			{
+				const int levelStart = wad.LevelHeader(level);
+				const int levelEnd = wad.LevelLastLump(level);
+				if (open <= levelEnd && index >= levelStart)
+				{
+					throw std::runtime_error("A resource namespace marker pair "
+							"encloses part of a map.");
+				}
+			}
+			lastEnd = index;
+			open = -1;
+		}
+	}
+	if (open >= 0)
+		throw std::runtime_error("The package has an unterminated resource namespace.");
+	return lastEnd;
 }
 
 bool CanWriteFile(const fs::path &path)
@@ -794,4 +928,182 @@ bool M_ValidateEditablePackage(const fs::path &path) noexcept
 	{
 	}
 	return false;
+}
+
+std::vector<PackageResourceEntry> M_ListPackageResources(
+		const fs::path &path)
+{
+	std::vector<PackageResourceEntry> result;
+	const ProjectPackage package = M_ProjectPackageForPath(path);
+	if (package == ProjectPackage::wad)
+	{
+		std::shared_ptr<Wad_file> wad = Wad_file::Open(path, WadOpenMode::read);
+		if (!wad)
+			throw std::runtime_error("Could not inspect the WAD package.");
+		FindNamespaceEnd(*wad, PackageResourceKind::wallTexture);
+		FindNamespaceEnd(*wad, PackageResourceKind::flat);
+		for (size_t index = 0; index < wad->getDir().size(); ++index)
+		{
+			const LumpRef &reference = wad->getDir()[index];
+			PackageResourceKind kind;
+			if (!reference.lump ||
+					!ResourceKindForNamespace(reference.ns, kind))
+			{
+				continue;
+			}
+			result.push_back({ kind, reference.lump->Name().asUpper(),
+					SString::printf("WAD lump #%llu",
+							static_cast<unsigned long long>(index)),
+					static_cast<uint64_t>(reference.lump->Length()), index });
+		}
+		return result;
+	}
+	if (package == ProjectPackage::pk3)
+	{
+		std::shared_ptr<ZipArchive> archive = ZipArchive::Open(path);
+		if (!archive)
+			throw std::runtime_error("Could not inspect the PK3 package.");
+		size_t ordinal = 0;
+		for (const ZipEntryInfo &info : archive->entryInfos())
+		{
+			PackageResourceKind kind;
+			if (info.directory || !ResourceKindForEntry(info.name, kind))
+				continue;
+			const SString editorName = ProjectedLumpNameForEntry(info.name);
+			if (editorName.empty())
+				continue;
+			result.push_back({ kind, editorName, info.name,
+					info.uncompressedSize, ordinal++ });
+		}
+		return result;
+	}
+	throw std::runtime_error("Texture import requires a WAD or PK3 package.");
+}
+
+void M_WritePackageResources(const fs::path &path,
+		const std::vector<PackageResourceWrite> &writes)
+{
+	if (writes.empty())
+		return;
+	for (const PackageResourceWrite &write : writes)
+	{
+		ValidateResourceName(write.editorName);
+		if (write.data.empty())
+			throw std::runtime_error("Cannot import an empty resource.");
+		if (write.data.size() >
+				static_cast<size_t>((std::numeric_limits<int>::max)()))
+			throw std::runtime_error("A resource is too large for the package.");
+	}
+	std::set<std::pair<PackageResourceKind, SString>> uniqueWrites;
+	for (const PackageResourceWrite &write : writes)
+		if (!uniqueWrites.insert(
+					{ write.kind, write.editorName.asUpper() }).second)
+		{
+			throw std::runtime_error("The import contains duplicate package "
+					"resource destinations.");
+		}
+
+	const ProjectPackage package = M_ProjectPackageForPath(path);
+	if (package == ProjectPackage::wad)
+	{
+		std::shared_ptr<Wad_file> wad = Wad_file::Open(path, WadOpenMode::append);
+		if (!wad || wad->IsReadOnly())
+			throw std::runtime_error("The WAD package is not writable.");
+		FindNamespaceEnd(*wad, PackageResourceKind::wallTexture);
+		FindNamespaceEnd(*wad, PackageResourceKind::flat);
+
+		std::vector<const PackageResourceWrite *> additions;
+		for (const PackageResourceWrite &write : writes)
+		{
+			std::vector<Lump_c *> matches;
+			const WadNamespace wanted = WadNamespaceForResource(write.kind);
+			for (const LumpRef &reference : wad->getDir())
+			{
+				if (reference.ns == wanted && reference.lump &&
+						reference.lump->Name().noCaseEqual(write.editorName))
+				{
+					matches.push_back(reference.lump.get());
+				}
+			}
+			if (write.replaceEntryPath)
+			{
+				if (matches.size() != 1)
+					throw std::runtime_error("The project resource selected for "
+							"replacement is missing or ambiguous.");
+				matches.front()->setData(std::vector<byte>(
+						write.data.begin(), write.data.end()));
+			}
+			else
+			{
+				if (!matches.empty())
+					throw std::runtime_error("A project resource now conflicts "
+							"with the requested import name.");
+				additions.push_back(&write);
+			}
+		}
+
+		for (PackageResourceKind kind :
+				{ PackageResourceKind::wallTexture, PackageResourceKind::flat })
+		{
+			std::vector<const PackageResourceWrite *> grouped;
+			for (const PackageResourceWrite *write : additions)
+				if (write->kind == kind)
+					grouped.push_back(write);
+			if (grouped.empty())
+				continue;
+
+			int end = FindNamespaceEnd(*wad, kind);
+			if (end < 0)
+			{
+				wad->InsertPoint();
+				wad->AddLump(StartMarker(kind));
+				wad->AddLump(EndMarker(kind));
+				end = wad->NumLumps() - 1;
+			}
+			wad->InsertPoint(end);
+			for (const PackageResourceWrite *write : grouped)
+			{
+				Lump_c &lump = wad->AddLump(write->editorName);
+				lump.Write(write->data.data(), static_cast<int>(write->data.size()));
+			}
+			wad->InsertPoint();
+		}
+		wad->writeToDisk();
+		return;
+	}
+
+	if (package == ProjectPackage::pk3)
+	{
+		std::shared_ptr<ZipArchive> archive = ZipArchive::Open(path);
+		if (!archive)
+			throw std::runtime_error("Could not open the PK3 package.");
+		std::set<std::string> destinations;
+		for (const PackageResourceWrite &write : writes)
+		{
+			const std::string destination = CanonicalResourceEntry(write);
+			const std::string lower = LowerASCII(destination);
+			if (!destinations.insert(lower).second)
+				throw std::runtime_error("The import contains duplicate PK3 destinations.");
+
+			if (write.replaceEntryPath)
+			{
+				const std::string previous = write.replaceEntryPath->c_str();
+				if (!archive->contains(previous))
+					throw std::runtime_error("The project resource selected for "
+							"replacement no longer exists.");
+				if (previous != destination)
+					archive->removeEntry(previous);
+			}
+			else if (archive->contains(destination))
+			{
+				throw std::runtime_error("A PK3 entry now conflicts with the "
+						"requested import destination.");
+			}
+			archive->setEntry(destination, write.data);
+		}
+		archive->writeToDisk();
+		return;
+	}
+
+	throw std::runtime_error("Texture import requires a WAD or PK3 package.");
 }

@@ -1,0 +1,147 @@
+Surface texture transforms
+==========================
+
+Heresy Editor provides one format-aware workflow for wall, floor, and ceiling
+texture placement. Select or highlight a surface and choose Edit -> Surface
+Texture Transform, press Alt+T, use Transform in the sector panel, or use
+Xform on a sidedef. In 3D view, selected wall parts and selected planes are
+used directly.
+
+
+Live canvas preview
+-------------------
+
+Every valid field, holdable step button, preset, Fit command, scope, mirror,
+and apply-mode change is always previewed immediately. There is no preview
+checkbox or delayed mode to accidentally leave disabled. The green LIVE status
+states exactly how many surfaces are being shown and whether Apply will store
+native transforms or create fitted project resources.
+
+The transform tool is an independent, movable top-level window. It no longer
+forces itself against the main-window edge, and resizing it never resizes the
+editor behind it. Its minimum layout keeps labels, inputs, step buttons,
+guidance, and actions separated; wider and taller sizes redistribute the
+controls and guidance. The last size is remembered in memory for the next
+invocation.
+
+On GNOME/Mutter the tool deliberately uses a non-modal window-manager
+transient. This prevents the desktop's "attach modal dialogs" behavior from
+unmaximizing or shrinking the editor when the tool is dragged. Map-editing
+controls are locked at the application level while the preview is open and
+restored on every exit path; rendering and live redraw remain active.
+
+The preview is transient: it does not mark the map dirty and never creates,
+clears, or consumes an Undo/Redo entry. Temporarily invalid input restores the
+original canvas, explains the problem inline, and disables Apply. Cancel,
+Escape, the window close control, and dialog destruction also restore every
+affected sidedef or sector property exactly. Apply first removes the transient
+projection, recomputes from the real map, and then records the final changes
+as one normal map Undo operation.
+
+
+Rendered size
+-------------
+
+Width and Height are percentages of the image's intrinsic pixel dimensions:
+
+* 100% is native 1:1 mapping: a 4096-pixel side occupies 4096 map units.
+* 50% makes the visible tile half as large and repeat twice as often.
+* 200% makes the visible tile twice as large.
+
+Lock proportions keeps Width and Height equal. Mirror X and Mirror Y use
+negative engine scale in UDMF and a mirrored fitted copy in classic formats.
+Native restores 1:1. The 64, 128, and 256 quick-size buttons preserve
+proportions and make each target texture's longest side occupy that many map
+units, using its own intrinsic dimensions.
+
+Fit both is the Hammer-style face fit: one tile occupies the selected wall's
+actual linedef length and visible upper/middle/lower height. Fit width and Fit
+height change only one axis. For floors and ceilings the fit bounds are the
+selected sector's exact geometry bounding box. Batch fitting resolves each
+surface against its own geometry and source dimensions, even though the first
+surface supplies the values displayed in the fields.
+
+The dialog reports the source pixel dimensions and exact resulting tile size
+in map units alongside the selected surface dimensions. It accepts engine
+scale magnitudes from 1/65536 through 65536
+and finite offsets up to one trillion map units. These limits are safeguards,
+not assumptions about traditional 64- or 128-pixel textures. Non-power-of-two
+and rectangular images retain their actual dimensions.
+
+Every numeric field has adjacent minus and plus buttons. Press once for one
+step or hold for continuous live adjustment. Shift uses a coarse step (eight
+map units for offsets and ten units for size/rotation); Ctrl uses a fine
+one-tenth step where the active format can represent it.
+
+
+Set exact and Adjust
+--------------------
+
+Set exact writes the displayed transform to every target. It is useful for
+making a whole material run consistent.
+
+Adjust treats offsets and rotation as deltas and rendered size as a
+multiplier. For example, Width 200% in Adjust mode doubles every target's
+current visible tile width without flattening different existing scales.
+Mirror toggles the corresponding orientation. Adjust is the initial batch
+mode when several map objects are selected.
+
+Every Apply is one map Undo operation. Cancel and window close do not change
+the map or history. The explicit target summary distinguishes selected map
+objects from the individual upper, middle, lower, floor, or ceiling surfaces
+that will be changed.
+
+
+Alignment
+---------
+
+Existing wall placement remains available:
+
+* hold R and drag in 3D view for direct offset adjustment;
+* X, Y, or Z aligns with the wall to the left;
+* Shift+X, Shift+Y, or Shift+Z aligns with the wall to the right;
+* C clears offsets;
+* select a linedef run in 2D and press Shift+A to align both axes.
+
+UDMF wall alignment accounts for the chosen wall part's effective offset and
+scale, so differently scaled adjacent walls meet at the shared endpoint.
+The dialog handles precise panning, mirroring, and plane rotation.
+
+
+Format and source-port behavior
+-------------------------------
+
+Doom and Hexen binary maps can store only shared integer X/Y sidedef offsets.
+When the active modern port supports standalone image namespaces and the
+project WAD/PK3 is writable, Size, Fit, and Mirror remain fully available:
+Apply creates a bilinearly resized TGA with a safe unique eight-character name
+in the correct texture or flat namespace and assigns that project-local copy.
+The loaded source is preserved, the package receives its normal backup, and
+the new dimensions render at ordinary 1:1 scale in the game. Multiple targets
+with the same source and dimensions share one fitted copy; different fits use
+separate names.
+
+Undo restores the map's previous texture assignment and Redo reapplies the
+fitted one. The unreferenced fitted resource remains harmlessly in the project
+after Undo because package-resource deletion/undo is intentionally separate
+from map Undo. Vanilla ports without standalone image namespaces cannot
+represent arbitrary fitted copies; the tool explains that limitation instead
+of presenting a false preview.
+
+UDMF itself is extensible, so support is declared by the active port profile.
+The ZDoom/BiasedDoom and Eternity profiles currently enable:
+
+* additional X/Y panning and X/Y scale for upper, middle, and lower wall
+  surfaces independently;
+* X/Y panning, X/Y scale, and clockwise rotation for floors and ceilings.
+
+These values serialize as the established namespace fields such as
+`offsetx_mid`, `scalex_mid`, `xpanningfloor`, `xscalefloor`, and
+`rotationfloor`. Unknown UDMF namespaces retain their unrelated extension
+properties. A modern writable project can use fitted copies when its UDMF
+namespace does not declare native transform fields; unsupported properties
+are never guessed.
+
+Both the OpenGL and software 3D renderers consume the same transforms,
+intrinsic image dimensions, rectangular/non-power-of-two wrapping, and mirror
+orientation. Saving, reopening, Undo, and Redo preserve the transform values.

@@ -1,0 +1,132 @@
+Mathematical grid and fast 3D inspection
+========================================
+
+Quick wall inspection
+---------------------
+
+Press Shift+Tab from any 2D edit mode to inspect the complete wall layout.
+Heresy Editor remembers the current object mode, full selection, and current
+sector-rendering overlay, switches to Linedef mode, selects every linedef, and
+enters 3D View. Every visible lower/upper wall surface on either side is
+highlighted as part of that temporary whole-line selection.
+
+Press Tab or Shift+Tab to return. The remembered object mode, selection, and
+rendering overlay are restored exactly. Shift+Tab from an ordinary 3D session
+simply returns to 2D. This workflow never edits the map or creates Undo data.
+
+Rendering shortcuts:
+
+* F8 opens the rendering operation menu.
+* Shift+F8 selects the next mode.
+* Ctrl+F8 on Linux/Windows, or Command+F8 on macOS, selects the previous mode.
+
+The cycle is Plain, Floor, Ceiling, Lighting, Floor Brightness, Ceiling
+Brightness, Sound Propagation, then 3D View. The View menu and F8 operation
+menu expose the same actions.
+
+
+Opening the mathematical grid
+-----------------------------
+
+Press Alt+G, choose View -> Mathematical Grid & Snapping, or use
+Grid -> Actions -> Mathematical Grid on the bottom information bar. Changes
+are previewed live on the canvas. Use Grid commits them; Cancel, Escape, and
+window close restore the prior grid without editing the map.
+
+The dialog is an independent nonmodal window at the window-manager level. It
+temporarily disables the main editor while open, avoiding attached-dialog
+window resizing while keeping the construction preview live.
+
+
+Geometry models
+---------------
+
+Orthogonal creates two perpendicular axes. Secondary spacing can differ from
+primary spacing for 2:1, 3:2, golden-ratio, square-root-two, tall, or arbitrary
+rectangular cells. Rotation creates diamond and angled construction grids.
+
+Oblique uses two independent basis axes. Set the angle between them and the
+secondary spacing. Presets include 60/120-degree triangular and hexagonal axial
+grids, flat-top and point-top hex construction, isometric, dimetric 2:1,
+military, and cabinet projections.
+
+Polar snaps radius and angle around an origin. Presets range from 8 directions
+(45 degrees) through 360 directions (one degree); any division count from 3
+through 360 is valid. Primary spacing is the radial interval.
+
+All three models support a rotated primary axis, a configurable major-line
+interval, and an arbitrary origin.
+
+
+Origin and rounding
+-------------------
+
+Origin shortcuts set the construction pivot to:
+
+* world 0,0;
+* the current pointer;
+* the center of the current selection; or
+* the 3D camera position.
+
+Exact X and Y values remain editable. Nearest chooses the closest
+intersection. Lower and Upper select the corresponding basis cell.
+Toward Origin truncates each construction coefficient toward the pivot;
+Away from Origin chooses the next coefficient away from it. These choices are
+useful for predictable outward shells, inward detail, repeated bays, and
+large-scale blockout.
+
+
+Spacing catalog and large maps
+------------------------------
+
+The information-bar Grid menu groups 75 ready-to-use spacings:
+
+* Essential: 1 through 1024;
+* Doom architecture: multiples of 3 through 3072;
+* Large map: 2048 through 65536;
+* Decimal engineering: 5 through 10000;
+* Fibonacci: 3 through 10946; and
+* Powers of three: 3 through 59049.
+
+The mathematical dialog accepts any whole-number primary spacing from 1
+through 65536 and a secondary ratio from 1/1024 through 1024. Preferences
+offers the expanded fast-cycle values as the startup grid.
+
+Large spacings are principally useful for UDMF or planning major regions.
+Doom and Hexen binary vertices remain limited by their format. UDMF positions
+retain 16.16 precision, correct large-coordinate map bounds, and untruncated
+status-bar coordinates.
+
+
+What snaps
+----------
+
+The vector grid is shared by:
+
+* ordinary vertex/sector drawing and object insertion;
+* drag, move, paste, and snapping indicators;
+* Quantize for Things and Vertices, including nearby collision alternatives;
+* Smart Sector anchors, drag points, extrusion, rooms, corridors, stairs,
+  insets, lifts, and Architecture; and
+* the pointer coordinates shown in the status bar.
+
+Room drags on rotated orthogonal grids produce rotated rectangles; room drags
+on oblique grids produce basis-aligned parallelograms. Thus all four room
+corners remain construction intersections instead of snapping only the two
+drag anchors.
+
+Candidate coordinates are quantized before use: integer coordinates for Doom
+and Hexen, and 16.16 coordinates for UDMF. Preview and apply therefore agree.
+The mathematical geometry is stored in map editor state and restored when the
+map/project is reopened.
+
+
+Command reference
+-----------------
+
+`GRID_Configure` opens the live tool. `GRID_Set <size>` accepts 1 through
+65536. `GRID_Bump +1` and `GRID_Bump -1` walk the compact fast sequence.
+`InspectAllLines3D` starts or returns from temporary inspection.
+`CycleRenderMode +1` and `CycleRenderMode -1` walk rendering modes.
+
+All default bindings can be changed in Preferences -> Keys.

@@ -115,12 +115,16 @@ set(source_m
     m_resource_diagnostics.h
     m_session.cc
     m_session.h
+    m_surface_transform.cc
+    m_surface_transform.h
     m_zip.cc
     m_zip.h
     m_select.cc
     m_select.h
     m_testmap.cc
     m_testmap.h
+    m_texture_import.cc
+    m_texture_import.h
     m_udmf.cc
 )
 
@@ -161,6 +165,8 @@ set(source_ui
     ui_hyper.h
     ui_infobar.cc
     ui_infobar.h
+    ui_grid.cc
+    ui_grid.h
     ui_keybindingstable.cc
     ui_keybindingstable.h
     ui_mapinfo.cc
@@ -188,10 +194,14 @@ set(source_ui
     ui_sector_design.h
     ui_sidedef.cc
     ui_sidedef.h
+    ui_surface_transform.cc
+    ui_surface_transform.h
     ui_thing.cc
     ui_thing.h
     ui_tile.cc
     ui_tile.h
+    ui_texture_import.cc
+    ui_texture_import.h
     ui_vertex.cc
     ui_vertex.h
     ui_window.cc

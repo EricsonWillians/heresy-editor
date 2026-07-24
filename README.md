@@ -35,11 +35,21 @@ Final Doom, Freedoom, HacX, Heretic, Hexen, and Strife game families.
   with visible validation before committing.
 - **Campaign-scale editing** — manage WAD and PK3 projects, map order, titles,
   episodes, normal/secret routes, entry points, and generated runtime ZMAPINFO.
+- **Surface texture import** — add multiple wall, floor/ceiling, or dual-use
+  PNG/JPEG/TGA/LMP resources with decoded previews, exact package destinations,
+  safe conflict policies, and immediate browser/Smart Tool availability.
+- **Live texture fit and alignment** — Hammer-style face fitting, holdable
+  offset/size controls, and an always-live reversible canvas preview; UDMF
+  stores native transforms while modern-port classic projects can create safe
+  fitted texture copies.
 - **Preservation first** — protect existing specials, doors, lifts, extended
   UDMF properties, unknown PK3 content, undo history, and unsaved multi-map
   work.
 - **Fast test loop** — automatically discover BiasedDoom or GZDoom on each
   platform and preserve Undo/Redo across Save and Test in Game.
+- **Mathematical construction grids** — use rotated, rectangular, oblique,
+  triangular/hexagonal, and polar snapping, 75 grouped size presets, custom
+  origins and rounding, and direct render/whole-linedef 3D inspection keys.
 
 Every Smart authoring gesture is planned without modifying the document,
 previewed with proposed and conflicting geometry, revalidated on commit, and
@@ -58,12 +68,28 @@ Tested packages and matching SHA-256 checksums are published on the
 
 macOS packages are ad-hoc signed for integrity but are not Apple-notarized.
 
+## What's new in 2.4.0
+
+Version 2.4.0 adds an end-to-end surface workflow: import wall and plane
+resources safely into WAD/PK3 projects, then pan, fit, scale, mirror, rotate,
+and align them with live OpenGL/software preview. Imported images retain their
+intrinsic dimensions and are immediately usable by ordinary controls, Smart
+Doors, and Smart Sector Designer.
+
+Large-map construction now includes 30 mathematical grid geometries, 75
+grouped spacings, custom origins and rounding, and temporary whole-linedef 3D
+inspection. Smart Sector Architecture also grows from 28 to 58 purposeful
+structures across all six families.
+
+Read the complete [2.4.0 changelog](changelogs/2.4.0.md).
+
 ## Quick start
 
 1. Download and verify the package for your platform.
 2. Launch `heresy` and select an IWAD when prompted.
 3. Create or open a WAD/PK3 project.
-4. In Sector mode, press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> +
+4. Use **File → Import Surface Textures** to add project images, or in Sector
+   mode press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> +
    <kbd>Shift</kbd> + <kbd>S</kbd> to open Smart Sector Designer.
 5. Select **BiasedDoom** or another supported source port, then use
    **Tools → Test in Game**.
@@ -128,6 +154,32 @@ host room instead of becoming void.
 
 Read the complete [Smart Sector Designer guide](docs/SmartSectors.txt).
 
+### Mathematical grid and fast 3D inspection
+
+Press <kbd>Alt</kbd>+<kbd>G</kbd> for the live Mathematical Grid & Snapping
+tool. It offers 30 geometry presets and editable square/rectangular, rotated,
+oblique, triangular/hexagonal, and 3–360-division polar grids. Set independent
+primary and secondary spacing, rotation, inter-axis angle, origin/pivot, major
+interval, and nearest/lower/upper/toward/away rounding. The info-bar Grid menu
+also groups 75 useful spacings—Doom architecture, large-map, decimal,
+Fibonacci, and powers of three—while accepting any whole spacing from 1 to
+65,536.
+
+Snapping uses the same intersections for ordinary drawing, object insertion,
+paste/move/quantize, and Smart Sector gestures. Map-local mathematical state
+is restored with the project; Smart Room follows rotated/oblique construction
+axes, and UDMF large positive coordinates retain correct bounds and status-bar
+precision.
+
+Use <kbd>Shift</kbd>+<kbd>Tab</kbd> to inspect every linedef immediately in 3D.
+The editor temporarily selects every wall, then <kbd>Tab</kbd> or
+<kbd>Shift</kbd>+<kbd>Tab</kbd> returns to the exact prior mode, selection,
+and 2D rendering overlay. <kbd>Shift</kbd>+<kbd>F8</kbd> cycles forward through
+all seven 2D render overlays and 3D; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+
+<kbd>F8</kbd> cycles backward. F8 remains the direct rendering menu.
+
+Read the [Mathematical grid and inspection guide](docs/MathematicalGrid.txt).
+
 ### Doors
 
 Smart Door reviews all selected sectors as a batch, resolves compatible
@@ -137,6 +189,35 @@ controls clear explicit overrides and immediately show the re-inferred
 textures. The same semantics are available directly from the Extrude pipeline.
 
 Read the [Smart Door guide](docs/SmartDoors.txt).
+
+### Surface textures
+
+**File → Import Surface Textures** accepts one or many PNG, JPEG, TGA, Doom
+patch, or raw-flat files. Modern images default to All Surfaces; review can
+target Walls or Floors/Ceilings instead. Portable names, loaded IWAD/resource
+ownership, exact WAD lumps or PK3 paths, active-map usage, and
+Rename/Override/Replace/Skip policy are resolved before any write.
+
+The complete batch is decoded, revalidated, backed up, and committed through
+one atomic package replacement. Imported dimensions remain intrinsic, so
+rendering, tiling, offsets, pegging, and alignment behave like loaded IWAD
+images. Surface catalogs refresh without changing map selection, dirty
+resident documents, canvas position, or Undo/Redo history.
+
+Read the [Surface texture import guide](docs/SurfaceTextures.txt).
+
+Select a wall, floor, or ceiling and use **Edit → Surface Texture Transform**,
+<kbd>Alt</kbd>+<kbd>T</kbd>, or the Transform/Xform panel buttons. The dialog
+is independently movable/resizable and always previews live. Hammer-style
+Both/Width/Height fitting uses actual surface geometry; every numeric field
+has holdable coarse/fine step buttons alongside Native/64/128/256 sizing,
+exact/relative edits, panning, mirroring, and plane rotation. Supported UDMF
+ports store part-specific transforms. Writable modern-port classic projects
+instead create safe fitted resources while retaining native integer offsets.
+Both renderers, map save/load, and one-step map Undo/Redo use the reviewed
+result.
+
+Read the [Surface transform guide](docs/SurfaceTransforms.txt).
 
 ## Projects, campaigns, and recovery
 
@@ -193,6 +274,10 @@ BiasedDoom compatibility contract detects upstream release or metadata drift.
 - [Installation and distribution](INSTALL.txt)
 - [Smart Sector Designer](docs/SmartSectors.txt)
 - [Smart Doors](docs/SmartDoors.txt)
+- [Surface texture import](docs/SurfaceTextures.txt)
+- [Surface texture transforms](docs/SurfaceTransforms.txt)
+- [Mathematical grids and fast 3D inspection](docs/MathematicalGrid.txt)
+- [Heresy Editor 2.4.0 changelog](changelogs/2.4.0.md)
 - [Projects and roadmap](docs/Projects.txt)
 - [BiasedDoom compatibility](docs/BiasedDoom.txt)
 - [Authors and contributors](AUTHORS.md)

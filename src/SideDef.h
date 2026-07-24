@@ -35,6 +35,28 @@ struct SideDef
 	StringID lower_tex;
 	int sector = 0;
 
+	// UDMF per-surface texture transforms.  The ordinary x/y offsets above
+	// remain the shared sidedef offsets; these values are additional and only
+	// serialized for UDMF maps.  A scale of 1 is native 1:1 mapping.
+	double offsetx_top = 0.0;
+	double offsety_top = 0.0;
+	double scalex_top = 1.0;
+	double scaley_top = 1.0;
+
+	double offsetx_mid = 0.0;
+	double offsety_mid = 0.0;
+	double scalex_mid = 1.0;
+	double scaley_mid = 1.0;
+
+	double offsetx_bottom = 0.0;
+	double offsety_bottom = 0.0;
+	double scalex_bottom = 1.0;
+	double scaley_bottom = 1.0;
+
+	// Transient editor-only projection used while reviewing transforms that a
+	// binary map cannot serialize directly. Never written to a map.
+	bool preview_surface_transform = false;
+
 	// Unrecognized UDMF extension fields, retained verbatim across saves.
 	UdmfProperties udmf_properties;
 

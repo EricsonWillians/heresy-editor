@@ -104,7 +104,7 @@ private:
 	int scoreTextureMatch(const Objid &adj, const Objid &cur) const;
 	void partCalcExtent(const Objid &obj, Part part, int *z1, int *z2) const;
 
-	int calcReferenceH(const Objid& obj) const;
+	double calcReferenceH(const Objid& obj) const;
 
 	bool alignCheckAdjacent(const std::vector<Objid> & group,
 							int j, int k, bool do_right) const;
