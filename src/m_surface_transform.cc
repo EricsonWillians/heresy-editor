@@ -12,6 +12,7 @@
 #include "Sector.h"
 #include "SideDef.h"
 #include "Vertex.h"
+#include "WindowsSanitization.h"
 
 #include <algorithm>
 #include <cmath>
