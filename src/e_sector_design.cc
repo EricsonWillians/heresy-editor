@@ -10,6 +10,7 @@
 #include "SideDef.h"
 #include "Vertex.h"
 #include "WadData.h"
+#include "WindowsSanitization.h"
 #include "e_hover.h"
 #include "e_objects.h"
 #include "w_rawdef.h"
