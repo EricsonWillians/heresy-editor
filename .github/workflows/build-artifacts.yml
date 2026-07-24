@@ -56,12 +56,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes \
             clang cmake g++ libgl-dev libglu1-mesa-dev libjpeg-dev \
-            libpng-dev libxpm-dev libz-dev ninja-build python3
+            libpng-dev libxpm-dev libz-dev ninja-build python3 xauth xvfb
 
-      - name: Build and test
+      - name: Build
         run: >-
-          ./build.sh --clean --type Release --test --jobs 2
+          ./build.sh --clean --type Release --jobs 2
           --cc "${{ matrix.cc }}" --cxx "${{ matrix.cxx }}"
+
+      - name: Test under virtual display
+        run: >-
+          xvfb-run --auto-servernum
+          --server-args="-screen 0 1280x1024x24"
+          ctest --test-dir build --build-config Release
+          --parallel 2 --output-on-failure
 
       - name: Package portable build
         if: matrix.publish && github.event_name != 'pull_request'

@@ -1215,7 +1215,11 @@ void Instance::Beep(EUR_FORMAT_STRING(const char *fmt), ...)
 	Status_Set("%s", text.c_str());
 	gLog.printf("BEEP: %s\n", text.c_str());
 
-	fl_beep();
+	// FLTK tries to open a display when sounding the bell. Command dispatch is
+	// also exercised without a window by tests and other headless callers, so
+	// retain the status/error semantics without requiring a GUI connection.
+	if (main_win)
+		fl_beep();
 
 	EXEC_Errno = 1;
 }
