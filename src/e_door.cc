@@ -6,6 +6,7 @@
 
 #include "Document.h"
 #include "WadData.h"
+#include "WindowsSanitization.h"
 #include "w_rawdef.h"
 
 #include <algorithm>
