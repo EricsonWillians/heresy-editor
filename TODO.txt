@@ -4,25 +4,95 @@ Heresy Editor TODO / WISHLIST
 
 See also github.com/EricsonWillians/heresy-editor list of issues.
 
-BiasedDoom support
-------------------
+Completed BiasedDoom roadmap
+----------------------------
 
--  add a dedicated BiasedDoom port profile derived from the ZDoom profile
--  add definitions for BiasedDoom-specific actors and map extensions
--  verify the Test in Game workflow against packaged and local BiasedDoom builds
+-  DONE: add a dedicated BiasedDoom port profile derived from ZDoom
+-  DONE: audit BiasedDoom-specific actors and map extensions (the pinned
+   release adds no map-facing identifiers beyond its GZDoom base)
+-  DONE: verify Test in Game against all supported map formats and improve
+   automatic local/installed BiasedDoom and GZDoom discovery
+-  DONE: support preservation-safe PK3 projects and recursively project nested
+   flat, sprite, and texture resources into the editor
+-  DONE: replace New Project's split dialog/chooser sequence with a validated
+   three-page workflow and final creation summary
+-  DONE: add versioned campaign titles, episode grouping, and normal/secret
+   route relationships with WAD/PK3 persistence
+-  DONE: add a bounded, read-only PK3 inventory for declarative metadata,
+   runtime sources, conventional resource groups, and preserved content
+-  DONE: diagnose uppercase eight-character PK3 projected-name collisions and
+   flat/sprite/texture overrides across the loaded resource order
+-  DONE: diagnose unreachable campaign maps, potential route cycles, and
+   configured route targets that are missing from the project package
+-  DONE: support explicit additional campaign entry points with versioned
+   metadata, multi-entry reachability, WAD/PK3 persistence, and migration tests
+-  DONE: replace four fixed external-resource slots with a dynamic ordered
+   file/folder list and preserve command-line/project load order
+-  DONE: run deep engine discovery behind responsive progress with cancellation
+   while retaining recursive home and installation coverage
+-  DONE: explicitly preview and generate marker-owned runtime ZMAPINFO from
+   campaign metadata without overwriting user-authored declarations
+-  DONE: report managed ZMAPINFO freshness and add a stale-runtime Test in Game
+   preflight with cancel, unchanged-launch, and previewed-update choices
+-  DONE: make Test Settings extension-neutral, directly editable, rediscoverable,
+   and self-diagnosing while preserving the current selection on search failure
+-  DONE: add format-aware Smart Door sector finishing with semantic presets,
+   inferred textures, a review overlay, batch validation, and atomic undo
+-  DONE: make Smart Door targets unmistakable, explain door-face and track-wall
+   roles, and add a searchable loaded-texture chooser shared with Smart Sector
+-  DONE: repair and expose Face/Track Auto state, verify Smart Door through the
+   complete Extrude panel pipeline, and preserve Undo/Redo across project saves
+   and Test in Game
+-  DONE: automatically restore the last explicit project at startup while
+   retaining the preference-controlled loose-WAD fallback
+-  DONE: add the nonmodal, format-aware Smart Sector Designer with rooms,
+   polygons, freeform geometry, extrusion, inset/rings, routed corridors,
+   stairs, lifts, door-aware connections, live previews, and atomic undo
+-  DONE: enhance Smart Sector extrusion with chain-relative drag depth, exact
+   signed depth, selective sized/offset embedded doors, sector Special/Tag
+   authoring, and a shared top-menu Snap to Grid control
+-  DONE: add a searchable/manual sector Special chooser, grid-stepped corridor
+   wheel sizing, DPI-safe property rows, and empty-middle returning U corridors
+-  DONE: make extrusion follow the dragged pointer for either linedef winding,
+   lock bent-chain direction to the chosen seam, add true drag-release depth,
+   visible side/depth feedback, and direct designer/extrude shortcuts
+-  DONE: make extrusion Enter commits focus-safe and retry-safe, reject
+   duplicate whole-sector gestures before apply, harden preview and issue
+   navigation, and separate Snap to Grid onto Shift+G
+-  DONE: resolve and preview embedded-door Auto textures, allow safe extrusion
+   beside local door/lift triggers, and persist Snap to Grid across restarts
+-  DONE: make selection-free sector-interior extrusion infer the crossed wall,
+   harden Make Sectors with no prior selection, and surface blocking reasons
+-  DONE: preserve action-linedef extrusion seams, remove their false
+   consumption error, and add copyable/resizable Smart Sector diagnostics
+-  DONE: distinguish the empty repeat-mode gesture from a blocked plan, close
+   stale diagnostics after apply, and make idle Enter a neutral prompt
+-  DONE: make Smart Sector mode switching one-to-one and atomic, add direct
+   target selection and advertised drag gestures to every applicable mode,
+   preserve corridor/stair endpoint ownership, and prevent repeat commits
+-  DONE: resolve post-split corridor portals without clearing adjacent wall
+   sidedefs, add searchable Floor/Ceiling/Wall property selectors with live
+   Auto previews, and make the Smart Sector sidebar drag-resizable
+-  DONE: clarify Smart Lift selection, travel, triggers, tagging, and alcove
+   workflows; add grid-stepped Inset / Ring wheel sizing
+-  DONE: expand to 31 ordered polygon profiles through crosses, sawblades,
+   foils, rosettes, and 288-vertex tracery; add 16 architectural layouts,
+   quarter-grid wheel sizing, host-preserving inserts, and atomic hall
+   generation in clear void across seven styles
+-  DONE: lock Architecture hosts from the first unsnapped press so elements
+   work in ordinary, holed, and concave sectors; keep invalid intent visible
+   with conflict supports, exact point/line markers, and precise navigation
 
-IOAN NOTE: this is only kept here for archival.
+See docs/Projects.txt and docs/BiasedDoom.txt for the maintained roadmap.
 
 
 Slightly Possible
 -----------------
 
-+  support resources in PK3 files
-
 -  linedef mode: '[' and ']' to adjust length of current line
 
--  Tools/Make Door
--  Tools/Make Lift
+-  optional standalone one-shot Make Lift shortcut (the nonmodal Smart Sector
+   Lift workflow is complete)
 
 -  a way to clear the Browser recent lists
 

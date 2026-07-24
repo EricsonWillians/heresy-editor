@@ -35,6 +35,7 @@
 
 class Img_c;
 enum class Side;
+struct DesignPreviewPath;
 struct v2double_t;
 
 #ifdef NO_OPENGL
@@ -98,6 +99,7 @@ public:
 	void CheckGridSnap();
 
 	void DrawSelection(selection_c *list);
+	void DrawDesignAssistPreview();
 	void DrawSectorSelection(selection_c *list, double dx, double dy);
 	void DrawHighlight(ObjType objtype, int objnum,
 	                   bool skip_lines = false, double dx=0, double dy=0);
@@ -136,6 +138,7 @@ private:
 	void DrawMapLine(double map_x1, double map_y1, double map_x2, double map_y2);
 	void DrawMapVector(double map_x1, double map_y1, double map_x2, double map_y2);
 	void DrawMapArrow(double map_x1, double map_y1, int r, int angle);
+	void DrawFilledPreviewPath(const DesignPreviewPath &path);
 
 	void DrawKnobbyLine(double map_x1, double map_y1, double map_x2, double map_y2, bool reverse = false);
 	void DrawSplitLine(double map_x1, double map_y1, double map_x2, double map_y2);

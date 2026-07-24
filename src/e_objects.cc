@@ -405,6 +405,84 @@ void ObjectsModule::insertLinedefAutosplit(EditOperation &op, int v1, int v2, bo
 	insertLinedef(op, cur_v, v2, no_fill);
 }
 
+std::vector<int> ObjectsModule::insertSectorPolygon(EditOperation &op,
+		const std::vector<v2double_t> &points, MapFormat format) const
+{
+	std::vector<int> result;
+	if (points.size() < 3)
+		return result;
+
+	const int firstSector = doc.numSectors();
+	std::vector<int> vertices;
+	vertices.reserve(points.size());
+
+	for (const v2double_t &rawPoint : points)
+	{
+		const v2double_t point = {
+			MakeValidCoordF(format, rawPoint.x),
+			MakeValidCoordF(format, rawPoint.y)
+		};
+		int vertex = doc.vertmod.findExact(point.x, point.y);
+		if (vertex < 0)
+		{
+			vertex = op.addNew(ObjType::vertices);
+			doc.vertices[vertex]->SetRawXY(format, point);
+		}
+		vertices.push_back(vertex);
+
+		// A generated outline is allowed to begin or end in the middle of an
+		// existing wall. Split every such wall now so the later collinear
+		// segment can be reused instead of duplicated.
+		const int existingLines = doc.numLinedefs();
+		for (int line = 0; line < existingLines; ++line)
+		{
+			const LineDef &linedef = *doc.linedefs[line];
+			if (linedef.TouchesVertex(vertex))
+				continue;
+			const Vertex &start = doc.getStart(linedef);
+			const Vertex &end = doc.getEnd(linedef);
+			if (PointOnLineSide(point.x, point.y, start.x(), start.y(),
+							   end.x(), end.y()) != Side::neither)
+				continue;
+			const double lowX = std::min(start.x(), end.x()) - GEOM_EPSILON;
+			const double highX = std::max(start.x(), end.x()) + GEOM_EPSILON;
+			const double lowY = std::min(start.y(), end.y()) - GEOM_EPSILON;
+			const double highY = std::max(start.y(), end.y()) + GEOM_EPSILON;
+			if (point.x >= lowX && point.x <= highX &&
+				point.y >= lowY && point.y <= highY)
+			{
+				doc.linemod.splitLinedefAtVertex(op, line, vertex);
+			}
+		}
+	}
+
+	// If the outline shares an existing edge, process that edge first. The
+	// final edge will then be newly inserted and trigger closed-loop filling.
+	size_t firstEdge = 0;
+	for (size_t index = 0; index < vertices.size(); ++index)
+	{
+		if (doc.linemod.linedefAlreadyExists(vertices[index],
+					vertices[(index + 1) % vertices.size()]))
+		{
+			firstEdge = index;
+			break;
+		}
+	}
+
+	for (size_t offset = 0; offset < vertices.size(); ++offset)
+	{
+		size_t index = (firstEdge + offset) % vertices.size();
+		int start = vertices[index];
+		int end = vertices[(index + 1) % vertices.size()];
+		if (start != end)
+			insertLinedefAutosplit(op, start, end, false);
+	}
+
+	for (int sector = firstSector; sector < doc.numSectors(); ++sector)
+		result.push_back(sector);
+	return result;
+}
+
 
 void ObjectsModule::insertVertex(bool force_continue, bool no_fill) const
 {

@@ -30,6 +30,7 @@
 
 #include "im_color.h"
 #include "m_strings.h"
+#include <array>
 #include <initializer_list>
 #include <map>
 #include <optional>
@@ -128,6 +129,50 @@ struct linetype_t
 	SpecialArg args[5];
 	std::variant<SimpleInfo, Floor3DInfo, SlopeInfo, SlopeCopyInfo> specialHandling =
 			SimpleInfo::none;
+};
+
+enum class ActivationPolicy
+{
+	encoded,
+	useOnce,
+	useRepeat
+};
+
+// Compatibility name retained for the Stage 23 Smart Door API.
+using DoorActivation = ActivationPolicy;
+
+// Semantic, ordered presets used by Smart Door. The active game/port
+// definitions own the engine-specific special and arguments.
+struct DoorPreset
+{
+	SString id;
+	SString label;
+	int special = 0;
+	ActivationPolicy activation = ActivationPolicy::encoded;
+	std::array<int, 5> args = {};
+};
+
+enum class SectorActionKind
+{
+	lift
+};
+
+struct SectorActionArgument
+{
+	int value = 0;
+	bool targetTag = false;
+};
+
+// Semantic actions which target sectors through a tag. Keeping these
+// separate from line descriptions makes design tools portable across games.
+struct SectorActionPreset
+{
+	SectorActionKind kind = SectorActionKind::lift;
+	SString id;
+	SString label;
+	int special = 0;
+	ActivationPolicy activation = ActivationPolicy::encoded;
+	std::array<SectorActionArgument, 5> args = {};
 };
 
 
@@ -449,6 +494,8 @@ struct ConfigData
 	std::map<SString, char> flat_categories;
 	std::map<char, linegroup_t> line_groups;
 	std::map<int, linetype_t> line_types;
+	std::vector<DoorPreset> door_presets;
+	std::vector<SectorActionPreset> sector_action_presets;
 	std::map<int, sectortype_t> sector_types;
 	std::map<SString, char> texture_categories;
 	std::map<char, texturegroup_t> texture_groups;

@@ -91,6 +91,7 @@ public:
 	void CMD_CopyMap();
 	void CMD_CampaignNavigator();
 	void CMD_CreateNextMap();
+	void CMD_PackageMetadata();
 	void CMD_CopyProperties();
 	void CMD_DefaultProps();
 	void CMD_Delete();
@@ -104,6 +105,7 @@ public:
 	void CMD_FindNext();
 	void CMD_FlipMap();
 	void CMD_FreshMap();
+	void CMD_GenerateRuntimeMapInfo();
 	void CMD_GivenFile();
 	void CMD_GoToCamera();
 	void CMD_GRID_Bump();
@@ -153,6 +155,8 @@ public:
 	void CMD_SEC_Ceil();
 	void CMD_SEC_Floor();
 	void CMD_SEC_Light();
+	void CMD_SEC_MakeDoor();
+	void CMD_SEC_SmartSector();
 	void CMD_SEC_SelectGroup();
 	void CMD_SEC_SwapFlats();
 	void CMD_Select();
@@ -276,7 +280,7 @@ public:
 
 	// M_FILES
 	fs::path M_PickDefaultIWAD() const;
-	bool M_TryOpenMostRecent();
+	bool M_TryOpenMostRecent(bool allowLooseFile = true);
 
 	// M_GAME
 	bool is_sky(const SString &flat) const;
@@ -309,7 +313,9 @@ public:
 	void GB_PrintMsg(EUR_FORMAT_STRING(const char *str), ...) EUR_PRINTF(2, 3);
 
 	// M_TESTMAP
-	bool M_PortSetupDialog(const SString& port, const SString& game, const std::optional<SString> &commandLine);
+	bool M_PortSetupDialog(const SString& port, const SString& game,
+			const std::optional<SString> &commandLine,
+			bool autoDiscover = true);
 
 	// M_UDMF
 	void UDMF_LoadLevel(int loading_level, const Wad_file *load_wad, Document &doc, LoadingData &loading, BadCount &bad) const;
@@ -319,6 +325,8 @@ public:
 	// MAIN
 	fs::path Main_FileOpFolder() const;
 	void Main_LoadResources(const LoadingData &loading) noexcept(false);
+	void Main_LoadResources(const LoadingData &loading,
+			std::shared_ptr<Wad_file> editWad) noexcept(false);
 	void UpdateViewOnResources();
 
 	// R_RENDER
@@ -366,7 +374,10 @@ public:
 	void gridUpdateSnap() override
 	{
 		if (main_win)
+		{
 			main_win->info_bar->UpdateSnap();
+			main_win->UpdateSnapToGrid(grid.snaps());
+		}
 	}
 	
 	void gridAdjustPos() override
@@ -402,6 +413,8 @@ public:
 	bool Project_SwitchMap(const std::shared_ptr<Wad_file> &package,
 			const SString &mapName);
 	bool Project_CreateMap(const SString &mapName);
+	bool Project_GenerateRuntimeMapInfo();
+	bool Project_CheckRuntimeMapInfoBeforeTest();
 	std::vector<SString> Project_DirtyMapNames() const;
 	void Project_AutosaveTick() noexcept;
 	bool Project_WriteAutosave(bool notify = false) noexcept;
@@ -496,7 +509,6 @@ private:
 	bool M_ExportMap(bool inhibit_node_build);
 	void Navigate2D();
 	void Project_ApplyChanges(const UI_ProjectSetup::Result &result) noexcept(false);
-	std::optional<fs::path> Project_AskFile(ProjectPackage package) const;
 	void SaveLevel(LoadingData &loading, const SString &level, Wad_file &wad, bool inhibit_node_build);
 	void StoreDocumentInWad(LoadingData &loading, const SString &mapName,
 			Wad_file &wad, const Document &document, bool inhibitNodeBuild);

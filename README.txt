@@ -30,15 +30,145 @@ FEATURES
 -  Undo/Redo (multiple levels)
 -  3D view with good lighting emulation
 -  Editable panels for things, linedefs, sectors (etc)
+-  Review-first Smart Door authoring for existing sector geometry
+-  Nonmodal Smart Sector Designer for rooms, polygons, freeform sectors,
+   extrusions, rings, corridors, stairs, lifts, architecture, and door-aware
+   connections
 -  Browser for textures, flats, things (etc)
 -  Key binding system
 -  Built-in nodes builder
 -  Test-map workflow compatible with BiasedDoom
 -  Campaign Navigator with safe multi-map working state
 -  Full-IWAD, single-map, and custom ordered campaign layouts
+-  Per-map titles, episode groups, entry points, and normal/secret routes
+-  Previewed, conflict-safe runtime ZMAPINFO generation
+-  Read-only campaign reachability, cycle, and missing-target diagnostics
 -  Atomic Save Project / Save All for WAD and PK3 projects
+-  Recursive PK3 flat, sprite, and texture resource discovery
+-  Read-only PK3 declaration, runtime-source, and resource inventory
 -  Per-map autosave with validated, rotating startup recovery
 -  Portable project sessions with recent-project and IWAD restoration
+
+
+SMART DOORS
+
+In 2D Sector mode, select one or more already-drawn door sectors and choose
+Edit / Make Smart Door or Make smart door from the Sector Operations menu.
+When there is no selection, one highlighted sector is accepted.
+
+The review dialog chooses behavior from presets declared by the active game
+and map format.  Its TARGET box names the exact sector numbers that will become
+doors.  Those sectors use a heavy orange outline and orange hatch on the map;
+activating portal lines are orange and one-sided track walls are green.
+
+Door face texture means the surface visible on the moving door slab.  Track
+wall texture means the narrow side walls inside the doorway.  Use Browse or
+click a preview tile to search and choose from loaded wall textures, use Auto
+to return to deterministic inference, or type a custom resource name.  The
+resolved choice and its purpose are shown beneath each control.  Unknown custom
+texture names warn but remain usable.
+
+Each sector needs at least two two-sided portal boundaries.  Selected doors
+cannot touch each other.  Smart Door reports malformed geometry and invalid
+heights as blocking errors, while unusual shapes, clearance, floor mismatches,
+missing tracks, shared sidedefs, and replaced specials appear as warnings.
+Every sector in a batch is revalidated before the map changes.  A successful
+batch is one Undo operation; Cancel and window close change neither the map nor
+the selection.
+
+Smart Door finishes existing geometry.  It does not split or resize walls,
+create a door sector, assign remote tags or switches, or build animated,
+sliding, or polyobject doors.
+
+
+SMART SECTOR DESIGNER
+
+In 2D Sector mode, press Ctrl/Cmd+Shift+S, choose Edit / Smart Sector
+Designer, or use its Sector Operations entry.  Press X in Sector mode to jump
+straight into Extrude.  The right-side panel stays open while you create
+rectangles, ordered polygon profiles, concave freeform rooms, wall extrusions,
+insets/rings, routed corridors, stair runs, lifts, and architectural layouts.
+Polygon profiles progress from triangle and square through circles, stars,
+crosses, gears, sawblades, foils, rosettes, and 288-vertex grand cathedral
+tracery.  Architecture offers 16 layouts ranging from a single pillar through
+cloisters, hypostyle halls, transepts, apses, sanctuaries, and fortified keeps
+with Functional, Classical, Romanesque, Gothic, Industrial, Art Deco, or
+Infernal support sections.  A footprint inside a room preserves that host; a
+footprint in clear void creates its walkable hall and supports atomically.  It
+locks an existing host from the first press, so holed and concave rooms work
+even when the footprint center is void.  Invalid layouts remain visible in
+red with exact point/line markers instead of disappearing.  It can also finish
+selected sector paths as stairs or platforms.
+
+View / Snap to Grid controls both ordinary sector drawing and every Smart
+Sector anchor or drag.  With snapping off, geometry is still quantized for
+the active Doom, Hexen, or UDMF format before it is previewed.  The last
+explicit Snap to Grid choice is restored on the next launch.  Blue outlines
+show proposed geometry; distinct
+opening, door, track, stair, lift, architecture, cut, warning, and conflict
+roles make the result readable before applying.  Auto properties inherit
+context, while the
+panel offers absolute/relative heights and light, explicit textures, and
+optional sector Special and Tag values.
+Floor, ceiling, and wall resources have searchable loaded-resource selectors,
+live preview tiles, and contextual Auto controls; Inset preserves separate
+Ring and Inner choices.  Special can be entered manually or chosen from the
+active game's searchable, described list.  Drag the panel's left edge to
+resize the designer, or double-click the grip to restore its default width.
+
+Left-click places anchors; Room, Polygon, Architecture, Corridor, Stairs, and
+wall-alcove Lift also support direct press-drag-release.  Inset and Lift accept
+canvas sector targets, while Shift/Ctrl-click builds a batch and selected
+Stairs use plain clicks for explicit path endpoints.  Right-click removes the
+last anchor, Enter or Space commits, Tab cycles corridor routes, f or F flips
+an extrusion or corridor, Shift+G toggles Snap to Grid, and double Escape
+clears then exits.  The canvas mouse wheel changes Corridor width or
+Inset / Ring thickness by the current grid step; Inset preserves its explicit
+inward or outward direction.  In Architecture it changes Structure size by a
+quarter grid step and respects the selected style's safe minimum.  Other modes
+retain normal zoom.  Returning U routes preserve their empty middle.  Extrude
+supports a real press-drag-release gesture without
+preselection: grab a wall directly, or begin inside a sector
+and drag through the wall that should be extruded.  The filled preview,
+normal-depth ruler, numeric depth, and visible Opposite side control show
+exactly where it will go.  The tool remains active after each commit, selects
+the resulting sectors, and creates exactly one Undo record per gesture.
+Existing actions, recognized doors and lifts, ambiguous overlaps, slivers,
+and invalid topology block a commit unless protected replacement is explicitly
+requested.
+
+Open, Wall, and Door connections are semantic choices.  Door connections use
+the Smart Door presets and texture inference in the same atomic edit.
+Extrusion follows the pointer side of the seam where the drag began, even for
+reversed linedefs and bent chains, or can use an exact signed depth.  Pressing
+F or selecting Opposite side deliberately inverts that result.  A door can use
+the longest boundary automatically or use one
+or more chosen chain segments, with independent width, offset, and depth
+controls; choose Smart Door for the Extrude Base seam, and use the green Face
+and Track Auto toggles to clear overrides and re-infer both textures.  Auto
+uses source-wall textures when available, shows the resolved names and tiles
+in the live review, and applies exactly that previewed result.  Auto width
+reserves safe track walls at chain bends.  Lift mode explains both workflows
+in-panel: click an existing platform (Shift/Ctrl-click for a batch), or drag
+outward from a wall to build an alcove.  Its live plan shows the inferred
+lowest adjacent-floor stop, travel, and trigger count.  The chosen
+configuration-declared behavior and selected usable portal boundaries receive
+one fresh tag per connected platform in the same atomic operation.
+Make Sectors revalidates the gesture and selects the result even when there was
+no previous selection; blocked previews report their error count and exact
+reason without partially editing the map.  Copy Review copies every diagnostic
+without truncation, while Expand Review opens a resizable, wrapped, selectable
+view; a blocked Enter attempt opens that view automatically.  Actions on the
+chosen extrusion seam are preserved for Open/Wall connections instead of being
+misclassified as consumed geometry.  Successful repeat-mode commits close stale
+diagnostics and return to a neutral WAITING FOR GESTURE state; an extra Enter
+while idle is guidance, not an error or edit.
+
+Saving and Test in Game preserve the active map's Undo and Redo history.  When
+the engine is launched, keyboard focus returns to the map canvas so Ctrl/Cmd+Z
+continues to undo the tested edit.  An accidental Undo can be recovered through
+Edit / Redo, Ctrl/Cmd+Shift+Z, or Ctrl/Cmd+Y until a different edit replaces
+the redo future.
 
 
 SUPPORTED GAMES
@@ -65,22 +195,40 @@ definitions and supports Doom, Hexen and UDMF map formats, all five compatible
 games, ZDoom action specials, and dynamic lights without duplicating the shared
 definitions.
 
-Tools / Test in Game automatically finds the BiasedDoom executable when a
-remembered path is unavailable.  The search checks `BIASEDDOOM_EXE`, the
-process `PATH`, portable editor locations, common CMake build layouts, and
-platform installation locations in that order.  A typical local build is:
+Tools / Test in Game automatically finds BiasedDoom or GZDoom when a remembered
+path is unavailable.  The search checks `BIASEDDOOM_EXE` and `GZDOOM_EXE`, the
+process `PATH`, portable editor locations, common CMake build layouts, and then
+recursively scans the user's home and platform installation roots.  A typical
+local build is:
 
    ~/workspace/BiasedDoom/build/biaseddoom
 
-Windows builds use `biaseddoom.exe`; macOS application bundles and Linux
-AppImages are also recognized.  If no candidate is valid, the existing engine
-picker remains available and remembers the selected path.
+Windows `.exe` builds, macOS application bundles, Linux extensionless binaries,
+and AppImages are recognized.  Deep searches run behind a responsive progress
+dialog that reports the current location and can be cancelled.  The engine
+picker does not require a filename extension.  Test Settings also provides an
+editable path, Browse and Auto Detect controls, and inline validation for
+missing, directory, and non-executable selections.  Cancelling or completing a
+rediscovery without a match keeps the current selection.
+
+For supported explicit projects, Test in Game also checks the freshness of an
+existing marker-owned runtime ZMAPINFO.  Current output launches silently.  If
+campaign metadata has changed, preflight can cancel, launch with the existing
+declaration, or open the exact preview and regenerate before launch.  A missing
+declaration remains optional, and user-authored MAPINFO is never compared or
+rewritten.
 
 Heresy Editor will pass the selected IWAD, resource WADs or PK3s, edited project
-package, and map name to BiasedDoom.  BiasedDoom-specific actors and features
-which are not inherited from ZDoom may still require dedicated editor
-definitions; expanding those definitions is part of the fork's ongoing support
-work.
+package, and map name to BiasedDoom.  PK3 resources under `flats/`, `sprites/`,
+and `textures/` are projected recursively into the corresponding editor
+browser namespaces while their original archive paths and records remain
+untouched.  File/PK3 Metadata inventories MAPINFO-family and common resource
+declarations, lists runtime sources without interpreting them, and summarizes
+conventional asset groups with bounded, read-only text previews.  It also
+reports uppercase eight-character projected-name collisions and overrides in
+the loaded IWAD/resource/project order without renaming or reordering anything.
+The pinned BiasedDoom release adds no map-facing actors, specials, or namespace
+beyond its audited GZDoom base.
 
 
 REQUIREMENTS
@@ -113,9 +261,14 @@ directory names remain compatibility identifiers so existing settings continue
 to work.
 
 You can open a WAD or PK3 project using File/Open Map, or create one with
-File/New Project.  New Project and Manage Project support a full IWAD campaign,
-a single-map campaign, or a validated custom map order.  File/Create Next Map
-and Campaign Navigator follow that stored order.
+File/New Project.  Its three pages collect project settings, campaign/resources,
+and a final validated destination summary before anything is written.  New
+Project and Manage Project support a full IWAD campaign, a single-map campaign,
+or a validated custom map order.  Campaign Navigator can add display titles,
+episode groups, normal-route overrides, explicit endings, and secret routes to
+configured slots.  The first slot is always a campaign entry, and Map Details
+can mark additional episode or hub starts.  File/Create Next Map follows the
+resulting normal route.
 
 Explicit projects also use an adjacent `<package>.heresy` session file.  It
 restores the last active map and Campaign Navigator selection and records only
@@ -125,13 +278,35 @@ Keep it beside the WAD or PK3 when moving a project; Heresy Editor validates it,
 ignores damaged or incompatible sessions, and rewrites it atomically.
 
 File/Recent Projects is separate from File/Recent Files, so projects with the
-same filename in different folders remain distinct.  Automatic recent loading
-prefers the latest explicit project and restores its last map when available.
+same filename in different folders remain distinct.  With no project specified
+on the command line, startup automatically reopens the latest explicit project
+and restores its last map when available.  The preference named "open the most
+recent loose WAD when no project exists" controls only the legacy loose-PWAD
+fallback; it does not disable explicit-project restoration.
 
 File/Campaign Navigator shows configured and additional maps together with
-their current, dirty, or missing state.  It can open, create, duplicate,
-rename, and delete maps.  Navigation retains up to eight resident map
-documents (one active and seven cached), never evicting unsaved work.
+their title, episode, effective routes, and current, dirty, or missing state.
+It can edit campaign details or open, create, duplicate, rename, and delete
+maps.  It analyzes those same effective routes from every campaign entry,
+flags unreachable maps, potential cycles, and routes whose configured targets
+are still missing from the package, and gives selected-map remediation details.
+The analysis is read-only.  These campaign fields are editor metadata and do
+not affect gameplay until File/Generate Runtime MAPINFO is explicitly run.
+For BiasedDoom, GZDoom, and ZDoom profiles, that command previews a root
+ZMAPINFO translating entries, titles, routes, and endings, then writes only a
+marker-owned declaration.  It shows map-slot title fallbacks and refuses to
+overwrite any user-authored MAPINFO-family declaration.  Campaign Navigator
+labels managed output as current or out of date.  Navigation retains up
+to eight resident map documents (one active and seven cached), never evicting
+unsaved work.
+
+For PK3 or ZIP projects, File/PK3 Metadata shows recognized campaign and
+resource declarations, runtime-source entries, conventional resource groups,
+managed map/project entries, and other preserved files.  It never edits the
+archive; previews are verbatim and limited to 512 KiB.
+The complete dialog also enforces a 4 MiB aggregate preview budget and reports
+duplicate projected flat, sprite, and texture names plus loaded-source
+overrides, including nominal winners or ambiguous sprite combinations.
 
 File/Save Map saves only the active map.  File/Save Project saves every dirty
 resident map and the project settings in one validated, atomic package update.
@@ -211,8 +386,8 @@ HOME : zoom 2D viewport to show the whole map
 END  : move 2D viewport to camera location
 ' (quote) : move 3D camera to position of mouse pointer
 
-f : toggle free mode vs grid snapping
 g : toggle grid on / off
+G : toggle Snap to Grid (free vs snapped drawing)
 
 N : open next map in the current wad
 P : open previous map in the current wad

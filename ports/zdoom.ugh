@@ -293,6 +293,66 @@ special 106 d "Door_WaitClose"        :tag  speed  delay  wait  light_tag:tag
 special 249 d "Door_CloseWaitOpen"    :tag  speed  delay  light_tag:tag
 special  14 d "Door_Animated"         :tag  speed  delay  lock
 
+door_preset raise-normal "Normal door (closes)"      12 use_repeat 0 16 150 0 0
+door_preset open-normal  "Normal door (stays open)"  11 use_once   0 16   0 0 0
+door_preset raise-fast   "Fast door (closes)"        12 use_repeat 0 64 150 0 0
+door_preset open-fast    "Fast door (stays open)"    11 use_once   0 64   0 0 0
+
+if $BASE_GAME is Doom Doom2
+  door_preset locked-red    "Locked door (red key)"    13 use_repeat 0 16 150 129 0
+  door_preset locked-blue   "Locked door (blue key)"   13 use_repeat 0 16 150 130 0
+  door_preset locked-yellow "Locked door (yellow key)" 13 use_repeat 0 16 150 131 0
+endif
+
+if $BASE_GAME is Heretic
+  door_preset locked-green  "Locked door (green key)"  13 use_repeat 0 16 150 1 0
+  door_preset locked-blue   "Locked door (blue key)"   13 use_repeat 0 16 150 2 0
+  door_preset locked-yellow "Locked door (yellow key)" 13 use_repeat 0 16 150 3 0
+endif
+
+if $BASE_GAME is Hexen
+  door_preset locked-steel   "Locked door (steel key)"   13 use_repeat 0 16 150  1 0
+  door_preset locked-cave    "Locked door (cave key)"    13 use_repeat 0 16 150  2 0
+  door_preset locked-axe     "Locked door (axe key)"     13 use_repeat 0 16 150  3 0
+  door_preset locked-fire    "Locked door (fire key)"    13 use_repeat 0 16 150  4 0
+  door_preset locked-emerald "Locked door (emerald key)" 13 use_repeat 0 16 150  5 0
+  door_preset locked-dungeon "Locked door (dungeon key)" 13 use_repeat 0 16 150  6 0
+  door_preset locked-silver  "Locked door (silver key)"  13 use_repeat 0 16 150  7 0
+  door_preset locked-rusted  "Locked door (rusted key)"  13 use_repeat 0 16 150  8 0
+  door_preset locked-horn    "Locked door (horn key)"    13 use_repeat 0 16 150  9 0
+  door_preset locked-swamp   "Locked door (swamp key)"   13 use_repeat 0 16 150 10 0
+  door_preset locked-castle  "Locked door (castle key)"  13 use_repeat 0 16 150 11 0
+endif
+
+if $BASE_GAME is Strife
+  door_preset locked-base         "Locked door (base key)"         13 use_repeat 0 16 150  1 0
+  door_preset locked-governor     "Locked door (governor key)"     13 use_repeat 0 16 150  2 0
+  door_preset locked-passcard     "Locked door (passcard)"         13 use_repeat 0 16 150  3 0
+  door_preset locked-id-badge     "Locked door (ID badge)"         13 use_repeat 0 16 150  4 0
+  door_preset locked-prison       "Locked door (prison key)"       13 use_repeat 0 16 150  5 0
+  door_preset locked-hand         "Locked door (severed hand)"     13 use_repeat 0 16 150  6 0
+  door_preset locked-power-1      "Locked door (power key 1)"      13 use_repeat 0 16 150  7 0
+  door_preset locked-power-2      "Locked door (power key 2)"      13 use_repeat 0 16 150  8 0
+  door_preset locked-power-3      "Locked door (power key 3)"      13 use_repeat 0 16 150  9 0
+  door_preset locked-gold         "Locked door (gold key)"         13 use_repeat 0 16 150 10 0
+  door_preset locked-id-card      "Locked door (ID card)"          13 use_repeat 0 16 150 11 0
+  door_preset locked-silver       "Locked door (silver key)"       13 use_repeat 0 16 150 12 0
+  door_preset locked-oracle       "Locked door (oracle key)"       13 use_repeat 0 16 150 13 0
+  door_preset locked-military     "Locked door (military ID)"      13 use_repeat 0 16 150 14 0
+  door_preset locked-order        "Locked door (order key)"        13 use_repeat 0 16 150 15 0
+  door_preset locked-warehouse    "Locked door (warehouse key)"    13 use_repeat 0 16 150 16 0
+  door_preset locked-brass        "Locked door (brass key)"        13 use_repeat 0 16 150 17 0
+  door_preset locked-red-crystal  "Locked door (red crystal key)"  13 use_repeat 0 16 150 18 0
+  door_preset locked-blue-crystal "Locked door (blue crystal key)" 13 use_repeat 0 16 150 19 0
+  door_preset locked-chapel       "Locked door (chapel key)"       13 use_repeat 0 16 150 20 0
+  door_preset locked-catacomb     "Locked door (catacomb key)"     13 use_repeat 0 16 150 21 0
+  door_preset locked-security     "Locked door (security key)"     13 use_repeat 0 16 150 22 0
+  door_preset locked-core         "Locked door (core key)"         13 use_repeat 0 16 150 23 0
+  door_preset locked-mauler       "Locked door (mauler key)"       13 use_repeat 0 16 150 24 0
+  door_preset locked-factory      "Locked door (factory key)"      13 use_repeat 0 16 150 25 0
+  door_preset locked-mine         "Locked door (mine key)"         13 use_repeat 0 16 150 26 0
+endif
+
 # Lifts
 special  62 g "Plat_DownWaitUpStay"          :tag  speed  delay
 special 206 g "Plat_DownWaitUpStayLip"       :tag  speed  delay  lip  sound_type
@@ -306,6 +366,11 @@ special  60 g "Plat_PerpetualRaise"          :tag  speed  delay
 special 207 g "Plat_PerpetualRaiseLip"       :tag  speed  delay  lip
 special 231 g "Plat_ToggleCeiling"           :tag
 special  61 g "Plat_Stop"                    :tag
+
+sector_action_preset lift lower-once        "Normal lift (once)"   62 use_once   @tag 16 105 0 0
+sector_action_preset lift lower-repeat      "Normal lift (repeat)" 62 use_repeat @tag 16 105 0 0
+sector_action_preset lift lower-fast-once   "Fast lift (once)"     62 use_once   @tag 32 105 0 0
+sector_action_preset lift lower-fast-repeat "Fast lift (repeat)"   62 use_repeat @tag 32 105 0 0
 
 # Elevators & Pillars
 special  95 e "Elevator_Lower"             :tag  speed  dist

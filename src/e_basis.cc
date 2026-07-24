@@ -496,7 +496,9 @@ bool Basis::undo()
 	UndoGroup grp = std::move(mUndoHistory.back());
 	mUndoHistory.pop_back();
 
-	inst.Status_Set("UNDO: %s", grp.getMessage().c_str());
+	inst.Status_Set(
+			"UNDO: %s  |  Recover with Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)",
+			grp.getMessage().c_str());
 	if(inst.main_win)
 	{
 		Fl_Sys_Menu_Bar *bar = inst.main_win->menu_bar;

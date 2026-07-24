@@ -915,7 +915,7 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 		  o->labelfont(FL_BOLD);
 		  o->align(Fl_Align(FL_ALIGN_LEFT|FL_ALIGN_INSIDE));
 		}
-		{ gen_autoload = new Fl_Check_Button(50, 280, 380, 25, " automatically open the most recent pwad");
+		{ gen_autoload = new Fl_Check_Button(50, 280, 380, 25, " open the most recent loose WAD when no project exists");
 		}
 		{ gen_swapsides = new Fl_Check_Button(50, 310, 380, 25, " swap upper and lower sidedefs in Linedef panel");
 		}

@@ -86,6 +86,19 @@ TEST_F(ZipArchiveTest, DeflatedAndStoredEntriesRoundTrip)
 	ASSERT_TRUE(reopened);
 	EXPECT_EQ(reopened->readEntry("TEXTURES/WALL.PNG"), compressible);
 	EXPECT_EQ(reopened->readEntry("readme.txt"), tiny);
+	const std::vector<ZipEntryInfo> entries = reopened->entryInfos();
+	ASSERT_EQ(entries.size(), 2u);
+	auto textureInfo = std::find_if(entries.begin(), entries.end(),
+			[](const ZipEntryInfo &entry)
+			{
+				return entry.name == "textures/wall.png";
+			});
+	ASSERT_NE(textureInfo, entries.end());
+	EXPECT_EQ(textureInfo->uncompressedSize, compressible.size());
+	EXPECT_LT(textureInfo->compressedSize, textureInfo->uncompressedSize);
+	EXPECT_EQ(textureInfo->compressionMethod, 8);
+	EXPECT_FALSE(textureInfo->encrypted);
+	EXPECT_FALSE(textureInfo->directory);
 }
 
 TEST_F(ZipArchiveTest, TargetedUpdatePreservesUnknownLocalRecordExactly)

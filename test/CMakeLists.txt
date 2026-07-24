@@ -66,6 +66,8 @@ add_executable(
     e_checks_test.cpp
     e_commands_test.cpp
     e_cutpaste_test.cpp
+    e_door_test.cpp
+    e_sector_design_test.cpp
     e_linedef_test.cpp
     e_objects_test.cpp
     FixedPointTest.cpp
@@ -75,17 +77,21 @@ add_executable(
     lib_tga_test.cpp
     lib_util_test.cpp
     m_bitvec_test.cpp
+    m_campaign_graph_test.cpp
     m_document_cache_test.cpp
     m_events_test.cpp
     m_files_test.cpp
     m_game_test.cpp
     m_iwad_test.cpp
     m_keys_test.cpp
+    m_mapinfo_test.cpp
     m_parse_test.cpp
     m_package_test.cpp
     m_project_test.cpp
+    m_project_resources_test.cpp
     m_project_save_test.cpp
     m_recovery_test.cpp
+    m_resource_diagnostics_test.cpp
     m_session_test.cpp
     m_select_test.cpp
     m_streams_test.cpp

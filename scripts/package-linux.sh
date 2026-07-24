@@ -66,6 +66,7 @@ install -m 0644 -- \
     "${SOURCE_DIRECTORY}/AUTHORS.md" \
     "${SOURCE_DIRECTORY}/GPL.txt" \
     "${SOURCE_DIRECTORY}/INSTALL.txt" \
+    "${SOURCE_DIRECTORY}/README.md" \
     "${SOURCE_DIRECTORY}/README.txt" \
     "$PACKAGE_ROOT/"
 

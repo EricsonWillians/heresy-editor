@@ -27,12 +27,34 @@ file before it atomically replaces the destination.
 other maps and unrelated lumps.
 `Document` owns the editable geometry and serializes the Doom, Hexen, or UDMF
 map data.  `LoadingData` carries the selected game, port, IWAD, map format,
-resources, and current map.  These settings are persisted in the legacy-named
-`__EUREKA` lump for WADs.  PK3 projects store the same payload at
+resources, current map, and the versioned editor campaign graph.  Campaign
+metadata version 2 retains the ordered slot list and adds per-map display
+titles, episode labels, normal-route overrides, and optional secret routes.
+Version 3 adds explicit additional campaign entry points; the first configured
+slot remains an implicit entry.  An absent normal override follows the ordered
+list, so version 1 and 2 projects keep their exact navigation behavior.
+Campaign Navigator analyzes that effective normal-route graph together with
+explicit secret routes from every entry.  It reports unreachable slots,
+potential cycles, and routes to configured maps that are not yet present in the
+package.  These settings are
+persisted in the legacy-named `__EUREKA` lump for WADs.  PK3 projects store the
+same payload at
 `heresy/project.txt` and project it back to `__EUREKA` in memory.  The lump name
 is retained for compatibility with existing WADs and older editor versions.
+Flat, sprite, and texture files at any depth below their conventional PK3
+namespace directory are projected into the resource view by basename; this
+view is read-only and never flattens or rewrites their archive paths.
+The separate File -> PK3 Metadata inventory reads central-directory sizes and
+only decompresses recognized text candidates within a 512 KiB per-entry and
+4 MiB aggregate safety bound.  The same view reports projected-name collisions
+inside the package and flat, sprite, or texture overrides across the loaded
+IWAD, resources, and project.  It has no archive mutation API and diagnostics
+never reorder sources or rewrite an archive path.
 
-File -> New Project creates either backend, loads a selected IWAD and game
+File -> New Project guides package/game settings, campaign/resources, and a
+final destination review across three pages.  The review normalizes a missing
+package extension and validates the complete selection before anything is
+written.  The established backend then loads the selected IWAD and game
 configuration, creates a valid starter room, and saves the first canonical IWAD
 map slot.  File -> Fresh Map can add an arbitrary map, while File -> Create Next
 Map follows the configured campaign order.  Direct WAD and PK3 opening remains
@@ -70,20 +92,38 @@ Creating and reopening a WAD or PK3 project
 --------------------------------------------
 
 1. Choose File -> New Project.
-2. Select WAD package or PK3 package, then select the game IWAD, source-port
-   compatibility profile, map format, and optional resource files.  Choose a
-   full-IWAD campaign, a single-map campaign, or enter a custom ordered list of
-   1-8 character map slots.
-3. Pick a new `.wad` or `.pk3` destination.  Heresy Editor refuses to overwrite
-   an existing destination or a known IWAD.
-4. The editor creates and opens the first canonical map (for Doom II this is
+2. On Project settings, select WAD or PK3, the game IWAD, source-port
+   compatibility profile, and map format.
+3. On Campaign and resources, choose a full-IWAD campaign, a single-map
+   campaign, or enter a custom ordered list of 1-8 character map slots.  Add
+   optional resource files or folders.
+4. On Review and create, choose or type a new `.wad` or `.pk3` destination and
+   inspect the complete summary.  Heresy Editor appends a missing extension and
+   refuses a mismatched extension, missing folder, existing destination, or
+   known IWAD.  Create remains disabled until the review is valid.
+5. The editor creates and opens the first canonical map (for Doom II this is
    `MAP01`).  In a PK3 it is stored as `maps/MAP01.wad`.
-5. Edit normally and choose File -> Create Next Map.  The current map remains
-   resident while the next slot is created (for Doom II this is `MAP02`).
-6. Save the current map with File -> Save Map, or atomically save every dirty
+6. Open File -> Campaign Navigator and use Map Details to assign an optional
+   display title and episode group, follow or override the ordered normal exit,
+   mark an ending, select an optional secret-exit target, and mark additional
+   episode or hub entry points.  The first slot is always an entry.  These
+   fields remain editor project metadata until runtime generation is explicitly
+   confirmed.
+   Review the Diagnostics column and selected-map explanation for unreachable
+   slots, potential cycles, and route targets that still need to be created.
+7. For a BiasedDoom, GZDoom, or ZDoom profile, open File -> Generate Runtime
+   MAPINFO.  Review the exact root ZMAPINFO plus any map-slot title fallbacks,
+   then confirm generation.  User-authored MAPINFO-family declarations stop the
+   operation; only Heresy Editor's marker-owned ZMAPINFO can be regenerated.
+8. In a PK3 project, open File -> PK3 Metadata to inspect declarative engine
+   metadata, resource groups, projected-name collisions, and loaded-source
+   overrides without editing or interpreting the archive.
+9. Edit normally and choose File -> Create Next Map.  The current map remains
+   resident while the configured normal-route target is created or opened.
+10. Save the current map with File -> Save Map, or atomically save every dirty
    resident map with File -> Save Project or File -> Save All, then close the
    editor.
-7. Reopen the `.wad` or `.pk3` with File -> Open Map, File -> Recent Projects,
+11. Reopen the `.wad` or `.pk3` with File -> Open Map, File -> Recent Projects,
    or the command line.  The game/profile settings and campaign slot order are
    read from the package.  An adjacent `.heresy` session restores the last map,
    navigator selection, and a portable IWAD location hint.
@@ -135,10 +175,11 @@ defensively and written through a validated same-directory atomic replacement.
 
 Stage 6 is complete: BiasedDoom has a dedicated source-port profile derived
 from the shared ZDoom definitions.  Test in Game keeps a valid remembered
-engine path, then performs ordered, non-recursive discovery through an explicit
-environment override, `PATH`, portable installations, local CMake builds, and
-conventional Linux, Windows, and macOS locations.  Invalid candidates are
-skipped and the manual picker remains the final fallback.  Profile inheritance,
+engine path, then performs ordered discovery through explicit BiasedDoom and
+GZDoom environment overrides, `PATH`, portable installations, local CMake
+builds, and recursive home and platform installation-root searches.  Invalid
+candidates are skipped and the extension-neutral manual picker remains the
+final fallback.  Profile inheritance,
 discovery priority, invalid-path handling, and launch arguments have automated
 regression coverage.
 
@@ -175,20 +216,309 @@ checkout or a minimal temporary fetch.  GitHub Actions runs that contract
 weekly, on relevant pull requests, and on demand so release drift cannot pass
 silently.
 
+Stage 11 is complete: PK3 resource projection now walks arbitrary nested paths
+below `flats/`, `sprites/`, and `textures/`, classifies them into the actual WAD
+namespaces consumed by the flat, sprite, and texture loaders, and skips nested
+WADs and unrelated engine directories.  Resource reloads now install the
+package being opened before rebuilding editor images, preventing resources
+from the previously open project from leaking into the browser.  Regression
+coverage verifies deep mixed-case paths, namespace assignment, exclusion,
+map-save preservation, reopen behavior, and active-package resource loading.
+
+Stage 12 is complete: New Project is a three-page workflow for project
+settings, campaign/resources, and review/create.  Destination selection is now
+part of that workflow instead of a second dialog after acceptance.  The final
+page summarizes the IWAD, port/format, package, campaign, resource count, first
+map, and normalized destination; Create is disabled until all settings pass
+validation.  The command repeats destination validation immediately before it
+invokes the unchanged safe creation backend.  Pure regression tests cover
+extension normalization and every destination state, including an existing
+file and a missing parent folder.  Manage Project retains its compact editing
+dialog and behavior.
+
+Stage 13 is complete: project metadata version 2 adds optional per-map display
+titles, episode grouping labels, normal-exit overrides (including explicit
+campaign endings), and secret-exit relationships.  Version 1 ordered campaigns
+remain valid and supply the default normal route.  Campaign Navigator exposes
+the graph in dedicated title, episode, route, and state columns and provides a
+validated Map Details editor for configured slots.  Create Next Map follows the
+effective normal route.  Renaming a configured map updates its slot, details,
+and every incoming relationship in the same atomic package write; deleting it
+intentionally leaves a missing configured slot that can be recreated.  Rich
+metadata is recovered by project autosave and round-trips through both WAD and
+PK3 backends.  Stage 13 intentionally kept it editor-only; explicit,
+conflict-safe runtime publication is added by Stage 20 below.
+
+Stage 14 is complete: File -> PK3 Metadata opens a read-only inventory of the
+current PK3 or ZIP project.  It identifies MAPINFO-family campaign declarations,
+common declarative resource definitions, and runtime-source entries; recognized
+text is displayed verbatim rather than parsed, while binary, encrypted,
+unreadable, and entries beyond the bounded preview budgets receive an explicit
+status.  Conventional asset directories are summarized by file count and
+unpacked size, with the flat, sprite, and texture groups marked as editor
+namespaces.  Managed maps, `heresy/project.txt`, and other preserved files are
+accounted for separately.  Inspection performs no writes, and regression tests
+prove both whole-package byte equality across inspection and preservation of
+recognized declarations, resources, and unknown entries after a map save.
+
+Stage 15 is complete: the PK3 Metadata view now diagnoses names that collapse
+to the same uppercase, eight-character editor basename within nested flat,
+sprite, and texture namespaces.  It also examines the active load stack in its
+actual IWAD, ordered-resource, project order and reports duplicate names within
+one source and overrides between sources.  Each diagnostic identifies the
+namespace, effective editor name, source order, occurrence count, and nominal
+winner where the image loaders have deterministic last-loaded behavior.
+Sprite-frame and rotation combinations are labeled ambiguous instead of
+claiming a single winner.  Package-local collisions retain their complete
+archive paths in the report, and analysis neither changes selection semantics
+nor mutates the archive.  Regression coverage includes case and extension
+collisions, eight-character truncation, namespace separation, source order,
+effective flat and sprite resolution, and whole-package byte preservation.
+
+Stage 16 is complete: Campaign Navigator performs a read-only analysis using
+the same effective normal routes as Create Next Map plus every configured
+secret route.  In version 2 projects, reachability starts at the first
+configured slot.  Every route
+to a configured map that is absent from the editable package is identified,
+and strongly connected route components—including self-routes—are reported as
+potential cycles because project metadata does not claim whether a loop is
+intentional.  The navigator adds compact per-map flags, a project warning
+count, and a selected-map panel that names the involved routes and suggests
+Create or Map Details actions.  Analysis works for WAD and PK3 projects and
+does not modify metadata or package bytes.  Regression tests cover implicit
+and explicit normal routes, secret routes, explicit endings, reachable and
+disconnected cycles, self-cycles, missing targets, clean graphs, deterministic
+ordering, and read-only preservation.
+
+Stage 17 is complete: project metadata version 3 adds optional campaign entry
+points without changing route semantics.  The first configured slot remains an
+implicit, non-removable entry for every project; Map Details can mark further
+configured slots as episode or hub starts.  Campaign Navigator labels effective
+entries and computes reachability from all of them, preventing independent
+episodes from being reported as disconnected.  Version 1 and version 2
+projects retain their single implicit entry and are not upgraded merely for
+being opened; adding an entry upgrades the metadata to version 3.  Entry fields
+follow configured-map renames, are pruned with orphaned definitions, survive
+autosave recovery, and round-trip through WAD and PK3 packages.  Tests cover
+legacy behavior, opt-in migration, parse ordering, removal, rename, status
+projection, independent episode reachability, and both package backends.
+
+Stage 18 is complete: New Project and Manage Project now use a scrollable,
+dynamic external-resource list instead of four fixed slots.  Files and folders
+can be added, removed, and moved up or down while the displayed order remains
+the exact editor and engine load order.  The project model validates missing,
+empty, duplicate, and unsupported filesystem-type entries before applying
+changes.  Duplicate identity is based on the resolved filesystem object or
+normalized full path, so distinct resources with the same basename are
+retained and can override one another according to their configured order.
+Command-line resources remain ahead of project-file resources during merging.
+Regression coverage includes lists beyond four entries, folder resources,
+ordering and removal, normalized and symbolic-link duplicates, same-basename
+resources in separate directories, serialization order, and
+command-line/project merge order.
+
+Stage 19 is complete: automatic BiasedDoom and GZDoom discovery now performs
+filesystem work on a worker thread behind a modal progress dialog, keeping the
+FLTK event loop responsive throughout deep recursive home and installation
+searches.  The dialog reports the active search phase, current location,
+folders scanned, and candidates checked, and can cancel between phases,
+directories, and directory entries.  Cancelling Test in Game stops the launch
+workflow cleanly; cancelling discovery from Port Settings still permits manual
+selection.  An unsuccessful Test in Game search is reused instead of being
+repeated when the manual dialog opens.  Existing environment, PATH, portable,
+source-build, home, and platform installation coverage and engine preference
+remain unchanged.  Regression tests verify ordered priority, progress and
+monotonic counters, prompt cancellation, recursive fallback, executable
+permissions, extension-neutral Linux discovery, and system search roots.
+
+Stage 20 is complete: File -> Generate Runtime MAPINFO turns explicit campaign
+metadata into an engine-facing root `ZMAPINFO` for BiasedDoom, GZDoom, and ZDoom
+profiles.  A read-only preview shows the exact generated text and every title
+that will fall back to its map slot.  The generator emits all campaign entry
+points as episodes, escaped display titles, effective ordered or explicit
+normal routes, configured secret routes, and game-family ending sequences.
+Dirty campaign metadata and resident maps are saved first; the package is then
+reinspected immediately before its atomic write.  A versioned marker identifies
+editor-owned output.  A lone marked declaration may be regenerated, but any
+user-authored MAPINFO, ZMAPINFO, UMAPINFO, or EMAPINFO declaration—including a
+nested PK3 entry—stops the operation with its exact path listed.  The PK3
+backend persists only marker-owned root ZMAPINFO content and refuses a direct
+attempt to replace an existing user-owned root declaration.  Regression tests
+cover generated syntax and escaping, entries, ordered/explicit/secret routes,
+endings, title fallbacks, unsupported profiles, WAD and recursive PK3 conflict
+detection, managed updates, later-save survival, unknown-entry preservation,
+and the backend's final overwrite guard.
+
+Stage 21 is complete: managed runtime freshness is derived by comparing the
+exact marker-owned ZMAPINFO in the current WAD or PK3 with freshly generated
+content from the in-memory project model.  Campaign Navigator reports `runtime
+current`, `runtime out of date`, `runtime not generated`, or `runtime
+user-authored` for supported profiles.  Test in Game performs the same
+preflight after saving a dirty active map and before engine discovery.  Current
+output launches without interruption; stale managed output offers Cancel,
+Launch Anyway, or Review and Update.  Review and Update reuses the exact Stage
+20 preview, saves dirty project state, reinspects conflicts, performs the atomic
+managed write, and launches only after success.  Missing output remains
+optional, while user-authored or mixed MAPINFO-family declarations are never
+treated as stale and never prompt.  An inspection failure is logged but does
+not turn advisory freshness checking into a launch blocker.  Regression tests
+cover pure absent/current/stale/user-authored classification, managed-text
+capture, WAD and PK3 freshness, silent current launches, stale cancellation,
+explicit unchanged launches, and the complete preview-update-launch path.
+
+Stage 22 is complete: Test Settings exposes the engine path as an editable field
+instead of a read-only `.exe`-oriented value.  Browse applies no extension
+filter, while Auto Detect reruns the responsive recursive BiasedDoom/GZDoom/ZDoom
+search from the dialog.  Cancelling that search or finding no replacement keeps
+the current selection.  Inline validation disables confirmation and identifies
+empty, missing, directory, non-executable, inaccessible, and unsupported
+filesystem paths; a valid extensionless Unix executable is accepted.  Profiles
+without a known engine family retain manual path selection and visibly disable
+Auto Detect.  Regression tests cover the supported-profile boundary and each
+portable validation state, including Unix execute permission.
+
+Stage 23 is complete: Smart Door turns one or more selected, already-drawn,
+nonadjacent sectors into format-correct local doors through a review-first
+sector-finisher workflow.  Ordered game configuration presets carry explicit
+specials, activation policy, and five exact arguments; Doom, Hexen, and UDMF
+representations are selected by capability instead of parsing descriptions.
+The pure planner identifies portal and one-sided track boundaries, required
+orientation flips, shared sidedefs, deterministic length-weighted Face and
+Track textures, preserved properties, warnings, and blocking errors.  The
+modal review updates a transient three-role canvas overlay and texture previews
+on every option change.  Apply recomputes the plan, isolates only changed shared
+sidedefs, normalizes tool-owned flags and activation, collapses each ceiling,
+and commits the entire batch as one undoable edit.  Cancel, close, validation
+failure, and exceptions clear the overlay without changing the map or
+selection.  Regression tests cover preset parsing and availability, geometry
+validation and inference, Doom/Hexen/UDMF application, preservation, selective
+isolation, atomic failure, undo/redo, dialog cancellation, and overlay cleanup.
+
+Stage 24 is complete: Smart Sector Designer provides a persistent right-side
+workspace for rectangles, regular polygons, concave freeform rooms,
+extrusions, inset/rings, routed corridors, generated or existing stairs, and
+selected or wall-extruded lifts.  Its pure planner quantizes Doom/Hexen
+coordinates to integers and UDMF coordinates to 16.16 precision, validates
+topology and protected actions, and emits reusable preview points, paths,
+fills, labels, roles, counts, warnings, and blocking errors.  The offline
+Clipper2 2.0.1 engine supplies deterministic boolean and offset operations
+without its experimental triangulation component.
+
+The designer intercepts canvas gestures only while active, supports square and
+centered rooms, constrained freeform points, route cycling, side flipping,
+Auto/Absolute/Relative properties, semantic Open/Wall/Door connections, and
+configuration-declared lift presets with typed fresh-tag arguments.  Generated
+doors append the established Smart Door mutation to the same EditOperation.
+Its enhanced extrusion workflow supports press-drag-release depth locked to a
+chosen seam of a nonbranching chain, follows pointer intent independently of
+linedef winding, exposes an explicit opposite-side control and numeric normal
+ruler, supports exact signed depth, and can place centered, sized, offset
+doors automatically or on explicitly chosen source segments.  Embedded Door
+Auto textures resolve from the source geometry, display their exact live
+result, and are frozen into the replanned atomic edit.  Door and lift
+recognition protects the functional sector without treating an ordinary room
+which shares one local trigger as protected.  Sector-mode shortcuts open the
+full designer or jump directly to Extrude.
+Extrusion also accepts a selection-free drag from inside a sector, infers the
+first boundary crossed instead of a merely nearby hover line, and safely
+creates and selects the result when no selection object previously existed.
+Optional Special and Tag fields cover effect-bearing sectors without leaving
+the designer.  Enter/Space focus is reclaimed by every canvas gesture,
+duplicate whole-sector outlines are rejected before apply, and apply-only
+diagnostics remain visible without an unsafe retry loop.  Complete diagnostics
+can be copied in one action or opened in a live, resizable, wrapped and
+selectable Review window; an explicit blocked apply opens it automatically.
+Successful repeat-mode applies close that window and render the newly empty
+gesture as neutral WAITING FOR GESTURE guidance, so a repeated Enter cannot
+misreport a completed door or create an accidental edit.
+Action-linedef source seams are owned by the connection plan, preserving their
+behavior for Open/Wall and replacing it deliberately for Door instead of
+misclassifying the boundary as consumed geometry.  View / Snap to Grid is
+shared by classic drawing and all Smart Sector gestures, uses Shift+G while
+lowercase g controls grid visibility, remains synchronized with the existing
+grid control, recomputes the live preview when changed, and restores the last
+explicit choice at the next application launch.
+Corridor endpoints now resolve the actual post-split shared portal before
+editing sidedefs, so a narrow opening cannot clear textures on the solid
+segments beside it.  Floor, ceiling, and wall property rows provide searchable
+loaded-resource selectors, live contextual Auto previews, and independent
+Ring/Inner values.  A draggable left-edge grip resizes the designer while
+preserving a minimum usable map workspace, and double-click restores its
+default width.
+Every commit is replanned and atomic, selects its results, leaves repeat mode
+active, and has one Undo record.  Cancellation, mode/map/window closure, stale
+validation, and exceptions clear nonserialized preview state without partial
+mutation.  See `docs/SmartSectors.txt`.
+
+The Stage 24 interaction hardening removes FLTK menu-path ambiguity from the
+Inset / Ring label, giving every visible mode a stable one-to-one planner
+index.  Mode changes now persist the old mode's fields before atomically
+clearing routes, anchors, stair endpoints, lift triggers, semantic targets,
+and preview state.  Every advertised primary gesture works directly:
+press-drag-release for Room, Polygon, Corridor, generated Stairs, Extrude, and
+wall-alcove Lift; canvas target/toggle selection for Inset and Lift; and
+explicit start/end picking plus numbered order for existing Stairs.  Endpoint
+line ownership survives void-to-wall routes, stale references are pruned after
+map changes, and selection-driven tools require a fresh target after commit.
+
+Stage 25 is complete: the designer now exposes a progressive construction
+vocabulary.  Polygon profiles are ordered from simple convex primitives
+through fine circles, stars, crosses, gears, sawblades, foils, rosettes, and
+288-vertex grand cathedral tracery, with deterministic format quantization and
+focused controls for regular sides, rotation, and concave inner radius.
+Inset / Ring consumes the mouse wheel in its active canvas mode to change
+thickness by exact grid steps without silently reversing inward/outward
+intent.
+
+Lift mode now documents its existing-platform and wall-alcove workflows in the
+panel itself.  Its live status and expanded review identify connected
+platforms, inferred adjacent-floor stops, travel, fresh tags, semantic
+behavior, and exact local trigger portals before the atomic apply.
+
+Architecture mode creates reusable, host-safe structural layouts rather than
+merely decorative preview marks.  Its 16 elements range from individual
+pillars and arch piers through colonnades, arcades, cloisters, hypostyle halls,
+buttress arrays, naves, transepts, apses, rotundas, sanctuaries, and fortified
+keeps using Functional, Classical, Romanesque, Gothic clustered, Industrial
+geared, Art Deco sunburst, or Infernal support sections.  A footprint inside a
+room retains its host; one wholly in clear void creates a walkable host hall
+before inserting supports through plan-local references.  Existing-room
+ownership locks from the first unsnapped press instead of the footprint
+center, which supports holed and strongly concave sectors.  Invalid footprint,
+support, point, and linedef intent remains visible with conflict roles and
+precise issue navigation.  The mouse wheel
+scales structural sections by quarter-grid increments with style-aware safe
+minimums.  Every support is a closed inherited sector, previewed in its own
+role and applied with the complete hall as one Undo operation.  Existing
+geometry contact, invalid host crossings, protected functional geometry,
+overlapping supports, and format-quantized topology remain blocking.
+
+Stages 1 through 25 now form the completed project roadmap described here.
+Future work can extend this foundation without leaving a known staged item
+partially implemented.
+
 Full-IWAD, single-map, and custom ordered campaign layouts are available from
 New Project and Manage Project.  Custom slots are normalized, deduplicated, and
 validated before becoming authoritative package metadata.  Explicit WAD and
 PK3 projects have a separate recent-project history keyed by full path, so
-same-named projects in different directories do not collide.  Startup prefers
-the latest recent project and restores its saved session when possible.
+same-named projects in different directories do not collide.  When no project,
+IWAD, or map is supplied on the command line, startup automatically reopens the
+latest explicit project and restores its saved session when possible.  The
+autoload preference applies only to falling back to a loose recent PWAD when no
+explicit project exists.
 
 Known limitations of the current foundation
 -------------------------------------------
 
-* New Project is a compact project-settings dialog followed by a destination,
-  not yet a paged wizard with a final summary.
-* Custom campaign layouts are explicit ordered map-slot lists.  They do not yet
-  model engine-specific episode graphs, secret exits, or display titles.
+* Titles, episode groups, and exit relationships remain editor project metadata
+  until Generate Runtime MAPINFO is explicitly confirmed.  Automatic runtime
+  output is deliberately limited to BiasedDoom/GZDoom/ZDoom ZMAPINFO and a
+  conservative campaign subset; advanced hand-authored MAPINFO must remain
+  separate because any user declaration disables managed generation.
+  Episode text remains a grouping label and does not automatically create an
+  entry point; mark the first map of an independent episode in Map Details.
+  Cycles are labeled potential because the editor cannot infer whether a loop
+  is intended.
 * Save Map intentionally writes only the active document.  Use Save Project or
   Save All to commit cached dirty maps in the same atomic package transaction.
 * The cache is intentionally bounded at eight total resident documents.  If
@@ -205,6 +535,13 @@ Known limitations of the current foundation
   managed entries.  ZIP64, multi-disk archives, and encrypted map entries are
   refused explicitly.  Unrelated entries using other compression methods are
   preserved byte-for-byte but are not decoded by the editor.
-* PK3 resource projection covers root files and one-level `flats/`, `sprites/`,
-  and `textures/` paths.  Deeper engine-specific resource trees remain safely
-  in the package but are not yet exposed in the resource browser.
+* PK3 resource projection exposes root files and arbitrarily nested `flats/`,
+  `sprites/`, and `textures/` paths by their WAD-compatible basename.  Other
+  engine namespaces such as `sounds/`, `music/`, `models/`, and `graphics/`
+  are summarized by PK3 Metadata but are not interpreted by the current
+  texture/flat/sprite browser.  Runtime sources are listed and may be previewed
+  verbatim, but are not parsed or executed.
+* PK3 projection still follows WAD-compatible uppercase, eight-character
+  names.  File -> PK3 Metadata reports collisions and the current source-order
+  outcome, but intentionally does not rename entries, reorder resources, or
+  choose a replacement policy for ambiguous sprite frames.

@@ -148,6 +148,19 @@ line 135 k "S1 Open red door /fast" :tag
 line 136 k "SR Open yellow door /fast"  :tag
 line 137 k "S1 Open yellow door /fast"  :tag
 
+# Smart Door local-use presets. @special resolves the final active description,
+# including game-specific Heretic and Strife overrides.
+door_preset raise-normal        @special   1 encoded 0 0 0 0 0
+door_preset open-normal         @special  31 encoded 0 0 0 0 0
+door_preset raise-fast          @special 117 encoded 0 0 0 0 0
+door_preset open-fast           @special 118 encoded 0 0 0 0 0
+door_preset locked-blue-raise   @special  26 encoded 0 0 0 0 0
+door_preset locked-yellow-raise @special  27 encoded 0 0 0 0 0
+door_preset locked-red-raise    @special  28 encoded 0 0 0 0 0
+door_preset locked-blue-open    @special  32 encoded 0 0 0 0 0
+door_preset locked-red-open     @special  33 encoded 0 0 0 0 0
+door_preset locked-yellow-open  @special  34 encoded 0 0 0 0 0
+
 # the "S1" and "W1" are lowercase here to inhibit the map checking
 # functions complaining about missing tag numbers.
 line  11 e "s1 Exit level"
@@ -179,6 +192,12 @@ line 121 p "W1 Lift Lower /fast"    :tag
 line 122 p "S1 Lift Lower /fast"    :tag
 line 123 p "SR Lift Lower /fast"    :tag
 
+# Smart Sector local lift presets.
+sector_action_preset lift lower-once        @special  21 encoded 0 0 0 0 0
+sector_action_preset lift lower-repeat      @special  62 encoded 0 0 0 0 0
+sector_action_preset lift lower-fast-once   @special 122 encoded 0 0 0 0 0
+sector_action_preset lift lower-fast-repeat @special 123 encoded 0 0 0 0 0
+
 line  53 m "W1 Start Moving Floor"  :tag
 line  87 m "WR Start Moving Floor"  :tag
 line  54 m "W1 Stop Moving Floor"   :tag
@@ -193,4 +212,3 @@ line  39 t "W1 Teleport"       :tag
 line  97 t "WR Teleport"       :tag
 line 125 t "W1 Teleport /mon"  :tag
 line 126 t "WR Teleport /mon"  :tag
-

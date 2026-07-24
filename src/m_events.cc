@@ -36,6 +36,7 @@
 #include "r_render.h"
 #include "ui_window.h"
 #include "ui_misc.h"
+#include "ui_sector_design.h"
 
 
 void Instance::ClearStickyMod()
@@ -55,6 +56,11 @@ void Instance::Editor_ClearAction() noexcept
 
 		case EditorAction::adjustOfs:
 			main_win->SetCursor(FL_CURSOR_DEFAULT);
+			break;
+
+		case EditorAction::designSector:
+			if (main_win)
+				main_win->SetCursor(FL_CURSOR_DEFAULT);
 			break;
 
 		default:
@@ -82,6 +88,11 @@ void Instance::Editor_SetAction(EditorAction  new_action)
 			mouse_last_pos.y = Fl::event_y();
 
 			main_win->SetCursor(FL_CURSOR_HAND);
+			break;
+
+		case EditorAction::designSector:
+			if (main_win)
+				main_win->SetCursor(FL_CURSOR_CROSS);
 			break;
 
 		default:
@@ -423,6 +434,13 @@ void Instance::EV_LeaveWindow()
 
 void Instance::EV_EscapeKey()
 {
+	if (UI_SectorDesignerActive(*this))
+	{
+		if (UI_SectorDesignerOwnsCanvas(*this))
+			UI_SectorDesignerEscape(*this);
+		return;
+	}
+
 	Nav_Clear();
 	ClearStickyMod();
 	Editor_ClearAction();
@@ -451,6 +469,14 @@ void Instance::EV_MouseMotion(v2int_t pos, keycode_t mod, v2int_t dpos)
 	if (edit.is_panning)
 	{
 		Editor_ScrollMap(0, dpos, mod);
+		return;
+	}
+
+	if (UI_SectorDesignerActive(*this))
+	{
+		UI_SectorDesignerCanvasMove(
+				*this, edit.map.xy, mod,
+				(Fl::event_buttons() & FL_BUTTON1) != 0);
 		return;
 	}
 
@@ -594,6 +620,33 @@ int Instance::EV_RawKey(int event)
 	if (key == 0)
 		return 1;
 
+	if (UI_SectorDesignerActive(*this))
+	{
+		const keycode_t base = key & FL_KEY_MASK;
+		if (event == FL_PUSH && base == FL_Button + 1)
+		{
+			// UI_Canvas consumes mouse events before FLTK's default focus
+			// handler. Claim focus explicitly so Enter/Space always applies
+			// the gesture that was just dragged on the canvas.
+			if (main_win && main_win->canvas)
+				main_win->canvas->take_focus();
+			UI_SectorDesignerCanvasClick(*this, edit.map.xy,
+										key & EMOD_ALL_MASK);
+			return 1;
+		}
+		if (event == FL_PUSH && base == FL_Button + 3)
+		{
+			if (main_win && main_win->canvas)
+				main_win->canvas->take_focus();
+			UI_SectorDesignerRemoveLastAnchor(*this);
+			return 1;
+		}
+		if (!UI_SectorDesignerOwnsCanvas(*this))
+			return 0;
+		if (UI_SectorDesignerCanvasKey(*this, key))
+			return 1;
+	}
+
 #if 0  // DEBUG
 	fprintf(stderr, "Key code: 0x%08x : %s\n", key, keys::toString(key).c_str());
 #endif
@@ -642,6 +695,10 @@ int Instance::EV_RawWheel(int event)
 	if (!wheel_dpos)
 		return 1;
 
+	if (wheel_dpos.x == 0 &&
+		UI_SectorDesignerCanvasWheel(*this, wheel_dpos.y))
+		return 1;
+
 	EV_RawKey(FL_MOUSEWHEEL);
 
 	return 1;
@@ -667,6 +724,14 @@ int Instance::EV_RawButton(int event)
 
 	if (button < 1 || button > 8)
 		return 0;
+	if (event == FL_RELEASE && button == 1 &&
+		UI_SectorDesignerActive(*this))
+	{
+		UI_SectorDesignerCanvasRelease(
+				*this, edit.map.xy,
+				Fl::event_state() & EMOD_ALL_MASK);
+		return 1;
+	}
 
 	return EV_RawKey(event);
 }

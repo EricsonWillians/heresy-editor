@@ -13,6 +13,16 @@
 
 namespace fs = std::filesystem;
 
+struct ZipEntryInfo
+{
+	std::string name;
+	uint64_t compressedSize = 0;
+	uint64_t uncompressedSize = 0;
+	uint16_t compressionMethod = 0;
+	bool encrypted = false;
+	bool directory = false;
+};
+
 // A deliberately small ZIP package layer for PK3 projects.  Existing entries
 // retain their complete local records and central-directory metadata unless a
 // caller explicitly replaces or removes them.  New entries use portable STORE
@@ -32,6 +42,7 @@ public:
 	}
 
 	std::vector<std::string> entryNames() const;
+	std::vector<ZipEntryInfo> entryInfos() const;
 	bool contains(const std::string &name) const noexcept;
 	std::vector<uint8_t> readEntry(const std::string &name) const;
 

@@ -29,6 +29,8 @@
 #include "m_parse.h"
 #include "m_streams.h"
 #include <assert.h>
+#include <cerrno>
+#include <climits>
 
 #define MAX_TOKENS  30   /* tokens per line */
 
@@ -286,6 +288,8 @@ static void ParseClearKeywords(ConfigData &config, const char ** argv, int argc,
 		{
 			config.line_groups.clear();
 			config.line_types.clear();
+			config.door_presets.clear();
+			config.sector_action_presets.clear();
 		}
 		else if (y_stricmp(argv[0], "sectors") == 0)
 		{
@@ -696,6 +700,137 @@ static void M_ParseNormalLine(parser_state_c *pst, ConfigData &config)
 		}
 		else
 			config.line_types[number] = info;
+	}
+	else if (y_stricmp(argv[0], "door_preset") == 0)
+	{
+		if (nargs != 9)
+			pst->fail(bad_arg_count_fail, argv[0], 9);
+
+		DoorPreset preset;
+		preset.id = argv[1];
+		preset.label = argv[2];
+		if (preset.id.empty())
+			pst->fail("door_preset requires a non-empty id");
+
+		auto parseInteger = [&](const char *text, const char *field)
+		{
+			errno = 0;
+			char *end = nullptr;
+			const long value = strtol(text, &end, 0);
+			if (errno == ERANGE || end == text || *end != '\0' ||
+					value < INT_MIN || value > INT_MAX)
+			{
+				pst->fail("invalid %s value \"%s\" in door_preset",
+						field, text);
+			}
+			return static_cast<int>(value);
+		};
+
+		preset.special = parseInteger(argv[3], "special");
+		if (preset.special < 0)
+			pst->fail("door_preset special must not be negative");
+
+		if (y_stricmp(argv[4], "encoded") == 0)
+			preset.activation = DoorActivation::encoded;
+		else if (y_stricmp(argv[4], "use_once") == 0)
+			preset.activation = DoorActivation::useOnce;
+		else if (y_stricmp(argv[4], "use_repeat") == 0)
+			preset.activation = DoorActivation::useRepeat;
+		else
+			pst->fail("unknown door_preset activation \"%s\"", argv[4]);
+
+		for (int index = 0; index < 5; ++index)
+		{
+			const SString field = SString::printf("argument %d", index + 1);
+			preset.args[index] = parseInteger(argv[5 + index], field.c_str());
+		}
+
+		auto existing = std::find_if(config.door_presets.begin(),
+				config.door_presets.end(), [&](const DoorPreset &candidate)
+				{
+					return candidate.id.noCaseEqual(preset.id);
+				});
+		if (existing == config.door_presets.end())
+			config.door_presets.push_back(std::move(preset));
+		else
+			*existing = std::move(preset);
+	}
+	else if (y_stricmp(argv[0], "sector_action_preset") == 0)
+	{
+		if (nargs != 10)
+			pst->fail(bad_arg_count_fail, argv[0], 10);
+
+		SectorActionPreset preset;
+		if (y_stricmp(argv[1], "lift") == 0)
+			preset.kind = SectorActionKind::lift;
+		else
+			pst->fail("unknown sector_action_preset kind \"%s\"", argv[1]);
+
+		preset.id = argv[2];
+		preset.label = argv[3];
+		if (preset.id.empty())
+			pst->fail("sector_action_preset requires a non-empty id");
+
+		auto parseInteger = [&](const char *text, const char *field)
+		{
+			errno = 0;
+			char *end = nullptr;
+			const long value = strtol(text, &end, 0);
+			if (errno == ERANGE || end == text || *end != '\0' ||
+					value < INT_MIN || value > INT_MAX)
+			{
+				pst->fail("invalid %s value \"%s\" in sector_action_preset",
+						field, text);
+			}
+			return static_cast<int>(value);
+		};
+
+		preset.special = parseInteger(argv[4], "special");
+		if (preset.special < 0)
+			pst->fail("sector_action_preset special must not be negative");
+
+		if (y_stricmp(argv[5], "encoded") == 0)
+			preset.activation = ActivationPolicy::encoded;
+		else if (y_stricmp(argv[5], "use_once") == 0)
+			preset.activation = ActivationPolicy::useOnce;
+		else if (y_stricmp(argv[5], "use_repeat") == 0)
+			preset.activation = ActivationPolicy::useRepeat;
+		else
+			pst->fail("unknown sector_action_preset activation \"%s\"", argv[5]);
+
+		int targetTags = 0;
+		for (int index = 0; index < 5; ++index)
+		{
+			SectorActionArgument &argument = preset.args[index];
+			if (y_stricmp(argv[6 + index], "@tag") == 0)
+			{
+				argument.targetTag = true;
+				targetTags++;
+			}
+			else
+			{
+				const SString field =
+						SString::printf("argument %d", index + 1);
+				argument.value = parseInteger(argv[6 + index], field.c_str());
+			}
+		}
+
+		if (preset.activation == ActivationPolicy::encoded && targetTags != 0)
+			pst->fail("encoded sector_action_preset cannot use @tag");
+		if (preset.activation != ActivationPolicy::encoded && targetTags != 1)
+			pst->fail("use-activated sector_action_preset requires one @tag");
+
+		auto existing = std::find_if(config.sector_action_presets.begin(),
+				config.sector_action_presets.end(),
+				[&](const SectorActionPreset &candidate)
+				{
+					return candidate.kind == preset.kind &&
+							candidate.id.noCaseEqual(preset.id);
+				});
+		if (existing == config.sector_action_presets.end())
+			config.sector_action_presets.push_back(std::move(preset));
+		else
+			*existing = std::move(preset);
 	}
 	else if(y_stricmp(argv[0], "specialhandling") == 0)
 	{

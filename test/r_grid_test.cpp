@@ -298,6 +298,34 @@ TEST_F(GridStateFixture, SetSnapSameValueChangesNothing)
 	}
 }
 
+TEST_F(GridStateFixture, ExplicitSnapChoiceBecomesNextSessionDefault)
+{
+	grid::State grid(*this);
+	config::grid_default_snap = false;
+	grid.Init();
+	ASSERT_FALSE(grid.snaps());
+
+	grid.SetSnap(true);
+	EXPECT_TRUE(grid.snaps());
+	EXPECT_TRUE(config::grid_default_snap);
+
+	grid.SetSnap(false);
+	EXPECT_FALSE(grid.snaps());
+	EXPECT_FALSE(config::grid_default_snap);
+}
+
+TEST_F(GridStateFixture, LegacyPerMapSnapDoesNotOverrideGlobalChoice)
+{
+	grid::State grid(*this);
+	config::grid_default_snap = true;
+	grid.Init();
+	ASSERT_TRUE(grid.snaps());
+
+	EXPECT_TRUE(grid.parseUser({"snap", "0"}));
+	EXPECT_TRUE(grid.snaps());
+	EXPECT_TRUE(config::grid_default_snap);
+}
+
 TEST_F(GridStateFixture, ToggleSnappingWithoutHidingInFreeMode)
 {
 	grid::State grid(*this);

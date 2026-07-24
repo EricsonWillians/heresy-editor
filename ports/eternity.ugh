@@ -424,6 +424,11 @@ special 105 d "Door_WaitRaise"        :tag  speed  delay  wait  light_tag:tag
 special 106 d "Door_WaitClose"        :tag  speed  delay  wait  light_tag:tag
 special 249 d "Door_CloseWaitOpen"    :tag  speed  delay  light_tag:tag
 
+door_preset raise-normal "Normal door (closes)"      12 use_repeat 0 16 150 0 0
+door_preset open-normal  "Normal door (stays open)"  11 use_once   0 16   0 0 0
+door_preset raise-fast   "Fast door (closes)"        12 use_repeat 0 64 150 0 0
+door_preset open-fast    "Fast door (stays open)"    11 use_once   0 64   0 0 0
+
 # Lifts
 special  62 g "Plat_DownWaitUpStay"          :tag  speed  delay
 special 206 g "Plat_DownWaitUpStayLip"       :tag  speed  delay  lip  sound_type
@@ -436,6 +441,11 @@ special  60 g "Plat_PerpetualRaise"          :tag  speed  delay
 special 207 g "Plat_PerpetualRaiseLip"       :tag  speed  delay  lip
 special 231 g "Plat_ToggleCeiling"           :tag
 special  61 g "Plat_Stop"                    :tag  stop_mode
+
+sector_action_preset lift lower-once        "Normal lift (once)"   62 use_once   @tag 16 105 0 0
+sector_action_preset lift lower-repeat      "Normal lift (repeat)" 62 use_repeat @tag 16 105 0 0
+sector_action_preset lift lower-fast-once   "Fast lift (once)"     62 use_once   @tag 32 105 0 0
+sector_action_preset lift lower-fast-repeat "Fast lift (repeat)"   62 use_repeat @tag 32 105 0 0
 
 # Elevators & Pillars
 special  95 e "FloorAndCeiling_LowerByValue" :tag  speed  dist

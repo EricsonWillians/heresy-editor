@@ -44,6 +44,7 @@ int  config::grid_ratio_low  = 1;  // (low must be > 0)
 
 void grid::State::Init()
 {
+	initializing = true;
 	step = config::grid_default_size;
 
 	if (step < 1)
@@ -69,6 +70,7 @@ void grid::State::Init()
 
 	snap = config::grid_default_snap;
 	listener.gridUpdateSnap();
+	initializing = false;
 }
 
 
@@ -631,6 +633,12 @@ void grid::State::ToggleShown()
 
 void grid::State::SetSnap(bool enable)
 {
+	// The toolbar/menu state is also the next-session default.  The
+	// miscellaneous settings writer persists this value on clean shutdown,
+	// so users do not need to duplicate the same choice in Preferences.
+	if (!initializing)
+		config::grid_default_snap = enable;
+
 	if (snap == enable)
 		return;
 
@@ -693,8 +701,9 @@ bool grid::State::parseUser(const std::vector<SString> &tokens)
 
 	if (tokens[0] == "snap" && tokens.size() >= 2)
 	{
-		configureSnap(!!atoi(tokens[1]));
-
+		// Legacy map-checksum state used to make snapping vary by map and
+		// could lose the latest choice when quitting with discarded edits.
+		// Consume the old record without overriding the global setting.
 		return true;
 	}
 
@@ -707,7 +716,6 @@ void grid::State::writeUser(std::ostream &os) const
 		'\n';
 	os << "grid " << (isShown() ? 1 : 0) << ' ' << (config::grid_style ? 0 : 1) << ' ' <<
 		getStep() << '\n';
-	os << "snap " << (snaps() ? 1 : 0) << '\n';
 }
 
 

@@ -49,6 +49,16 @@ static void file_do_campaign_navigator(Fl_Widget *w, void *data)
 	static_cast<Instance *>(data)->ExecuteCommand("CampaignNavigator");
 }
 
+static void file_do_generate_runtime_mapinfo(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("GenerateRuntimeMapInfo");
+}
+
+static void file_do_package_metadata(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("PackageMetadata");
+}
+
 static void file_do_open(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("OpenMap");
@@ -211,6 +221,16 @@ static void edit_do_rotate(Fl_Widget *w, void * data)
 	static_cast<Instance *>(data)->ExecuteCommand("RotateObjectsDialog");
 }
 
+static void edit_do_make_door(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("SEC_MakeDoor");
+}
+
+static void edit_do_smart_sector(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->ExecuteCommand("SEC_SmartSector", "room");
+}
+
 static void edit_do_mirror_horiz(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("Mirror", "horiz");
@@ -269,6 +289,11 @@ static void view_do_sprites(Fl_Widget *w, void * data)
 static void view_do_gamma(Fl_Widget *w, void * data)
 {
 	static_cast<Instance *>(data)->ExecuteCommand("Toggle", "gamma");
+}
+
+static void view_do_snap_to_grid(Fl_Widget *w, void *data)
+{
+	static_cast<Instance *>(data)->grid.ToggleSnap();
 }
 
 static void view_do_default_props(Fl_Widget *w, void * data)
@@ -467,6 +492,8 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{file_do_new_project, {"NewProject"} },
 	{file_do_manage_project, {"ManageProject"} },
 	{file_do_campaign_navigator, {"CampaignNavigator"} },
+	{file_do_generate_runtime_mapinfo, {"GenerateRuntimeMapInfo"} },
+	{file_do_package_metadata, {"PackageMetadata"} },
 	{file_do_open, {"OpenMap"} },
 	{file_do_save, {"SaveMap"} },
 	{file_do_save_project, {"SaveProject"} },
@@ -494,6 +521,8 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{edit_do_move, {"MoveObjectsDialog"} },
 	{edit_do_scale, {"ScaleObjectsDialog"} },
 	{edit_do_rotate, {"RotateObjectsDialog"} },
+	{edit_do_smart_sector, {"SEC_SmartSector", {"room"}} },
+	{edit_do_make_door, {"SEC_MakeDoor"} },
 	{edit_do_mirror_horiz, {"Mirror", {"horiz"}} },
 	{edit_do_mirror_vert, {"Mirror", {"vert"}} },
 
@@ -506,6 +535,7 @@ static std::unordered_map<void(*)(Fl_Widget *, void *), MenuCommand> s_menu_comm
 	{view_do_object_nums, {"Toggle", {"obj_nums"}} },
 	{view_do_sprites, {"Toggle", {"sprites"}} },
 	{view_do_gamma, {"Toggle", {"gamma"}} },
+	{view_do_snap_to_grid, {"Toggle", {"snap"}} },
 	{view_do_default_props, {"DefaultProps"} },
 	{view_do_find, {"FindDialog"} },
 	{view_do_next, {"FindNext"} },
@@ -563,6 +593,8 @@ static Fl_Menu_Item menu_items[] =
 		{ "&New Project   ",   0, FCAL file_do_new_project },
 		{ "&Manage Project  ", 0, FCAL file_do_manage_project },
 		{ "Campaign Na&vigator", 0, FCAL file_do_campaign_navigator },
+		{ "Generate Runtime MAP&INFO...", 0, FCAL file_do_generate_runtime_mapinfo },
+		{ "PK3 &Metadata...", 0, FCAL file_do_package_metadata },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
@@ -617,6 +649,8 @@ static Fl_Menu_Item menu_items[] =
 		{ "&Move Objects...",  0, FCAL edit_do_move },
 		{ "&Scale Objects...", 0, FCAL edit_do_scale },
 		{ "Rotate Objects...", 0, FCAL edit_do_rotate },
+		{ "Smart Sector &Designer...", 0, FCAL edit_do_smart_sector },
+		{ "Make Smart &Door...", 0, FCAL edit_do_make_door },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
@@ -632,6 +666,8 @@ static Fl_Menu_Item menu_items[] =
 		{ "Toggle S&prites",     0, FCAL view_do_sprites },
 		{ "Toggle &Gamma",       0, FCAL view_do_gamma },
 		{ "Toggle Object Nums",  0, FCAL view_do_object_nums },
+		{ "Snap to &Grid",       0, FCAL view_do_snap_to_grid, 0,
+								  FL_MENU_TOGGLE },
 
 		{ "", 0, 0, 0, FL_MENU_DIVIDER|FL_MENU_INACTIVE },
 
@@ -1041,6 +1077,21 @@ void setRedoDetail(Fl_Sys_Menu_Bar *bar, const SString &verb)
 		bar->mode(index, mode | FL_MENU_INACTIVE);
 }
 
+void setSnapToGrid(Fl_Sys_Menu_Bar *bar, bool enabled)
+{
+	if (!bar)
+		return;
+	const int index = locateMenuItem(*bar, view_do_snap_to_grid);
+	if (index < 0)
+		return;
+	int mode = bar->mode(index);
+	if (enabled)
+		mode |= FL_MENU_VALUE;
+	else
+		mode &= ~FL_MENU_VALUE;
+	bar->mode(index, mode);
+}
+
 Fl_Sys_Menu_Bar *create(int x, int y, int w, int h, void *userData)
 {
 	Fl_Sys_Menu_Bar *bar = new Fl_Sys_Menu_Bar(x, y, w, h);
@@ -1071,6 +1122,8 @@ Fl_Sys_Menu_Bar *create(int x, int y, int w, int h, void *userData)
 	bar->menu(items);
 	setUndoDetail(bar, "");
 	setRedoDetail(bar, "");
+	Instance *inst = static_cast<Instance *>(userData);
+	setSnapToGrid(bar, inst && inst->grid.snaps());
 
 	// for macOS, the preferences shall be in the app menu
 #ifdef __APPLE__

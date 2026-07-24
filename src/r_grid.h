@@ -62,6 +62,10 @@ private:
 	// whether the grid is being displayed or not.
 	bool shown = true;
 
+	// Init may temporarily synchronize snapping with grid visibility.
+	// Those internal transitions are not user choices to remember.
+	bool initializing = false;
+
 	// map coordinates for centre of canvas
 	v2double_t orig = {};
 

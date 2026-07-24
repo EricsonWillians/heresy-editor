@@ -8,13 +8,60 @@ and testing maps for BiasedDoom. It supports Linux, Windows and macOS.</p>
 <a class='urllink' href='https://github.com/EricsonWillians/heresy-editor' rel='nofollow'>Heresy Editor GitHub project</a>.</p>
 
 <div class='vspace'></div><h2>BiasedDoom Workflow</h2>
-<p>Choose the <code>zdoom</code> source-port profile for current BiasedDoom
-projects, then select the <code>biaseddoom</code> executable when using Tools /
-Test in Game. Heresy Editor will supply the project IWAD, resource WADs,
-edited WAD and current map to the engine.</p>
+<p>Choose the <code>biaseddoom</code> source-port profile for BiasedDoom
+projects, then use Tools / Test in Game. Heresy Editor automatically searches
+for BiasedDoom or GZDoom and will supply the project IWAD, resource WADs,
+edited WAD or PK3, and current map to the engine. Deep engine searches remain
+responsive and can be cancelled. Nested PK3 flat, sprite, and texture trees
+are available in the editor resource browser. File / New Project
+uses a three-page workflow with a validated summary before creation. Campaign
+Navigator models optional map titles, episode groups, multiple campaign entry
+points, and normal/secret routes. It flags unreachable maps, potential cycles,
+and configured route targets that are still missing from the project package.
+File / PK3 Metadata provides a read-only declaration and resource inventory.</p>
 
 <p class='vspace'>Read the <a class='wikilink' href='BiasedDoom.html'>BiasedDoom
 integration guide</a> for setup details and the current compatibility boundary.</p>
+
+<div class='vspace'></div><h2>Smart Door</h2>
+<p>In 2D Sector mode, select already-drawn door sectors and choose Edit / Make
+Smart Door. The review names the exact target sectors and marks them with a
+heavy orange hatch; orange lines are activating portals and green lines are
+track walls. Door Face means the moving slab texture and Track means the
+narrow doorway side-wall texture. Browse or click a preview tile to search
+loaded wall textures, or retain deterministic Auto inference.</p>
+
+<div class='vspace'></div><h2>Smart Sector Designer</h2>
+<p>In 2D Sector mode, press Ctrl/Cmd+Shift+S or open Edit / Smart Sector
+Designer; X opens Extrude directly. Create rooms,
+regular polygons, concave freeform sectors, extrusions, rings, routed
+corridors, stairs, lifts, and door-aware connections from one persistent
+right-side panel. Every gesture is format-quantized and reviewed on the canvas
+before a one-step atomic commit. View / Snap to Grid is shared with ordinary
+drawing. The mode selector is flat and changes planner/input state atomically,
+so the visible mode always owns the next gesture. Room, Polygon, Corridor, and
+Stairs support press-drag-release as well as click placement. Inset, existing
+Stairs, and Lift accept direct canvas sector targeting; Lift alcoves use a real
+wall-to-depth drag. Chain extrusion supports press-drag-release depth locked to the
+chosen seam, or a selection-free drag from inside a sector that infers the
+first crossed wall. It provides a visible normal ruler, explicit opposite-side
+control, exact depth, selective sized and offset doors, plus optional sector
+Special and Tag authoring. Shift+G toggles Snap to Grid while lowercase g only controls grid
+visibility, and the last explicit snapping choice is restored on the next
+launch. Embedded Smart Door Auto fields resolve from source geometry and show
+the exact Face and Track textures that will be applied. Floor, ceiling, and
+wall properties provide searchable selectors, preview tiles, and contextual
+Auto controls for each Ring or Inner property model. The designer's left-edge
+grip resizes the side area and protects a usable minimum map width. Narrow
+corridor connections resolve the actual post-split portal, preserving the
+solid wall textures beside it. Copy Review copies
+complete diagnostics without clipping, while Expand Review opens a live,
+resizable, wrapped, selectable view. Existing actions on an extrusion source
+seam are retained for Open/Wall connections and replaced only by Smart
+Door. After a successful commit, repeat mode returns to a zero-error WAITING
+FOR GESTURE state; pressing Enter there only prompts for the next gesture.
+Selection-based modes require a fresh target, preventing accidental duplicate
+commits.</p>
 
 <div class='vspace'></div><h2>Documentation</h2>
 <ul><li>Visit the <a class='wikilink' href='Main_About.html'>About</a> page for

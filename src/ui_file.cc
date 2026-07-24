@@ -26,11 +26,14 @@
 #include "m_files.h"
 #include "m_package.h"
 #include "m_game.h"
+#include "m_project_resources.h"
 #include "w_wad.h"
 
 #include "ui_window.h"
 #include "ui_file.h"
 
+#include <algorithm>
+#include <sstream>
 #include <set>
 
 #define FREE_COL  fl_rgb_color(0x33, 0xFF, 0xAA)
@@ -653,8 +656,8 @@ void UI_OpenMap::LoadFile()
 
 
 UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_startup) :
-	UI_Escapable_Window(is_startup ? 400 : 500,
-			is_startup ? 200 : (new_project ? 514 : 477),
+	UI_Escapable_Window(is_startup ? 400 : (new_project ? 620 : 650),
+			is_startup ? 200 : (new_project ? 550 : 590),
 			new_project ? "New Project" : "Manage Project"),
 	inst(inst),
 	newProject_(new_project)
@@ -662,6 +665,13 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 	callback(close_callback, this);
 
 	resizable(NULL);
+	if (new_project)
+	{
+		BuildNewProjectWizard();
+		end();
+		return;
+	}
+
 	int by = 0;
 
 	if (is_startup)
@@ -749,52 +759,16 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 
 	if (! is_startup)
 	{
-		const int project_shift = new_project ? 74 : 37;
-		Fl_Box *res_title = new Fl_Box(15, by+190+project_shift, 185, 30,
+		Fl_Box *res_title = new Fl_Box(35, by + 214, 220, 30,
 				"Resource Files or Folders:");
 		res_title->labelfont(FL_HELVETICA_BOLD);
 		res_title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-	}
-
-	for (int r = 0 ; r < RES_NUM ; r++)
-	{
-		result.resources[r].clear();
-
-		if (is_startup)
-			continue;
-
-		int cy = by + 220 + (new_project ? 74 : 37) + r * 35;
-
-		char res_label[64];
-		snprintf(res_label, sizeof(res_label), "%d. ", 1 + r);
-
-		res_name[r] = new Fl_Output(55, cy, 205, 25);
-		res_name[r]->copy_label(res_label);
-
-		Fl_Button *kill = new Fl_Button(270, cy, 30, 25, "x");
-		mClearButtons[r] = kill;
-		kill->labelsize(20);
-		kill->callback((Fl_Callback*)kill_callback, this);
-
-		// NOTE: on Apple, when selecting a folder picker, we can already pick files too, so unify the buttons
-#ifdef __APPLE__
-		Fl_Button *load = new Fl_Button(315, cy, 75 + 10 + 90, 25, "Load File or Folder");
-		mResourceFileButtons[r] = load;
-		load->callback((Fl_Callback*)load_callback, this);
-#else
-		Fl_Button *load = new Fl_Button(315, cy, 75, 25, "Load File");
-		mResourceFileButtons[r] = load;
-		load->callback((Fl_Callback*)load_callback, this);
-		
-		load = new Fl_Button(load->x() + load->w() + 10, cy, 90, 25, "Load Folder");
-		mResourceDirButtons[r] = load;
-		load->callback((Fl_Callback*)load_callback, this);
-#endif
+		BuildResourceList(35, by + 244, w() - 70, 205);
 	}
 
 	// bottom buttons
 	{
-		by += is_startup ? 80 : 375 + (new_project ? 74 : 37);
+		by = is_startup ? by + 80 : 520;
 
 		Fl_Group *g = new Fl_Group(0, by, w(), h() - by);
 		g->box(FL_FLAT_BOX);
@@ -818,6 +792,525 @@ UI_ProjectSetup::UI_ProjectSetup(Instance &inst, bool new_project, bool is_start
 }
 
 
+void UI_ProjectSetup::BuildNewProjectWizard()
+{
+	wizard_step = new Fl_Box(20, 12, w() - 40, 34,
+			"Step 1 of 3 - Project settings");
+	wizard_step->labelfont(FL_HELVETICA_BOLD);
+	wizard_step->labelsize(18);
+	wizard_step->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+
+	wizard = new Fl_Wizard(0, 55, w(), 427);
+	wizard->box(FL_FLAT_BOX);
+	wizard->color(WINDOW_BG, WINDOW_BG);
+
+	// Page 1: engine-facing project settings.
+	wizard_pages[0] = new Fl_Group(0, 55, w(), 427);
+	wizard_pages[0]->box(FL_FLAT_BOX);
+	wizard_pages[0]->color(WINDOW_BG, WINDOW_BG);
+
+	{
+		Fl_Box *intro = new Fl_Box(35, 69, w() - 70, 34,
+				"Choose the game data and compatibility profile for this project.");
+		intro->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
+	}
+
+	game_choice = new Fl_Choice(170, 118, 260, 29, "Game IWAD: ");
+	game_choice->labelfont(FL_HELVETICA_BOLD);
+	game_choice->down_box(FL_BORDER_BOX);
+	game_choice->callback((Fl_Callback*)game_callback, this);
+
+	{
+		Fl_Button *find = new Fl_Button(445, 120, 90, 25, "Find IWAD");
+		find->callback((Fl_Callback*)find_callback, this);
+	}
+
+	port_choice = new Fl_Choice(170, 163, 260, 29, "Source Port: ");
+	port_choice->labelfont(FL_HELVETICA_BOLD);
+	port_choice->down_box(FL_BORDER_BOX);
+	port_choice->callback((Fl_Callback*)port_callback, this);
+
+	{
+		Fl_Button *setup = new Fl_Button(445, 165, 90, 25, "Setup");
+		setup->callback((Fl_Callback*)setup_callback, this);
+	}
+
+	format_choice = new Fl_Choice(170, 208, 260, 29, "Map Type: ");
+	format_choice->labelfont(FL_HELVETICA_BOLD);
+	format_choice->down_box(FL_BORDER_BOX);
+	format_choice->callback((Fl_Callback*)format_callback, this);
+
+	package_choice = new Fl_Choice(170, 253, 365, 29, "Package: ");
+	package_choice->labelfont(FL_HELVETICA_BOLD);
+	package_choice->down_box(FL_BORDER_BOX);
+	package_choice->add("WAD package|PK3 package (BiasedDoom / GZDoom)");
+	package_choice->value(0);
+	package_choice->callback((Fl_Callback*)package_callback, this);
+
+	{
+		Fl_Box *help = new Fl_Box(85, 312, 450, 70,
+				"The game IWAD is opened read-only. The new package stores only "
+				"your maps, project metadata, and any resources you later add to it.");
+		help->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
+	}
+	wizard_pages[0]->end();
+
+	// Page 2: campaign shape and external resources.
+	wizard_pages[1] = new Fl_Group(0, 55, w(), 427);
+	wizard_pages[1]->box(FL_FLAT_BOX);
+	wizard_pages[1]->color(WINDOW_BG, WINDOW_BG);
+
+	campaign_choice = new Fl_Choice(170, 82, 365, 29, "Campaign: ");
+	campaign_choice->labelfont(FL_HELVETICA_BOLD);
+	campaign_choice->down_box(FL_BORDER_BOX);
+	campaign_choice->add("Full IWAD replacement|Single map|Custom map order");
+	campaign_choice->value(0);
+	campaign_choice->callback((Fl_Callback*)campaign_callback, this);
+
+	custom_slots = new Fl_Input(170, 121, 365, 29, "Map order: ");
+	custom_slots->tooltip("Comma- or space-separated map names, in campaign order");
+	custom_slots->callback((Fl_Callback*)custom_slots_callback, this);
+	custom_slots->when(FL_WHEN_CHANGED);
+	custom_slots->deactivate();
+
+	{
+		Fl_Box *res_title = new Fl_Box(35, 174, 240, 30,
+				"Resource Files or Folders:");
+		res_title->labelfont(FL_HELVETICA_BOLD);
+		res_title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+	}
+
+	BuildResourceList(35, 208, w() - 70, 162);
+	wizard_pages[1]->end();
+
+	// Page 3: destination and an explicit review before creation.
+	wizard_pages[2] = new Fl_Group(0, 55, w(), 427);
+	wizard_pages[2]->box(FL_FLAT_BOX);
+	wizard_pages[2]->color(WINDOW_BG, WINDOW_BG);
+
+	destination_input = new Fl_Input(145, 82, 350, 29, "Destination: ");
+	destination_input->labelfont(FL_HELVETICA_BOLD);
+	destination_input->tooltip("A new .wad or .pk3 package; existing files are never overwritten");
+	destination_input->callback((Fl_Callback*)destination_callback, this);
+	destination_input->when(FL_WHEN_CHANGED);
+
+	{
+		Fl_Button *choose = new Fl_Button(505, 84, 80, 25, "Choose...");
+		choose->callback((Fl_Callback*)choose_destination_callback, this);
+	}
+
+	review_summary = new Fl_Box(35, 128, 550, 235);
+	review_summary->box(FL_DOWN_BOX);
+	review_summary->color(FL_BACKGROUND2_COLOR);
+	review_summary->align(FL_ALIGN_TOP | FL_ALIGN_LEFT | FL_ALIGN_INSIDE |
+			FL_ALIGN_WRAP);
+	review_summary->labelfont(FL_COURIER);
+	review_summary->labelsize(13);
+
+	review_status = new Fl_Box(35, 374, 550, 52);
+	review_status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
+	review_status->labelfont(FL_HELVETICA_BOLD);
+	wizard_pages[2]->end();
+	wizard->end();
+
+	Fl_Group *bottom = new Fl_Group(0, 482, w(), h() - 482);
+	bottom->box(FL_FLAT_BOX);
+	bottom->color(WINDOW_BG, WINDOW_BG);
+
+	cancel = new Fl_Button(30, 498, 90, 35, "Cancel");
+	cancel->callback((Fl_Callback*)close_callback, this);
+
+	back_but = new Fl_Button(365, 498, 90, 35, "Back");
+	back_but->callback((Fl_Callback*)back_callback, this);
+
+	next_but = new Fl_Return_Button(500, 498, 90, 35, "Next");
+	next_but->labelfont(FL_HELVETICA_BOLD);
+	next_but->callback((Fl_Callback*)next_callback, this);
+
+	ok_but = new Fl_Return_Button(500, 498, 90, 35, "Create");
+	ok_but->labelfont(FL_HELVETICA_BOLD);
+	ok_but->callback((Fl_Callback*)use_callback, this);
+	bottom->end();
+
+	ShowWizardPage(0);
+}
+
+
+namespace
+{
+
+std::string ProjectPathText(const fs::path &path)
+{
+	const std::u8string text = path.u8string();
+	return std::string(reinterpret_cast<const char *>(text.data()), text.size());
+}
+
+const char *ProjectPackageLabel(ProjectPackage package)
+{
+	return package == ProjectPackage::pk3 ? "PK3" : "WAD";
+}
+
+const char *CampaignLabel(CampaignMode campaign)
+{
+	if (campaign == CampaignMode::singleMap)
+		return "Single map";
+	if (campaign == CampaignMode::custom)
+		return "Custom map order";
+	return "Full IWAD replacement";
+}
+
+const char *MapFormatLabel(MapFormat format)
+{
+	if (format == MapFormat::hexen)
+		return "Hexen";
+	if (format == MapFormat::udmf)
+		return "UDMF";
+	if (format == MapFormat::doom)
+		return "Doom";
+	return "Not selected";
+}
+
+} // namespace
+
+
+void UI_ProjectSetup::BuildResourceList(int x, int y, int width, int height)
+{
+	static const int columns[] = { 42, 175, 0 };
+	resource_list = new Fl_Hold_Browser(x, y, width, height);
+	resource_list->column_widths(columns);
+	resource_list->format_char(0);
+	resource_list->tooltip(
+			"Resources load from top to bottom; later entries can override earlier ones");
+	resource_list->callback(resource_selection_callback, this);
+
+	const int buttonY = y + height + 9;
+#ifdef __APPLE__
+	resource_add_file = new Fl_Button(x, buttonY, 165, 27,
+			"Add File or Folder...");
+	resource_add_file->callback((Fl_Callback *)resource_add_file_callback, this);
+	resource_remove = new Fl_Button(x + 181, buttonY, 90, 27, "Remove");
+	resource_up = new Fl_Button(x + 279, buttonY, 78, 27, "Move Up");
+	resource_down = new Fl_Button(x + 365, buttonY, 88, 27, "Move Down");
+#else
+	resource_add_file = new Fl_Button(x, buttonY, 90, 27, "Add File...");
+	resource_add_file->callback((Fl_Callback *)resource_add_file_callback, this);
+	resource_add_folder = new Fl_Button(x + 98, buttonY, 100, 27,
+			"Add Folder...");
+	resource_add_folder->callback((Fl_Callback *)resource_add_folder_callback,
+			this);
+	resource_remove = new Fl_Button(x + 214, buttonY, 90, 27, "Remove");
+	resource_up = new Fl_Button(x + 312, buttonY, 78, 27, "Move Up");
+	resource_down = new Fl_Button(x + 398, buttonY, 88, 27, "Move Down");
+#endif
+	resource_remove->callback((Fl_Callback *)resource_remove_callback, this);
+	resource_up->callback((Fl_Callback *)resource_up_callback, this);
+	resource_down->callback((Fl_Callback *)resource_down_callback, this);
+	UpdateResourceButtons();
+}
+
+
+void UI_ProjectSetup::RefreshResourceList(int selectedRow)
+{
+	if (!resource_list)
+		return;
+
+	if (selectedRow <= 0)
+		selectedRow = resource_list->value();
+	resource_list->clear();
+	for (size_t index = 0; index < result.resources.size(); ++index)
+	{
+		const fs::path &resource = result.resources[index];
+		const fs::path name = resource.has_filename() ? resource.filename() :
+				resource.parent_path().filename();
+		const SString row = SString::printf("%zu.\t%s\t%s", index + 1,
+				ProjectPathText(name).c_str(), ProjectPathText(resource).c_str());
+		resource_list->add(row.c_str());
+	}
+
+	if (result.resources.empty())
+		resource_list->value(0);
+	else
+	{
+		selectedRow = std::clamp(selectedRow, 1,
+				static_cast<int>(result.resources.size()));
+		resource_list->value(selectedRow);
+	}
+	UpdateResourceButtons();
+}
+
+
+void UI_ProjectSetup::UpdateResourceButtons()
+{
+	if (!resource_list || !resource_remove || !resource_up || !resource_down)
+		return;
+
+	const int selected = resource_list->value();
+	const bool hasSelection = selected > 0 &&
+			selected <= static_cast<int>(result.resources.size());
+	if (hasSelection)
+		resource_remove->activate();
+	else
+		resource_remove->deactivate();
+
+	if (hasSelection && selected > 1)
+		resource_up->activate();
+	else
+		resource_up->deactivate();
+
+	if (hasSelection && selected < static_cast<int>(result.resources.size()))
+		resource_down->activate();
+	else
+		resource_down->deactivate();
+}
+
+
+void UI_ProjectSetup::ShowWizardPage(int page)
+{
+	if (!wizard)
+		return;
+
+	wizard_page = std::clamp(page, 0, 2);
+	wizard->value(wizard_pages[wizard_page]);
+
+	static const char *stepLabels[] =
+	{
+		"Step 1 of 3 - Project settings",
+		"Step 2 of 3 - Campaign and resources",
+		"Step 3 of 3 - Review and create"
+	};
+	wizard_step->copy_label(stepLabels[wizard_page]);
+
+	if (wizard_page == 0)
+		back_but->deactivate();
+	else
+		back_but->activate();
+
+	if (wizard_page == 2)
+	{
+		next_but->hide();
+		ok_but->show();
+		UpdateWizardReview();
+	}
+	else
+	{
+		ok_but->hide();
+		next_but->show();
+		next_but->activate();
+	}
+
+	redraw();
+}
+
+
+bool UI_ProjectSetup::ValidateBasics(bool notify)
+{
+	SString message;
+	if (result.game.empty())
+		message = "Choose a supported game IWAD before continuing.";
+	else
+	{
+		const fs::path *iwad = global::recent.queryIWAD(result.game);
+		std::error_code error;
+		if (!iwad || !fs::is_regular_file(*iwad, error) || error)
+			message = "The selected game IWAD is no longer available.";
+	}
+
+	if (message.empty() && result.port.empty())
+		message = "Choose a source-port compatibility profile before continuing.";
+	else if (message.empty() && result.mapFormat == MapFormat::invalid)
+		message = "Choose a map format before continuing.";
+	else if (message.empty() && result.package != ProjectPackage::wad &&
+			result.package != ProjectPackage::pk3)
+		message = "Choose a supported project package type before continuing.";
+
+	if (!message.empty() && notify)
+		DLG_Notify("Project settings are incomplete:\n\n%s", message.c_str());
+	return message.empty();
+}
+
+
+bool UI_ProjectSetup::ValidateCampaignAndResources(bool notify)
+{
+	SString error;
+	if (result.campaign == CampaignMode::custom)
+	{
+		std::optional<std::vector<SString>> slots = M_ParseCustomMapSlots(
+				custom_slots ? custom_slots->value() : "", &error);
+		if (slots)
+			result.mapSlots = std::move(*slots);
+	}
+	else if (newProject_ && result.mapSlots.empty())
+	{
+		error = "The selected IWAD does not contain a valid map slot.";
+	}
+	if (error.empty())
+	{
+		const ProjectResourceValidation validation =
+				M_ValidateProjectResources(result.resources);
+		if (!validation.valid())
+			error = validation.message;
+	}
+
+	if (!error.empty() && notify)
+		DLG_Notify("Invalid campaign or resource settings:\n\n%s", error.c_str());
+	return error.empty();
+}
+
+
+ProjectDestinationValidation UI_ProjectSetup::ValidateDestination()
+{
+	fs::path destination;
+	if (destination_input && destination_input->value()[0])
+	{
+		destination = fs::path(reinterpret_cast<const char8_t *>(
+				destination_input->value()));
+	}
+
+	const fs::path normalized = M_NormalizeProjectDestination(destination,
+			result.package);
+	const bool knownIwad = !normalized.empty() &&
+			global::recent.hasIwadByPath(normalized);
+	return M_ValidateProjectDestination(normalized, result.package, knownIwad);
+}
+
+
+void UI_ProjectSetup::UpdateWizardReview()
+{
+	if (!newProject_ || !review_summary || !review_status)
+		return;
+
+	const bool basicsValid = ValidateBasics(false);
+	const bool campaignValid = ValidateCampaignAndResources(false);
+	ProjectDestinationValidation destination = ValidateDestination();
+	result.destination = destination.destination;
+
+	const fs::path *iwad = result.game.empty() ? nullptr :
+			global::recent.queryIWAD(result.game);
+	std::ostringstream summary;
+	summary << "Package:       " << ProjectPackageLabel(result.package) << '\n';
+	summary << "Game IWAD:     ";
+	if (iwad)
+		summary << ProjectPathText(*iwad);
+	else
+		summary << "Not selected";
+	summary << '\n';
+	summary << "Compatibility: " << result.port.c_str() << " / "
+			<< MapFormatLabel(result.mapFormat) << '\n';
+	summary << "Campaign:      " << CampaignLabel(result.campaign);
+	if (!campaignValid && result.campaign == CampaignMode::custom)
+		summary << " (invalid map order)";
+	else if (!result.mapSlots.empty())
+	{
+		const size_t slotCount = result.campaign == CampaignMode::singleMap ?
+				1 : result.mapSlots.size();
+		summary << " (" << slotCount << " map" << (slotCount == 1 ? "" : "s")
+				<< ", starting at " << result.mapSlots.front().c_str() << ')';
+	}
+	summary << '\n';
+
+	const size_t resourceCount = result.resources.size();
+	summary << "Resources:     " << resourceCount << '\n';
+	if (resourceCount > 0)
+	{
+		constexpr size_t maxReviewedResources = 6;
+		const size_t shownResources = std::min(resourceCount,
+				maxReviewedResources);
+		for (size_t index = 0; index < shownResources; ++index)
+		{
+			summary << "  " << index + 1 << ". "
+					<< ProjectPathText(result.resources[index]) << '\n';
+		}
+		if (shownResources < resourceCount)
+			summary << "  ... and " << resourceCount - shownResources
+					<< " more\n";
+	}
+	summary << "Destination:   ";
+	if (destination.destination.empty())
+		summary << "Not selected";
+	else
+		summary << ProjectPathText(destination.destination);
+	review_summary->copy_label(summary.str().c_str());
+
+	SString status;
+	if (!basicsValid)
+		status = "Return to Project settings and complete every required choice.";
+	else if (!campaignValid)
+		status = "Return to Campaign and resources and correct the invalid selection.";
+	else if (!destination.valid())
+		status = destination.message;
+	else
+		status = "Ready to create. The destination is new and the game IWAD will remain read-only.";
+
+	review_status->copy_label(status.c_str());
+	review_status->labelcolor(basicsValid && campaignValid && destination.valid() ?
+			fl_rgb_color(0x18, 0x70, 0x32) : FL_RED);
+
+	if (basicsValid && campaignValid && destination.valid())
+		ok_but->activate();
+	else
+		ok_but->deactivate();
+}
+
+
+void UI_ProjectSetup::back_callback(Fl_Button *, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	that->ShowWizardPage(that->wizard_page - 1);
+}
+
+
+void UI_ProjectSetup::next_callback(Fl_Button *, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	if (that->wizard_page == 0 && !that->ValidateBasics(true))
+		return;
+	if (that->wizard_page == 1 && !that->ValidateCampaignAndResources(true))
+		return;
+	that->ShowWizardPage(that->wizard_page + 1);
+}
+
+
+void UI_ProjectSetup::destination_callback(Fl_Input *, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	that->UpdateWizardReview();
+}
+
+
+void UI_ProjectSetup::choose_destination_callback(Fl_Button *, void *data)
+{
+	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
+	Fl_Native_File_Chooser chooser;
+	chooser.title("Choose new project destination");
+	chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+	chooser.filter(that->result.package == ProjectPackage::pk3 ?
+			"PK3 Packages\t*.pk3" : "WAD Packages\t*.wad");
+	chooser.directory(reinterpret_cast<const char *>(
+			that->inst.Main_FileOpFolder().u8string().c_str()));
+
+	switch (chooser.show())
+	{
+		case -1:
+			DLG_Notify("Unable to choose a project destination:\n\n%s",
+					chooser.errmsg());
+			return;
+
+		case 1:
+			return;
+
+		default:
+			break;
+	}
+
+	fs::path destination = fs::path(reinterpret_cast<const char8_t *>(
+			chooser.filename()));
+	destination = M_NormalizeProjectDestination(destination,
+			that->result.package);
+	that->destination_input->value(ProjectPathText(destination).c_str());
+	that->UpdateWizardReview();
+}
+
+
 std::optional<UI_ProjectSetup::Result> UI_ProjectSetup::Run()
 {
 	PopulateIWADs();
@@ -825,6 +1318,8 @@ std::optional<UI_ProjectSetup::Result> UI_ProjectSetup::Run()
 	PopulateMapFormat();
 	PopulateCampaign();
 	PopulateResources();
+	if (newProject_)
+		ShowWizardPage(0);
 
 	set_modal();
 
@@ -1088,29 +1583,12 @@ void UI_ProjectSetup::PopulateNamespaces()
 #endif
 }
 
-inline static fs::path fileOrDirName(const fs::path &path)
-{
-	return path.has_filename() ? path.filename() : path.parent_path().filename();
-}
-
 void UI_ProjectSetup::PopulateResources()
 {
 	// Note: these resource wads may be invalid (not exist) during startup.
 	//       This is probably NOT the place to validate them...
-
-	for (int r = 0 ; r < RES_NUM ; r++)
-	{
-		// the resource widgets are not created for the missing-iwad dialog
-		if (! res_name[r])
-			continue;
-
-		if (r < (int)inst.loaded.resourceList.size())
-		{
-			result.resources[r] = inst.loaded.resourceList[r];
-
-			res_name[r]->value(reinterpret_cast<const char *>(fileOrDirName(result.resources[r]).u8string().c_str()));
-		}
-	}
+	result.resources = inst.loaded.resourceList;
+	RefreshResourceList();
 }
 
 
@@ -1125,17 +1603,22 @@ void UI_ProjectSetup::close_callback(Fl_Widget *w, void *data)
 void UI_ProjectSetup::use_callback(Fl_Button *w, void *data)
 {
 	UI_ProjectSetup * that = (UI_ProjectSetup *)data;
-	if (that->result.campaign == CampaignMode::custom)
+	if (!that->ValidateBasics(true) ||
+			(that->custom_slots && !that->ValidateCampaignAndResources(true)))
+		return;
+
+	if (that->newProject_)
 	{
-		SString error;
-		std::optional<std::vector<SString>> slots = M_ParseCustomMapSlots(
-				that->custom_slots->value(), &error);
-		if (!slots)
+		ProjectDestinationValidation validation = that->ValidateDestination();
+		if (!validation.valid())
 		{
-			DLG_Notify("Invalid custom campaign:\n\n%s", error.c_str());
+			DLG_Notify("Cannot create the project:\n\n%s",
+					validation.message.c_str());
 			return;
 		}
-		that->result.mapSlots = std::move(*slots);
+		that->result.destination = validation.destination;
+		that->destination_input->value(
+				ProjectPathText(validation.destination).c_str());
 	}
 
 	that->action = Action::accept;
@@ -1166,6 +1649,7 @@ void UI_ProjectSetup::game_callback(Fl_Choice *w, void *data)
 		that->result.mapSlots.clear();
 		that->PopulateCampaign();
 	}
+	that->UpdateWizardReview();
 }
 
 
@@ -1178,6 +1662,7 @@ void UI_ProjectSetup::port_callback(Fl_Choice *w, void *data)
 	that->result.port = name;
 
 	that->PopulateMapFormat();
+	that->UpdateWizardReview();
 }
 
 
@@ -1195,6 +1680,7 @@ void UI_ProjectSetup::format_callback(Fl_Choice *w, void *data)
 		that->result.mapFormat = MapFormat::doom;
 
 	that->PopulateNamespaces();
+	that->UpdateWizardReview();
 }
 
 void UI_ProjectSetup::campaign_callback(Fl_Choice *w, void *data)
@@ -1205,7 +1691,15 @@ void UI_ProjectSetup::campaign_callback(Fl_Choice *w, void *data)
 	if (that->result.campaign == CampaignMode::custom)
 		that->custom_slots->activate();
 	else
+	{
 		that->custom_slots->deactivate();
+		if (that->newProject_)
+		{
+			that->result.mapSlots.clear();
+			that->PopulateCampaign();
+		}
+	}
+	that->UpdateWizardReview();
 }
 
 
@@ -1217,6 +1711,7 @@ void UI_ProjectSetup::custom_slots_callback(Fl_Input *input, void *data)
 			M_ParseCustomMapSlots(input->value(), &ignored);
 	if (slots)
 		that->result.mapSlots = std::move(*slots);
+	that->UpdateWizardReview();
 }
 
 void UI_ProjectSetup::package_callback(Fl_Choice *w, void *data)
@@ -1224,6 +1719,7 @@ void UI_ProjectSetup::package_callback(Fl_Choice *w, void *data)
 	UI_ProjectSetup *that = static_cast<UI_ProjectSetup *>(data);
 	that->result.package = (w->value() == 1) ? ProjectPackage::pk3 :
 			ProjectPackage::wad;
+	that->UpdateWizardReview();
 }
 
 
@@ -1279,6 +1775,7 @@ void UI_ProjectSetup::find_callback(Fl_Button *w, void *data)
 	that->PopulateIWADs();
 	that->PopulatePort();
 	that->PopulateMapFormat();
+	that->UpdateWizardReview();
 }
 
 void UI_ProjectSetup::setup_callback(Fl_Button *w, void *data)
@@ -1296,31 +1793,44 @@ void UI_ProjectSetup::setup_callback(Fl_Button *w, void *data)
 }
 
 
-void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
+void UI_ProjectSetup::resource_selection_callback(Fl_Widget *, void *data)
 {
-	auto that = static_cast<UI_ProjectSetup*>(data);
-	int r;
-	bool isdir = false;
-	for (r = 0; r < RES_NUM; ++r)
-		if (w == that->mResourceFileButtons[r] || w == that->mResourceDirButtons[r])
-		{
-			isdir = w == that->mResourceDirButtons[r];
-			break;
-		}
-	SYS_ASSERT(0 <= r && r < RES_NUM);
+	auto that = static_cast<UI_ProjectSetup *>(data);
+	that->UpdateResourceButtons();
+}
 
-	SYS_ASSERT(that);
-	
-	const char *title = isdir ? "Pick folder to open" : "Pick file to open";
+
+void UI_ProjectSetup::resource_add_file_callback(Fl_Button *, void *data)
+{
+	auto that = static_cast<UI_ProjectSetup *>(data);
 #ifdef __APPLE__
-	title = "Pick file or folder to open";
-	isdir = true;
+	that->ChooseAndAddResource(true);
+#else
+	that->ChooseAndAddResource(false);
+#endif
+}
+
+
+void UI_ProjectSetup::resource_add_folder_callback(Fl_Button *, void *data)
+{
+	auto that = static_cast<UI_ProjectSetup *>(data);
+	that->ChooseAndAddResource(true);
+}
+
+
+void UI_ProjectSetup::ChooseAndAddResource(bool directory)
+{
+	const char *title = directory ? "Pick resource folder" :
+			"Pick resource file";
+#ifdef __APPLE__
+	title = "Pick resource file or folder";
+	directory = true;
 #endif
 
 	Fl_Native_File_Chooser chooser;
 
 	chooser.title(title);
-	if(isdir)
+	if (directory)
 	{
 		chooser.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
 #ifdef __APPLE__
@@ -1332,12 +1842,13 @@ void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
 		chooser.type(Fl_Native_File_Chooser::BROWSE_FILE);
 		chooser.filter("WAD/PK3 resources\t*.{wad,pk3,zip}\nHeresy Editor defs\t*.ugh\nDehacked files\t*.deh\nBEX files\t*.bex");
 	}
-	chooser.directory(reinterpret_cast<const char *>(that->inst.Main_FileOpFolder().u8string().c_str()));
+	chooser.directory(reinterpret_cast<const char *>(
+			inst.Main_FileOpFolder().u8string().c_str()));
 
 	switch (chooser.show())
 	{
 		case -1:  // error
-			DLG_Notify("Unable to open that wad:\n\n%s", chooser.errmsg());
+			DLG_Notify("Unable to choose that resource:\n\n%s", chooser.errmsg());
 			return;
 
 		case 1:  // cancelled
@@ -1347,29 +1858,56 @@ void UI_ProjectSetup::load_callback(Fl_Button *w, void *data)
 			break;  // OK
 	}
 
-	that->result.resources[r] = fs::path(reinterpret_cast<const char8_t *>(chooser.filename()));
+	const fs::path resource(reinterpret_cast<const char8_t *>(chooser.filename()));
+	ProjectResourceValidation validation;
+	if (!M_AddProjectResource(result.resources, resource, &validation))
+	{
+		DLG_Notify("Cannot add that resource:\n\n%s",
+				validation.message.c_str());
+		return;
+	}
 
-	that->res_name[r]->value(reinterpret_cast<const char *>(fileOrDirName(that->result.resources[r]).u8string().c_str()));
+	RefreshResourceList(static_cast<int>(result.resources.size()));
+	UpdateWizardReview();
 }
 
 
-void UI_ProjectSetup::kill_callback(Fl_Button *w, void *data)
+void UI_ProjectSetup::resource_remove_callback(Fl_Button *, void *data)
 {
-	auto that = static_cast<UI_ProjectSetup*>(data);
-	int r;
-	for (r = 0; r < RES_NUM; ++r)
-		if (w == that->mClearButtons[r])
-			break;
-	SYS_ASSERT(0 <= r && r < RES_NUM);
+	auto that = static_cast<UI_ProjectSetup *>(data);
+	const int selected = that->resource_list->value();
+	if (selected <= 0 || !M_RemoveProjectResource(that->result.resources,
+			static_cast<size_t>(selected - 1)))
+		return;
 
-	SYS_ASSERT(that);
+	that->RefreshResourceList(selected);
+	that->UpdateWizardReview();
+}
 
-	if (!that->result.resources[r].empty())
-	{
-		that->result.resources[r].clear();
 
-		that->res_name[r]->value("");
-	}
+void UI_ProjectSetup::resource_up_callback(Fl_Button *, void *data)
+{
+	auto that = static_cast<UI_ProjectSetup *>(data);
+	const int selected = that->resource_list->value();
+	if (selected <= 0 || !M_MoveProjectResource(that->result.resources,
+			static_cast<size_t>(selected - 1), -1))
+		return;
+
+	that->RefreshResourceList(selected - 1);
+	that->UpdateWizardReview();
+}
+
+
+void UI_ProjectSetup::resource_down_callback(Fl_Button *, void *data)
+{
+	auto that = static_cast<UI_ProjectSetup *>(data);
+	const int selected = that->resource_list->value();
+	if (selected <= 0 || !M_MoveProjectResource(that->result.resources,
+			static_cast<size_t>(selected - 1), 1))
+		return;
+
+	that->RefreshResourceList(selected + 1);
+	that->UpdateWizardReview();
 }
 
 

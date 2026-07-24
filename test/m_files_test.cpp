@@ -18,11 +18,14 @@
 
 #include "testUtils/TempDirContext.hpp"
 
+#include "Instance.h"
+#include "m_config.h"
 #include "m_files.h"
 #include "m_loadsave.h"
 #include "m_package.h"
 #include "m_parse.h"
 #include "m_streams.h"
+#include "w_wad.h"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -56,6 +59,8 @@ TEST_F(EurekaLumpFixture, WriteEurekaLump)
 	loaded.resourceList.push_back(getSubPath(fs::path("first") / "deep" / "call.txt"));	// child path
 	loaded.resourceList.push_back(getSubPath("upper.txt"));		// upper path
 	loaded.resourceList.push_back(getSubPath(fs::path("second") / "music.mid"));	// sibling path
+	loaded.resourceList.push_back(getSubPath(fs::path("third") / "alpha.wad"));
+	loaded.resourceList.push_back(getSubPath(fs::path("fourth") / "beta.pk3"));
 
 	// In case of Windows, also check different drive letter
 	fs::path wadpathobj = fs::path(wadpath.c_str());
@@ -86,6 +91,8 @@ TEST_F(EurekaLumpFixture, WriteEurekaLump)
 		"resource deep/call.txt\n"
 		"resource ../upper.txt\n"
 		"resource ../second/music.mid\n"
+		"resource ../third/alpha.wad\n"
+		"resource ../fourth/beta.pk3\n"
 	;
 	if(wadpathobj.has_root_name())
 	{
@@ -294,6 +301,75 @@ TEST_F(ParseEurekaLumpFixture, ProjectMetadataRoundTrip)
 	EXPECT_EQ(loading.project.mapSlots[1], "MAP02");
 }
 
+TEST_F(ParseEurekaLumpFixture, RichCampaignMetadataRoundTrip)
+{
+	Lump_c &metadata = wad->AddLump(EUREKA_LUMP);
+	metadata.Printf("project_version 3\n");
+	metadata.Printf("project_name \"Graph Campaign\"\n");
+	metadata.Printf("project_package wad\n");
+	metadata.Printf("campaign_mode custom\n");
+	// Detail fields deliberately precede slots to prove parse order is benign.
+	metadata.Printf("map_title_MAP01 \"The Arrival\"\n");
+	metadata.Printf("map_episode_MAP01 \"Episode One\"\n");
+	metadata.Printf("map_entry_MAP03 1\n");
+	metadata.Printf("map_next_MAP01 MAP03\n");
+	metadata.Printf("map_secret_MAP01 MAP31\n");
+	metadata.Printf("map_title_MAP99 Orphan\n");
+	metadata.Printf("map_next_MAP02 -\n");
+	metadata.Printf("map_slot MAP01\n");
+	metadata.Printf("map_slot MAP02\n");
+	metadata.Printf("map_slot MAP03\n");
+	metadata.Printf("map_slot MAP31\n");
+
+	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir,
+			recent, wad.get()));
+	EXPECT_EQ(loading.project.version, 3);
+	ASSERT_EQ(loading.project.mapDefinitions.size(), 3u);
+	const CampaignMapDefinition *first =
+			loading.project.mapDefinition("MAP01");
+	ASSERT_TRUE(first);
+	EXPECT_EQ(first->title, "The Arrival");
+	EXPECT_EQ(first->episode, "Episode One");
+	EXPECT_EQ(first->normalExit, std::optional<SString>("MAP03"));
+	EXPECT_EQ(first->secretExit, std::optional<SString>("MAP31"));
+	const CampaignMapDefinition *second =
+			loading.project.mapDefinition("MAP02");
+	ASSERT_TRUE(second);
+	ASSERT_TRUE(second->normalExit.has_value());
+	EXPECT_TRUE(second->normalExit->empty());
+	const CampaignMapDefinition *third =
+			loading.project.mapDefinition("MAP03");
+	ASSERT_TRUE(third);
+	EXPECT_TRUE(third->entryPoint);
+	EXPECT_EQ(M_CampaignEntryMaps(loading.project),
+			(std::vector<SString>{ "MAP01", "MAP03" }));
+	EXPECT_FALSE(loading.project.mapDefinition("MAP99"));
+}
+
+TEST_F(ParseEurekaLumpFixture, VersionTwoCampaignRemainsSingleEntryOnLoad)
+{
+	Lump_c &metadata = wad->AddLump(EUREKA_LUMP);
+	metadata.Printf("project_version 2\n");
+	metadata.Printf("project_name \"Legacy Graph\"\n");
+	metadata.Printf("project_package wad\n");
+	metadata.Printf("campaign_mode custom\n");
+	metadata.Printf("map_title_E1M1 Start\n");
+	metadata.Printf("map_next_E1M2 -\n");
+	metadata.Printf("map_slot E1M1\n");
+	metadata.Printf("map_slot E1M2\n");
+	metadata.Printf("map_slot E2M1\n");
+
+	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir,
+			recent, wad.get()));
+	EXPECT_EQ(loading.project.version, 2);
+	EXPECT_EQ(M_CampaignEntryMaps(loading.project),
+			(std::vector<SString>{ "E1M1" }));
+	const auto fields = loading.project.serializedFields();
+	ASSERT_FALSE(fields.empty());
+	EXPECT_EQ(fields.front(),
+			(std::pair<SString, SString>{ "project_version", "2" }));
+}
+
 TEST_F(ParseEurekaLumpFixture, TryGameAndPort)
 {
 	Lump_c &eureka = wad->AddLump(EUREKA_LUMP);
@@ -477,13 +553,14 @@ TEST_F(ParseEurekaLumpFixture, TryResources)
 	ASSERT_NE(std::find(res.begin(), res.end(), getSubPath(fs::path("abs") / "abspath.wad")), res.end());
 }
 
-TEST_F(ParseEurekaLumpFixture, ResourcesAreUniqueByFileNameNoCase)
+TEST_F(ParseEurekaLumpFixture, ResourceOrderAllowsSameBasenameInDifferentFolders)
 {
 	Lump_c &eureka = wad->AddLump(EUREKA_LUMP);
 	eureka.Printf("game doom\n");
 	eureka.Printf("resource samename.wad\n");
-	eureka.Printf("resource sub/SameName.Wad\n");	// repeat so we check we don't add it again
+	eureka.Printf("resource sub/SameName.Wad\n");
 	eureka.Printf("resource othername.wad\n");
+	eureka.Printf("resource samename.wad\n");	// same resolved path is ignored
 
 	// Make the files
 	std::ofstream stream;
@@ -518,9 +595,36 @@ TEST_F(ParseEurekaLumpFixture, ResourcesAreUniqueByFileNameNoCase)
 	makeGame(makeGamesDir(), "doom.ugh");
 
 	loading.parseEurekaLump(home_dir, old_home_dir, install_dir, recent, wad.get());
-	ASSERT_EQ(loading.resourceList.size(), 2);
-	ASSERT_EQ(loading.resourceList[0], getSubPath("samename.wad"));	// not the second one too
-	ASSERT_EQ(loading.resourceList[1], getSubPath("othername.wad"));
+	ASSERT_EQ(loading.resourceList.size(), 3);
+	EXPECT_EQ(loading.resourceList[0], getSubPath("samename.wad"));
+	EXPECT_EQ(loading.resourceList[1], getSubPath("sub/SameName.Wad"));
+	EXPECT_EQ(loading.resourceList[2], getSubPath("othername.wad"));
+}
+
+TEST_F(ParseEurekaLumpFixture, CommandLineResourcesStayAheadOfProjectResources)
+{
+	Lump_c &eureka = wad->AddLump(EUREKA_LUMP);
+	eureka.Printf("resource project-first.wad\n");
+	eureka.Printf("resource project-second.pk3\n");
+
+	const fs::path commandFirst = getSubPath("command-first.wad");
+	const fs::path commandSecond = getSubPath("command-second.pk3");
+	const fs::path projectFirst = getSubPath("project-first.wad");
+	const fs::path projectSecond = getSubPath("project-second.pk3");
+	for (const fs::path &path :
+			{ commandFirst, commandSecond, projectFirst, projectSecond })
+	{
+		std::ofstream stream(path);
+		ASSERT_TRUE(stream.is_open());
+		stream.close();
+		mDeleteList.push(path);
+	}
+
+	loading.resourceList = { commandFirst, commandSecond };
+	ASSERT_TRUE(loading.parseEurekaLump(home_dir, old_home_dir, install_dir,
+			recent, wad.get(), true));
+	EXPECT_EQ(loading.resourceList, (std::vector<fs::path>{ commandFirst,
+			commandSecond, projectFirst, projectSecond }));
 }
 
 TEST_F(ParseEurekaLumpFixture, TryResourcesParentPath)
@@ -676,6 +780,43 @@ class RecentFilesFixture : public TempDirContext
 protected:
 	void testLoadRecent(const fs::path &homePath, const fs::path &oldHomePath, const fs::path &miscPath);
 };
+
+TEST_F(RecentFilesFixture, StartupReopensExplicitProjectWithoutLooseFilePreference)
+{
+	struct RecentRestore
+	{
+		RecentKnowledge saved;
+		~RecentRestore()
+		{
+			global::recent = std::move(saved);
+		}
+	} restore{global::recent};
+	global::recent = {};
+
+	const fs::path projectPath = getSubPath("last-project.wad");
+	mDeleteList.push(projectPath);
+	std::shared_ptr<Wad_file> project =
+			Wad_file::Open(projectPath, WadOpenMode::write);
+	ASSERT_TRUE(project);
+	project->AddLevel("MAP07");
+	project->AddLump("THINGS");
+	project->AddLump("LINEDEFS");
+	project->AddLump("SIDEDEFS");
+	project->AddLump("VERTEXES");
+	project->AddLump("SECTORS");
+	project->writeToDisk();
+	project.reset();
+
+	global::recent.addRecentProject(projectPath, "MAP07", {});
+
+	Instance inst;
+	ASSERT_TRUE(inst.M_TryOpenMostRecent(
+			false /* do not load a loose recent WAD */));
+	ASSERT_TRUE(inst.wad.master.editWad());
+	EXPECT_TRUE(fs::equivalent(
+			inst.wad.master.editWad()->PathName(), projectPath));
+	EXPECT_EQ(inst.loaded.levelName, "MAP07");
+}
 
 TEST_F(RecentFilesFixture, WriteFile)
 {
@@ -853,12 +994,21 @@ TEST_F(RecentFilesFixture, MSaveRecent)
 	RecentFiles_c readRecentFiles;
 	std::map<SString, fs::path> readKnownIwads;
 	std::map<SString, fs::path> readPortPaths;
+	std::optional<bool> readGridSnap;
 	while(M_ReadTextLine(line, is))
 	{
 		TokenWordParse parse(line, true);
 		SString keyword;
 		if(!parse.getNext(keyword))
 			continue;
+		if (keyword == "grid_snap")
+		{
+			SString enabled;
+			ASSERT_TRUE(parse.getNext(enabled));
+			ASSERT_TRUE(enabled == "0" || enabled == "1");
+			readGridSnap = enabled == "1";
+			continue;
+		}
 		SString name;
 		fs::path path;
 		ASSERT_TRUE(parse.getNext(name));
@@ -887,6 +1037,8 @@ TEST_F(RecentFilesFixture, MSaveRecent)
 		}
 	}
 	// Now check content
+	ASSERT_TRUE(readGridSnap.has_value());
+	EXPECT_EQ(*readGridSnap, config::grid_default_snap);
 	ASSERT_EQ(readRecentFiles.getSize(), 3);
 	for(int i = 0; i < readRecentFiles.getSize(); ++i)
 	{
@@ -907,6 +1059,40 @@ TEST_F(RecentFilesFixture, MSaveRecent)
 		ASSERT_TRUE(recent.queryPortPath(item.first));
 		ASSERT_EQ(*recent.queryPortPath(item.first), item.second);
 	}
+}
+
+TEST_F(RecentFilesFixture, SnapSettingSurvivesApplicationSettingsRoundTrip)
+{
+	struct SnapRestore
+	{
+		bool value = config::grid_default_snap;
+		~SnapRestore()
+		{
+			config::grid_default_snap = value;
+		}
+	} restore;
+
+	config::grid_default_snap = false;
+	Instance running;
+	running.grid.Init();
+	ASSERT_FALSE(running.grid.snaps());
+	running.grid.SetSnap(true);
+	ASSERT_TRUE(config::grid_default_snap);
+
+	RecentKnowledge closingState;
+	closingState.save(mTempDir);
+	mDeleteList.push(mTempDir / "misc.cfg");
+
+	// Simulate a fresh process using its compiled/configured default before
+	// loading the settings written during clean shutdown.
+	config::grid_default_snap = false;
+	RecentKnowledge startupState;
+	startupState.load(mTempDir, {});
+	ASSERT_TRUE(config::grid_default_snap);
+
+	Instance restarted;
+	restarted.grid.Init();
+	EXPECT_TRUE(restarted.grid.snaps());
 }
 
 TEST_F(RecentFilesFixture, PersistsWadAndPk3ProjectsSeparatelyFromRecentFiles)

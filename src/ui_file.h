@@ -142,10 +142,6 @@ private:
 class UI_ProjectSetup : public UI_Escapable_Window
 {
 public:
-	enum
-	{
-		RES_NUM = 4
-	};
 	struct Result
 	{
 		SString game;
@@ -155,21 +151,36 @@ public:
 		ProjectPackage package = ProjectPackage::wad;
 		CampaignMode campaign = CampaignMode::fullIwad;
 		std::vector<SString> mapSlots;
-		fs::path resources[RES_NUM];
+		fs::path destination;
+		std::vector<fs::path> resources;
 	};
 
 private:
-	Fl_Choice *game_choice;
-	Fl_Choice *port_choice;
-	Fl_Choice *format_choice;
+	Fl_Choice *game_choice = nullptr;
+	Fl_Choice *port_choice = nullptr;
+	Fl_Choice *format_choice = nullptr;
 	Fl_Choice *package_choice = nullptr;
 	Fl_Choice *campaign_choice = nullptr;
 	Fl_Input *custom_slots = nullptr;
+	Fl_Input *destination_input = nullptr;
 
-	Fl_Output *res_name[RES_NUM];
+	Fl_Hold_Browser *resource_list = nullptr;
+	Fl_Button *resource_add_file = nullptr;
+	Fl_Button *resource_add_folder = nullptr;
+	Fl_Button *resource_remove = nullptr;
+	Fl_Button *resource_up = nullptr;
+	Fl_Button *resource_down = nullptr;
 
-	Fl_Button *ok_but;
-	Fl_Button *cancel;
+	Fl_Button *ok_but = nullptr;
+	Fl_Button *cancel = nullptr;
+	Fl_Button *back_but = nullptr;
+	Fl_Button *next_but = nullptr;
+	Fl_Wizard *wizard = nullptr;
+	Fl_Group *wizard_pages[3] = {};
+	Fl_Box *wizard_step = nullptr;
+	Fl_Box *review_summary = nullptr;
+	Fl_Box *review_status = nullptr;
+	int wizard_page = 0;
 
 	map_format_bitset_t usable_formats;
 
@@ -192,24 +203,38 @@ private:
 
 	static void  find_callback(Fl_Button*, void*);
 	static void setup_callback(Fl_Button*, void*);
-	static void  kill_callback(Fl_Button*, void*);
-	static void  load_callback(Fl_Button*, void*);
+	static void resource_selection_callback(Fl_Widget*, void*);
+	static void resource_add_file_callback(Fl_Button*, void*);
+	static void resource_add_folder_callback(Fl_Button*, void*);
+	static void resource_remove_callback(Fl_Button*, void*);
+	static void resource_up_callback(Fl_Button*, void*);
+	static void resource_down_callback(Fl_Button*, void*);
 
 	static void close_callback(Fl_Widget*, void*);
 	static void   use_callback(Fl_Button*, void*);
+	static void   back_callback(Fl_Button*, void*);
+	static void   next_callback(Fl_Button*, void*);
+	static void destination_callback(Fl_Input*, void*);
+	static void choose_destination_callback(Fl_Button*, void*);
 
+	void BuildNewProjectWizard();
+	void ShowWizardPage(int page);
+	void UpdateWizardReview();
+	bool ValidateBasics(bool notify);
+	bool ValidateCampaignAndResources(bool notify);
+	ProjectDestinationValidation ValidateDestination();
 	void PopulateIWADs();
 	void PopulatePort();
 	void PopulateMapFormat();
 	void PopulateCampaign();
 	void PopulateNamespaces();
 	void PopulateResources();
+	void BuildResourceList(int x, int y, int width, int height);
+	void RefreshResourceList(int selectedRow = 0);
+	void UpdateResourceButtons();
+	void ChooseAndAddResource(bool directory);
 
 	Result result;
-
-	Fl_Button* mResourceFileButtons[RES_NUM] = {};
-	Fl_Button* mResourceDirButtons[RES_NUM] = {};
-	Fl_Button* mClearButtons[RES_NUM] = {};
 
 	Instance &inst;
 	bool newProject_ = false;

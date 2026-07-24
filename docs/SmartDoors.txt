@@ -1,0 +1,100 @@
+Smart Door authoring
+====================
+
+Smart Door is a sector-finishing tool.  Draw the intended door sector first,
+including its two-sided openings and any one-sided track walls.  In 2D Sector
+mode, select one or more nonadjacent door sectors and use Edit -> Make Smart
+Door or the Sector Operations menu.  With no selection, the highlighted sector
+is used temporarily.  The sector itself becomes the moving door volume: Smart
+Door does not choose one of its neighbors.
+
+Review
+------
+
+The TARGET box names the exact sector numbers that will be converted, including
+when the command temporarily uses the highlighted sector.  The dialog reports
+how many sectors, activating portal lines, and track walls the planner found.
+The map overlay uses three separate roles:
+
+* orange hatch with a heavy orange outline: sectors that will become doors
+* orange lines: portal lines that receive the door action
+* green: one-sided track walls
+
+The overlay remains visible beside the review window.  Selecting a warning or
+error centers the map on its sector or line.  Nothing is changed until Make
+Door is pressed.
+
+Choose a semantic preset such as a normal, fast, stay-open, or locally
+supported keyed door.  The available list comes from the active game, source
+port, and map format; unsupported representations are hidden.
+
+Door face texture is the surface visible on the moving door slab.  Track wall
+texture is the texture on the narrow side walls inside the doorway.  Browse,
+or click either preview tile, to open a searchable list of loaded wall textures
+with dimensions and a larger preview.  Search is case-insensitive.  Use Auto
+to clear an override, or type a custom resource name directly.  A green, lit
+Auto button means that field is genuinely using inference; typing or choosing
+an override turns it off.  The resolved choice and its purpose are shown below
+each control.
+
+Auto face inference prefers neighbor-facing portal surfaces, then track
+surfaces, then the configured default wall.  Auto track inference prefers
+existing track middles, then the inferred face, then the default wall.  Linedef
+length supplies the weight, and the lowest linedef number resolves a tie.  A
+texture that is not loaded is a warning rather than an error, so custom
+resource names remain possible.
+
+Validation
+----------
+
+Every selected sector needs at least two two-sided portal boundaries.  A batch
+is blocked if a sector is malformed or self-referencing, if selected door
+sectors are adjacent, if heights are invalid, or if portal ownership conflicts.
+Warnings call attention to unusual or split shapes, extra neighbors, missing
+tracks, low opening clearance, floor mismatches, custom textures, shared
+sidedefs that will be isolated, and existing specials that will be replaced.
+
+Make Door remains disabled while any blocking error exists.  The complete
+selection is planned again when Make Door is pressed.  If any sector has become
+invalid, no sector is changed.
+
+Result and undo
+---------------
+
+Portal lines are oriented with the door sector on the back/left, receive the
+chosen special, arguments, and map-format activation, and place the Face
+texture on the neighbor-facing upper surface.  Track walls become actionless,
+one-sided/blocking, lower-unpegged walls using the Track texture.  The door
+ceiling closes to its floor.
+
+Sector flats, floor height, lighting, type, tag, offsets, potentially visible
+portal lower textures, and unrelated line flags are preserved.  Only affected
+shared sidedefs are copied.  The whole batch is one Undo step, and Redo restores
+it.  Cancel or closing the dialog makes no edit and does not alter selection.
+
+Boundaries
+----------
+
+Smart Door does not draw, split, resize, or move geometry.  Remote switches and
+automatic tags, raw special editing, live 3D mutation, animated or sliding
+doors, and polyobject construction are outside this tool.  The transient
+planning and preview architecture is intended for later lifts, stairs,
+corridors, and portal-building tools.
+
+Smart Sector integration
+------------------------
+
+Smart Sector Designer now supplies the geometry-building counterpart.  Its
+Extrude and Corridor modes can choose a Door connection, which inserts the
+door-depth sector and calls this same Smart Door planner and mutation code
+inside the geometry operation.  Extrusion can place a centered, sized, and
+offset door on the automatically chosen longest source segment, or place
+independent doors on explicitly selected segments of a nonbranching chain.
+Auto width reserves track walls at chain bends; the remaining extrusion seam
+stays a blocking wall.  The embedded Preset, Face, and Track controls have
+identical Auto and compatibility behavior, and the embedded face/track preview
+tiles and Choose buttons open the same loaded-texture picker.
+Generated geometry, portal orientation, textures, special, arguments,
+activation, and collapsed ceiling commit as one Undo step; if either geometry
+or door revalidation fails, none of the combined operation is retained.  See
+`docs/SmartSectors.txt`.

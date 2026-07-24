@@ -29,7 +29,9 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "e_design.h"
 #include "m_events.h"
 #include "e_objects.h"
 #include "e_things.h"
@@ -82,6 +84,21 @@ struct Navigation
 	bool  lax;
 };
 
+// Transient, non-serialized geometry roles used by review-first design tools.
+// Later portal, lift, stair, and corridor tools can reuse this overlay.
+struct DesignAssistPreview
+{
+	selection_c sectors{ObjType::sectors};
+	selection_c activatingLines{ObjType::linedefs};
+	selection_c trackLines{ObjType::linedefs};
+	// Smart Door uses a strong hatched fill and heavy outline so the exact
+	// sectors that will be converted cannot be mistaken for a hover.
+	bool emphasizeSectors = false;
+	std::vector<DesignPreviewPath> paths;
+	std::vector<DesignPreviewPoint> points;
+	std::vector<DesignPreviewLabel> labels;
+};
+
 //
 // this holds some important editor state
 //
@@ -123,6 +140,8 @@ struct Editor_State_t
 	int   thing_render_mode;
 
 	bool show_object_numbers;
+
+	std::optional<DesignAssistPreview> designAssistPreview;
 
 
 	/* navigation stuff */

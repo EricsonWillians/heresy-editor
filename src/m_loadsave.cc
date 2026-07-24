@@ -37,6 +37,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_files.h"
+#include "m_mapinfo.h"
 #include "m_package.h"
 #include "m_recovery.h"
 #include "m_session.h"
@@ -53,7 +54,9 @@
 #include "ui_window.h"
 #include "ui_campaign.h"
 #include "ui_file.h"
+#include "ui_mapinfo.h"
 #include "ui_menu.h"
+#include "ui_package.h"
 
 #include <memory>
 #include <ctime>
@@ -187,55 +190,6 @@ void Instance::FreshLevel()
 }
 
 
-std::optional<fs::path> Instance::Project_AskFile(ProjectPackage package) const
-{
-	// this returns false if user cancelled
-
-	Fl_Native_File_Chooser chooser;
-
-	chooser.title("Pick file to create");
-	chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
-	chooser.filter(package == ProjectPackage::pk3 ?
-			"PK3 Packages\t*.pk3" : "WAD Packages\t*.wad");
-	chooser.directory(reinterpret_cast<const char *>(Main_FileOpFolder().u8string().c_str()));
-
-	// Show native chooser
-	switch (chooser.show())
-	{
-		case -1:
-			gLog.printf("New Project: error choosing file:\n");
-			gLog.printf("   %s\n", chooser.errmsg());
-
-			DLG_Notify("Unable to create a new project:\n\n%s", chooser.errmsg());
-			return {};
-
-		case 1:
-			gLog.printf("New Project: cancelled by user\n");
-			return {};
-
-		default:
-			break;  // OK
-	}
-
-	const char *requiredExtension = package == ProjectPackage::pk3 ? ".pk3" : ".wad";
-	const char *packageName = package == ProjectPackage::pk3 ? "PK3" : "WAD";
-
-	// If the extension is missing, add the selected package extension.
-	fs::path filename = fs::path(reinterpret_cast<const char8_t *>(chooser.filename()));
-
-	fs::path extension = filename.extension();
-	if(extension.empty())
-		filename += requiredExtension;
-	else if (!MatchExtensionNoCase(filename, requiredExtension))
-	{
-		DLG_Notify("A %s project destination must use the %s extension.",
-				packageName, requiredExtension);
-		return {};
-	}
-
-	return filename;
-}
-
 static void updateLoading(const UI_ProjectSetup::Result &result, LoadingData &loading)
 {
 	loading.gameName = result.game;
@@ -245,16 +199,14 @@ static void updateLoading(const UI_ProjectSetup::Result &result, LoadingData &lo
 	loading.iwadName = *iwad;
 	loading.levelFormat = result.mapFormat;
 	loading.udmfNamespace = result.nameSpace;
-	loading.resourceList.clear();
-	for(int i = 0; i < UI_ProjectSetup::RES_NUM; ++i)
-		if(!result.resources[i].empty())
-			loading.resourceList.push_back(result.resources[i]);
+	loading.resourceList = result.resources;
 
 	if (loading.project.isExplicit())
 	{
 		loading.project.campaign = result.campaign;
 		if (result.campaign == CampaignMode::custom)
 			loading.project.mapSlots = result.mapSlots;
+		M_ReconcileCampaignMetadata(loading.project);
 	}
 }
 
@@ -309,7 +261,7 @@ void Instance::CMD_NewProject()
 		if (!Project_ConfirmClose("create a new project"))
 			return;
 
-		/* First choose the package, game, port, format, and resources. */
+		/* Collect and review all project settings before creating anything. */
 		// TODO: new instance
 		UI_ProjectSetup dialog(*this, true /* new_project */, false /* is_startup */);
 
@@ -320,47 +272,46 @@ void Instance::CMD_NewProject()
 			return;
 		}
 
-		/* Then choose a destination with the matching package extension. */
-		std::optional<fs::path> filename = Project_AskFile(result->package);
-		if (!filename)
-			return;
-
-		if(global::recent.hasIwadByPath(*filename))
+		const fs::path normalizedDestination = M_NormalizeProjectDestination(
+				result->destination, result->package);
+		ProjectDestinationValidation destination = M_ValidateProjectDestination(
+				normalizedDestination, result->package,
+				global::recent.hasIwadByPath(normalizedDestination));
+		if (!destination.valid())
 		{
-			DLG_Notify("Cannot overwrite a game IWAD: %s", reinterpret_cast<const char *>(filename.value().u8string().c_str()));
+			DLG_Notify("Cannot create the project:\n\n%s",
+					destination.message.c_str());
 			return;
 		}
-
-		if (FileExists(*filename))
-		{
-			DLG_Notify("The destination package already exists:\n\n%s",
-				reinterpret_cast<const char *>(filename->u8string().c_str()));
-			return;
-		}
+		const fs::path &filename = destination.destination;
 
 
 		LoadingData loading = loaded;
 		updateLoading(*result, loading);
-		newres = loadResources(loading, wad);
+		newres = loadResources(loading, wad, nullptr);
 
 		const std::shared_ptr<Wad_file> &gameWad = newres.waddata.master.gameWad();
 		if (!gameWad || !gameWad->IsReadOnly())
 			ThrowException("The selected IWAD could not be opened read-only.");
 
-		newres.loading.project = M_NewProjectMetadata(*filename,
+		newres.loading.project = M_NewProjectMetadata(filename,
 				result->package, result->campaign, *gameWad);
 		if (result->campaign == CampaignMode::custom)
+		{
 			newres.loading.project.mapSlots = result->mapSlots;
+			M_ReconcileCampaignMetadata(newres.loading.project);
+		}
 		if (newres.loading.project.mapSlots.empty())
 			ThrowException("The selected IWAD does not contain a valid map slot.");
 
 		const SString map_name = newres.loading.project.mapSlots.front();
 
-		gLog.printf("Creating New File : %s in %s\n", map_name.c_str(), reinterpret_cast<const char *>(filename->u8string().c_str()));
+		gLog.printf("Creating New File : %s in %s\n", map_name.c_str(),
+				reinterpret_cast<const char *>(filename.u8string().c_str()));
 
 
 		std::shared_ptr<PackageBackend> backend =
-				M_CreatePackageBackend(*filename, result->package);
+				M_CreatePackageBackend(filename, result->package);
 		std::shared_ptr<Wad_file> wad = backend ? backend->openEditable() : nullptr;
 
 		if (!wad)
@@ -515,8 +466,19 @@ void Instance::CMD_CreateNextMap()
 			loaded.levelName);
 	if (!nextMap)
 	{
-		DLG_Notify("There is no map slot after %s in this campaign.",
-				loaded.levelName.c_str());
+		const CampaignMapDefinition *definition =
+				loaded.project.mapDefinition(loaded.levelName);
+		if (definition && definition->normalExit &&
+				definition->normalExit->empty())
+		{
+			DLG_Notify("The normal route from %s ends the campaign.",
+					loaded.levelName.c_str());
+		}
+		else
+		{
+			DLG_Notify("There is no normal-route map after %s in this campaign.",
+					loaded.levelName.c_str());
+		}
 		return;
 	}
 
@@ -1317,7 +1279,7 @@ bool Instance::Project_CheckRecovery()
 		}
 		recoveryContext.levelName = loaded.levelName;
 
-		NewResources recoveryResources = loadResources(recoveryContext, wad);
+		NewResources recoveryResources = loadResources(recoveryContext, wad, package);
 		const ConfigData previousConfig = conf;
 		const LoadingData previousLoading = loaded;
 		const WadData previousWads = wad;
@@ -1545,45 +1507,188 @@ void Instance::CMD_CampaignNavigator()
 		return;
 	}
 
-	CampaignNavigatorResult result = UI_CampaignNavigator(*this).Run();
-	if (result.action == CampaignNavigatorAction::none)
-		return;
+	for (;;)
+	{
+		CampaignNavigatorResult result = UI_CampaignNavigator(*this).Run();
+		if (result.action == CampaignNavigatorAction::none)
+			return;
 
+		if (result.action == CampaignNavigatorAction::editMetadata)
+		{
+			const auto before = loaded.project.serializedFields();
+			SString error;
+			if (!M_SetCampaignMapDefinition(loaded.project,
+					result.mapDefinition, &error))
+			{
+				DLG_Notify("Invalid campaign map details:\n\n%s", error.c_str());
+				continue;
+			}
+			if (before != loaded.project.serializedFields())
+			{
+				documentCache.updateLoadingContext(loaded);
+				Project_MarkMetadataDirty();
+				Status_Set("Updated campaign details for %s",
+						result.mapName.c_str());
+			}
+			continue;
+		}
+
+		try
+		{
+			switch (result.action)
+			{
+				case CampaignNavigatorAction::open:
+					Project_SwitchMap(package, result.mapName);
+					break;
+
+				case CampaignNavigatorAction::create:
+					Project_CreateMap(result.mapName);
+					break;
+
+				case CampaignNavigatorAction::duplicate:
+					if (Project_SwitchMap(package, result.mapName))
+						CMD_CopyMap();
+					break;
+
+				case CampaignNavigatorAction::rename:
+					if (Project_SwitchMap(package, result.mapName))
+						CMD_RenameMap();
+					break;
+
+				case CampaignNavigatorAction::remove:
+					if (Project_SwitchMap(package, result.mapName))
+						CMD_DeleteMap();
+					break;
+
+				case CampaignNavigatorAction::none:
+				case CampaignNavigatorAction::editMetadata:
+					break;
+			}
+		}
+		catch (const std::runtime_error &error)
+		{
+			DLG_ShowError(false, "Campaign operation failed: %s", error.what());
+		}
+		return;
+	}
+}
+
+bool Instance::Project_GenerateRuntimeMapInfo()
+{
+	std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package || !loaded.project.isExplicit())
+	{
+		DLG_Notify("Open or create an explicit WAD or PK3 project before generating "
+				"runtime MAPINFO.");
+		return false;
+	}
+	if (package->IsReadOnly())
+	{
+		DLG_Notify("The current project package is read-only. Runtime MAPINFO was "
+				"not generated.");
+		return false;
+	}
+
+	SString error;
+	std::optional<GeneratedRuntimeMapInfo> generated = M_GenerateRuntimeMapInfo(
+			loaded.project, loaded.portName, loaded.gameName, &error);
+	if (!generated)
+	{
+		DLG_Notify("Runtime MAPINFO cannot be generated:\n\n%s", error.c_str());
+		return false;
+	}
+
+	const fs::path packagePath = package->PathName();
+	const ProjectPackage packageType = M_ProjectPackageForPath(packagePath);
 	try
 	{
-		switch (result.action)
+		RuntimeMapInfoInspection inspection = M_InspectRuntimeMapInfo(packagePath,
+				packageType, *package);
+		if (!inspection.canWrite())
 		{
-			case CampaignNavigatorAction::open:
-				Project_SwitchMap(package, result.mapName);
-				break;
-
-			case CampaignNavigatorAction::create:
-				Project_CreateMap(result.mapName);
-				break;
-
-			case CampaignNavigatorAction::duplicate:
-				if (Project_SwitchMap(package, result.mapName))
-					CMD_CopyMap();
-				break;
-
-			case CampaignNavigatorAction::rename:
-				if (Project_SwitchMap(package, result.mapName))
-					CMD_RenameMap();
-				break;
-
-			case CampaignNavigatorAction::remove:
-				if (Project_SwitchMap(package, result.mapName))
-					CMD_DeleteMap();
-				break;
-
-			case CampaignNavigatorAction::none:
-				break;
+			DLG_Notify("%s", inspection.detail.c_str());
+			return false;
 		}
+
+		if (!UI_ConfirmRuntimeMapInfoPreview(*generated, inspection, packagePath,
+				loaded.project.mapSlots.size(), Project_HasChanges()))
+		{
+			return false;
+		}
+
+		// The preview may use dirty in-memory campaign metadata. Save it and all
+		// resident maps first, then inspect the just-saved package again so the
+		// conflict decision is adjacent to the write.
+		if (Project_HasChanges() && !M_SaveProject(false))
+			return false;
+		package = wad.master.editWad();
+		if (!package)
+			throw std::runtime_error("The editable project package is no longer open.");
+		inspection = M_InspectRuntimeMapInfo(packagePath, packageType, *package);
+		if (!inspection.canWrite())
+		{
+			DLG_Notify("The package changed before generation.\n\n%s",
+					inspection.detail.c_str());
+			return false;
+		}
+
+		M_BackupWad(package.get());
+		M_StoreManagedRuntimeMapInfo(*package, generated->text);
+		package->writeToDisk();
+		Status_Set("%s runtime ZMAPINFO for %zu map%s",
+				inspection.state == RuntimeMapInfoState::managed ? "Updated" : "Generated",
+				loaded.project.mapSlots.size(),
+				loaded.project.mapSlots.size() == 1 ? "" : "s");
+		Project_SaveSession();
+		return true;
 	}
-	catch (const std::runtime_error &error)
+	catch (const std::runtime_error &runtimeError)
 	{
-		DLG_ShowError(false, "Campaign operation failed: %s", error.what());
+		// The in-memory aggregate may have received the generated lump before an
+		// atomic disk replacement failed. Reload it to keep later saves honest.
+		std::shared_ptr<Wad_file> restored = M_OpenEditablePackage(packagePath);
+		if (restored)
+			wad.master.ReplaceEditWad(restored);
+		DLG_ShowError(false, "Runtime MAPINFO was not written; the original package "
+				"was preserved: %s", runtimeError.what());
+		return false;
 	}
+}
+
+void Instance::CMD_GenerateRuntimeMapInfo()
+{
+	Project_GenerateRuntimeMapInfo();
+}
+
+void Instance::CMD_PackageMetadata()
+{
+	std::shared_ptr<Wad_file> package = wad.master.editWad();
+	if (!package)
+	{
+		DLG_Notify("Open a PK3 project before inspecting package metadata.");
+		return;
+	}
+
+	const fs::path &path = package->PathName();
+	if (M_ProjectPackageForPath(path) != ProjectPackage::pk3)
+	{
+		DLG_Notify("PK3 Metadata is available for PK3 or ZIP projects.\n\n"
+				"The current project is a WAD.");
+		return;
+	}
+
+	SString error;
+	std::optional<Pk3PackageInventory> inventory =
+			M_InspectPk3Package(path, &error);
+	if (!inventory)
+	{
+		DLG_ShowError(false, "Could not inspect PK3 metadata: %s", error.c_str());
+		return;
+	}
+
+	const ResourceDiagnostics diagnostics =
+			M_AnalyzeResourceConflicts(*inventory, wad.master);
+	UI_Pk3Metadata(*inventory, diagnostics).Run();
 }
 
 //
@@ -1823,7 +1928,7 @@ void OpenFileMap(const fs::path &filename, const SString &map_namem) noexcept(fa
 
 	// These 2 may throw, but it's safe here
 	NewDocument newdoc = gInstance->openDocument(loading, *wad, lev_num);
-	NewResources newres = loadResources(newdoc.loading, gInstance->wad);
+	NewResources newres = loadResources(newdoc.loading, gInstance->wad, wad);
 
 	gInstance->level = std::move(newdoc.doc);
 	gInstance->conf = std::move(newres.config);
@@ -1941,7 +2046,7 @@ void Instance::CMD_OpenMap()
 		NewResources newres = {};
 		try
 		{
-			newres = loadResources(newdoc.loading, this->wad);
+			newres = loadResources(newdoc.loading, this->wad, newEditWad);
 		}
 		catch (const std::runtime_error& e)
 		{
@@ -2743,7 +2848,7 @@ bool Instance::M_ExportMap(bool inhibit_node_build)
 	try
 	{
 		// do this after the save (in case it fatal errors)
-		Main_LoadResources(loading);
+		Main_LoadResources(loading, wad);
 	}
 	catch(const std::runtime_error &e)
 	{
@@ -2852,8 +2957,9 @@ void Instance::CMD_CopyMap()
 
 void Instance::CMD_RenameMap()
 {
-	std::optional<SString> backupName;
-	std::optional<int> backupIndex;
+	const LoadingData backupLoading = loaded;
+	const bool backupMetadataDirty = projectMetadataDirty_;
+	fs::path packagePath;
 	try
 	{
 		if(!wad.master.gameWad())
@@ -2911,23 +3017,32 @@ void Instance::CMD_RenameMap()
 			return;
 		}
 
-
 		// perform the rename
-		int lev_num = wad.master.editWad()->LevelFind(loaded.levelName);
+		const SString old_name = loaded.levelName.asUpper();
+		const int lev_num = wad.master.editWad()->LevelFind(old_name);
+		if (lev_num < 0)
+			ThrowException("The current map is not present in the editable package.");
 
-		if (lev_num >= 0)
+		packagePath = wad.master.editWad()->PathName();
+		const int level_lump = wad.master.editWad()->LevelHeader(lev_num);
+		wad.master.editWad()->RenameLump(level_lump, new_name.c_str());
+		if (loaded.project.isExplicit())
 		{
-
-			int level_lump = wad.master.editWad()->LevelHeader(lev_num);
-			backupIndex = level_lump;
-			backupName = wad.master.editWad()->GetLump(level_lump)->Name();
-
-			documentCache.erase(new_name);
-			wad.master.editWad()->RenameLump(level_lump, new_name.c_str());
-			wad.master.editWad()->writeToDisk();
+			M_RenameProjectMapMetadata(loaded.project, old_name, new_name);
+			loaded.writeEurekaLump(*wad.master.editWad());
 		}
+		wad.master.editWad()->writeToDisk();
 
 		loaded.levelName = new_name.asUpper();
+		documentCache.erase(new_name);
+		documentCache.rename(old_name, new_name);
+		if (loaded.project.isExplicit())
+		{
+			documentCache.updateLoadingContext(loaded);
+			projectMetadataDirty_ = false;
+		}
+		if (navigatorSelection_.noCaseEqual(old_name))
+			navigatorSelection_ = loaded.levelName;
 
 		if (main_win)
 			main_win->SetTitle(wad.master.editWad()->PathName().u8string(),
@@ -2939,8 +3054,14 @@ void Instance::CMD_RenameMap()
 	}
 	catch (const std::runtime_error& e)
 	{
-		if(backupIndex && backupName)
-			wad.master.editWad()->RenameLump(*backupIndex, backupName->c_str());
+		loaded = backupLoading;
+		projectMetadataDirty_ = backupMetadataDirty;
+		if (!packagePath.empty())
+		{
+			std::shared_ptr<Wad_file> restored = M_OpenEditablePackage(packagePath);
+			if (restored)
+				wad.master.ReplaceEditWad(restored);
+		}
 		DLG_ShowError(false, "Could not rename map: %s", e.what());
 	}
 

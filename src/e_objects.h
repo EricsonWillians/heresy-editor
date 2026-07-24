@@ -36,6 +36,7 @@
 class EditOperation;
 class selection_c;
 struct ConfigData;
+enum class MapFormat;
 
 struct transform_t
 {
@@ -74,6 +75,8 @@ public:
 	void scale4(double scale_x, double scale_y, double scale_z,
 		double pos_x, double pos_y, double pos_z) const;
 	void rotate3(double deg, double pos_x, double pos_y) const;
+	std::vector<int> insertSectorPolygon(EditOperation &op,
+			const std::vector<v2double_t> &points, MapFormat format) const;
 
 	int findLineBetweenLineAndVertex(int lineID, int vertID) const;
 	void splitLinedefAndMergeSandwich(EditOperation &op, int splitLineID, int vertID, const v2double_t &delta, selection_c *delResultList) const;

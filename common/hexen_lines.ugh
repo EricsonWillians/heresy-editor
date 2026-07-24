@@ -56,6 +56,11 @@ special 65 g "Plat_Up"          :tag! speed  delay  dist
 special 60 g "Plat_Perpetual"   :tag! speed  delay
 special 61 g "Plat_Stop"        :tag!
 
+sector_action_preset lift lower-once        "Normal lift (once)"      62 use_once   @tag 16 105 0 0
+sector_action_preset lift lower-repeat      "Normal lift (repeat)"    62 use_repeat @tag 16 105 0 0
+sector_action_preset lift lower-fast-once   "Fast lift (once)"        62 use_once   @tag 32 105 0 0
+sector_action_preset lift lower-fast-repeat "Fast lift (repeat)"      62 use_repeat @tag 32 105 0 0
+
 special 26 q "Stairs_Down"        :tag! speed  dist  delay  reset
 special 27 q "Stairs_Up"          :tag! speed  dist  delay  reset
 special 31 q "Stairs_Down /sync"  :tag! speed  dist  reset
@@ -76,6 +81,22 @@ special 10 d "Door_Close"   :tag! speed
 special 11 d "Door_Open"    :tag  speed
 special 12 d "Door_Raise"   :tag  speed  delay
 special 13 d "Door_Locked"  :tag  speed  delay  lock
+
+door_preset raise-normal "Normal door (closes)"      12 use_repeat 0 16 150 0 0
+door_preset open-normal  "Normal door (stays open)"  11 use_once   0 16   0 0 0
+door_preset raise-fast   "Fast door (closes)"        12 use_repeat 0 64 150 0 0
+door_preset open-fast    "Fast door (stays open)"    11 use_once   0 64   0 0 0
+door_preset locked-steel   "Locked door (steel key)"   13 use_repeat 0 16 150  1 0
+door_preset locked-cave    "Locked door (cave key)"    13 use_repeat 0 16 150  2 0
+door_preset locked-axe     "Locked door (axe key)"     13 use_repeat 0 16 150  3 0
+door_preset locked-fire    "Locked door (fire key)"    13 use_repeat 0 16 150  4 0
+door_preset locked-emerald "Locked door (emerald key)" 13 use_repeat 0 16 150  5 0
+door_preset locked-dungeon "Locked door (dungeon key)" 13 use_repeat 0 16 150  6 0
+door_preset locked-silver  "Locked door (silver key)"  13 use_repeat 0 16 150  7 0
+door_preset locked-rusted  "Locked door (rusted key)"  13 use_repeat 0 16 150  8 0
+door_preset locked-horn    "Locked door (horn key)"    13 use_repeat 0 16 150  9 0
+door_preset locked-swamp   "Locked door (swamp key)"   13 use_repeat 0 16 150 10 0
+door_preset locked-castle  "Locked door (castle key)"  13 use_repeat 0 16 150 11 0
 
 # Lighting
 
@@ -152,4 +173,3 @@ special 71 u "Teleport /silent"  :tid!
 
 special 74 x "Exit_ToMap"  map  position
 special 75 x "End_Game"
-

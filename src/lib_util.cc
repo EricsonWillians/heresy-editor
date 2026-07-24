@@ -30,6 +30,8 @@
 #include "sys_debug.h"
 #include "sys_macro.h"
 
+#include <cstdint>
+
 #ifndef _MSC_VER
 #include <sys/time.h>
 #endif
@@ -68,7 +70,10 @@ unsigned int TimeGetMillies()
 
 	gettimeofday(&tv, &tz);
 
-	return ((int)tv.tv_sec * 1000 + (int)tv.tv_usec / 1000);
+	const uint64_t milliseconds =
+			static_cast<uint64_t>(tv.tv_sec) * 1000u +
+			static_cast<uint64_t>(tv.tv_usec) / 1000u;
+	return static_cast<unsigned int>(milliseconds);
 #endif
 }
 

@@ -228,6 +228,15 @@ line  27 k "DR Open yellow door"
 line  33 k "D1 Open green door (stays open)"
 line  28 k "DR Open green door"
 
+door_preset raise-normal        @special  1 encoded 0 0 0 0 0
+door_preset open-normal         @special 31 encoded 0 0 0 0 0
+door_preset locked-blue-raise   @special 26 encoded 0 0 0 0 0
+door_preset locked-yellow-raise @special 27 encoded 0 0 0 0 0
+door_preset locked-green-raise  @special 28 encoded 0 0 0 0 0
+door_preset locked-blue-open    @special 32 encoded 0 0 0 0 0
+door_preset locked-green-open   @special 33 encoded 0 0 0 0 0
+door_preset locked-yellow-open  @special 34 encoded 0 0 0 0 0
+
 # the "S1" and "W1" are lowercase here to inhibit the map checking
 # functions complaining about missing tag numbers.
 line  11 e "s1 Exit level"
@@ -252,6 +261,10 @@ line  82 f "WR Lower floor to LEF"  :tag
 
 line  21 p "S1 Lower lift"  :tag
 line  62 p "SR Lower lift"  :tag
+
+# Smart Sector local lift presets (Heretic has the normal local pair).
+sector_action_preset lift lower-once   @special 21 encoded 0 0 0 0 0
+sector_action_preset lift lower-repeat @special 62 encoded 0 0 0 0 0
 line  10 p "W1 Lower lift"  :tag
 line  88 p "WR Lower lift"  :tag
 
@@ -570,4 +583,3 @@ flat - FLOOR26
 flat - FLOOR28
 flat - FLOOR29
 flat - FLOOR30
-

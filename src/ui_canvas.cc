@@ -22,6 +22,8 @@
 #include "main.h"
 
 #include <algorithm>
+#include <cctype>
+#include <limits>
 
 #ifndef NO_OPENGL
 #include "FL/gl.h"
@@ -157,7 +159,11 @@ void UI_Canvas::draw()
 
 	if (inst.edit.render3d)
 	{
+#ifdef NO_OPENGL
+		Render3D_Draw(inst, x(), y(), w(), h(), w(), h());
+#else
 		Render3D_Draw(inst, x(), y(), w(), h(), pixel_w(), pixel_h());
+#endif
 		return;
 	}
 
@@ -330,6 +336,7 @@ void UI_Canvas::DrawEverything()
 	DrawMap();
 
 	DrawSelection(&*inst.edit.Selected);
+	DrawDesignAssistPreview();
 
 	if (inst.edit.action == EditorAction::drag && !inst.edit.dragged.valid() && inst.edit.drag_lines != NULL)
 		DrawSelection(inst.edit.drag_lines);
@@ -1851,6 +1858,177 @@ void UI_Canvas::DrawSectorSelection(selection_c *list, double dx, double dy)
 		bool reverse = !touches1;
 
 		DrawKnobbyLine(x1, y1, x2, y2, reverse);
+	}
+}
+
+void UI_Canvas::DrawDesignAssistPreview()
+{
+	if (!inst.edit.designAssistPreview)
+		return;
+
+	DesignAssistPreview &preview = *inst.edit.designAssistPreview;
+
+	const Fl_Color sectorColor = preview.emphasizeSectors ?
+			fl_rgb_color(255, 136, 32) : fl_rgb_color(64, 176, 255);
+	if (preview.emphasizeSectors)
+	{
+		RenderColor(DarkerColor(sectorColor));
+		for (int sector : preview.sectors.asArray())
+		{
+			if (!inst.level.isSector(sector))
+				continue;
+			sector_subdivision_c *subdiv =
+					inst.Subdiv_PolygonsForSector(sector);
+			if (!subdiv)
+				continue;
+			for (const sector_polygon_t &polygon : subdiv->polygons)
+			{
+				DesignPreviewPath fill;
+				fill.closed = true;
+				for (int point = 0; point < polygon.count; ++point)
+					fill.points.push_back({
+						polygon.mx[point], polygon.my[point]
+					});
+				DrawFilledPreviewPath(fill);
+			}
+		}
+	}
+	RenderColor(sectorColor);
+	RenderThickness(preview.emphasizeSectors ? 6 : 3);
+	DrawSectorSelection(&preview.sectors, 0, 0);
+
+	auto drawLines = [&](selection_c &lines, Fl_Color color, int thickness)
+	{
+		RenderColor(color);
+		RenderThickness(thickness);
+		for (int line : lines.asArray())
+		{
+			if (!inst.level.isLinedef(line))
+				continue;
+			const LineDef &linedef = *inst.level.linedefs[line];
+			DrawMapLine(inst.level.getStart(linedef).x(),
+						inst.level.getStart(linedef).y(),
+						inst.level.getEnd(linedef).x(),
+						inst.level.getEnd(linedef).y());
+		}
+	};
+
+	drawLines(preview.activatingLines, fl_rgb_color(255, 144, 48), 5);
+	drawLines(preview.trackLines, fl_rgb_color(80, 224, 128), 4);
+
+	auto roleColor = [](DesignPreviewRole role)
+	{
+		switch (role)
+		{
+			case DesignPreviewRole::proposed:
+				return fl_rgb_color(64, 176, 255);
+			case DesignPreviewRole::retained:
+				return fl_rgb_color(130, 150, 168);
+			case DesignPreviewRole::opening:
+				return fl_rgb_color(88, 224, 176);
+			case DesignPreviewRole::door:
+				return fl_rgb_color(255, 152, 48);
+			case DesignPreviewRole::track:
+				return fl_rgb_color(80, 224, 128);
+			case DesignPreviewRole::stair:
+				return fl_rgb_color(192, 128, 255);
+			case DesignPreviewRole::lift:
+				return fl_rgb_color(255, 208, 64);
+			case DesignPreviewRole::architecture:
+				return fl_rgb_color(88, 216, 232);
+			case DesignPreviewRole::cut:
+				return fl_rgb_color(235, 92, 160);
+			case DesignPreviewRole::anchor:
+				return fl_rgb_color(255, 255, 255);
+			case DesignPreviewRole::warning:
+				return fl_rgb_color(255, 196, 64);
+			case DesignPreviewRole::conflict:
+				return fl_rgb_color(255, 72, 72);
+		}
+		return fl_rgb_color(64, 176, 255);
+	};
+
+	for (const DesignPreviewPath &path : preview.paths)
+	{
+		if (path.points.size() < 2)
+			continue;
+		if (path.filled && path.closed && path.points.size() >= 3)
+		{
+			RenderColor(DarkerColor(roleColor(path.role)));
+			RenderThickness(1);
+			DrawFilledPreviewPath(path);
+		}
+		RenderColor(roleColor(path.role));
+		RenderThickness(path.role == DesignPreviewRole::conflict ? 5 :
+						path.role == DesignPreviewRole::warning ? 4 : 3);
+		for (size_t index = 1; index < path.points.size(); index++)
+			DrawMapLine(path.points[index - 1].x,
+						path.points[index - 1].y,
+						path.points[index].x, path.points[index].y);
+		if (path.closed)
+			DrawMapLine(path.points.back().x, path.points.back().y,
+						path.points.front().x, path.points.front().y);
+	}
+	for (const DesignPreviewPoint &point : preview.points)
+	{
+		RenderColor(roleColor(point.role));
+		RenderThickness(point.role == DesignPreviewRole::conflict ? 4 : 2);
+		DrawVertex(point.position.x, point.position.y, 5);
+	}
+	RenderFontSize(14);
+	for (const DesignPreviewLabel &label : preview.labels)
+	{
+		const bool supported = std::all_of(label.text.begin(),
+				label.text.end(), [](char character)
+				{
+					return std::isdigit(
+							   static_cast<unsigned char>(character)) ||
+						   character == ' ' ||
+						   character == '-' || character == '.' ||
+						   character == ':';
+				});
+		if (!supported)
+			continue;
+		RenderColor(roleColor(label.role));
+		RenderNumString(SCREENX(label.position.x),
+						SCREENY(label.position.y), label.text.c_str());
+	}
+	RenderThickness(1);
+}
+
+void UI_Canvas::DrawFilledPreviewPath(const DesignPreviewPath &path)
+{
+	std::vector<v2int_t> screen;
+	screen.reserve(path.points.size());
+	int lowest = std::numeric_limits<int>::max();
+	int highest = std::numeric_limits<int>::min();
+	for (const v2double_t &point : path.points)
+	{
+		v2int_t converted{SCREENX(point.x), SCREENY(point.y)};
+		screen.push_back(converted);
+		lowest = std::min(lowest, converted.y);
+		highest = std::max(highest, converted.y);
+	}
+	lowest = std::max(lowest, y());
+	highest = std::min(highest, y() + h() - 1);
+
+	for (int scanY = lowest; scanY <= highest; scanY += 4)
+	{
+		std::vector<int> crossings;
+		for (size_t index = 0; index < screen.size(); index++)
+		{
+			const v2int_t &a = screen[index];
+			const v2int_t &b = screen[(index + 1) % screen.size()];
+			if ((a.y > scanY) == (b.y > scanY) || a.y == b.y)
+				continue;
+			const double portion =
+					static_cast<double>(scanY - a.y) / (b.y - a.y);
+			crossings.push_back(iround(a.x + (b.x - a.x) * portion));
+		}
+		std::sort(crossings.begin(), crossings.end());
+		for (size_t index = 1; index < crossings.size(); index += 2)
+			RenderLine(crossings[index - 1], scanY,
+					   crossings[index], scanY);
 	}
 }
 

@@ -7,7 +7,9 @@ for [BiasedDoom](https://github.com/ericsonwillians/BiasedDoom).  The original
 Eureka Editor authors and contributors are credited below, and the inherited
 copyright notices remain in effect.
 
-## Creator
+Fork maintainer: Ericson Willians (ericsonwillians@protonmail.com)
+
+## Eureka Creator
 
 Andrew Apted  <ajapted@users.sf.net>
 

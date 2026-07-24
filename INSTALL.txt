@@ -55,7 +55,7 @@ portable package layout.  Pull requests build and test the full platform matrix
 without publishing artifacts.  A maintainer can also publish artifacts from a
 manual workflow run.
 
-Pushing a version tag such as `v2.2.0` runs the same complete matrix and then
+Pushing a version tag such as `v2.3.0` runs the same complete matrix and then
 publishes the packages as a GitHub Release.  The tag must match the project
 version in CMakeLists.txt and have a matching `changelogs/<version>.md` file.
 Release publication verifies every checksum before uploading the packages,
@@ -154,15 +154,41 @@ SETTING UP BIASEDDOOM
 BiasedDoom is the primary engine target for Heresy Editor.  Build or install
 BiasedDoom first, then open File / New Project or File / Manage Project:
 
-  1. Select the appropriate game IWAD.
-  2. Select "zdoom" as the Source Port.  This is the current compatibility
-     profile for BiasedDoom because BiasedDoom is derived from GZDoom.
-  3. Use the port setup button, or Tools / Test in Game, and select the
-     `biaseddoom` executable.  A typical local build in this workspace is:
+  1. On New Project's first page, select the appropriate game IWAD and package.
+  2. Select "biaseddoom" as the Source Port.  This profile derives from the
+     shared ZDoom definitions because BiasedDoom is based on GZDoom.
+  3. Choose the campaign/resources, then review the normalized destination and
+     validation status before creating the package.
+  4. Use File / Campaign Navigator / Map Details to add optional map titles,
+     episode groups, additional campaign entry points, and normal or secret
+     route relationships.  The first configured slot remains an implicit entry.
+     Its diagnostics column and selected-map panel identify unreachable maps,
+     potential route cycles, and configured targets that have not been created.
+  5. For a BiasedDoom, GZDoom, or ZDoom profile, use File / Generate Runtime
+     MAPINFO to preview and publish those entries, titles, routes, and endings
+     as a marker-owned root ZMAPINFO.  Missing titles visibly use the map slot.
+     Existing user-authored MAPINFO-family declarations are never overwritten.
+  6. For a PK3 project, use File / PK3 Metadata to inspect MAPINFO-family and
+     resource declarations, runtime-source entries, resource groups, projected
+     basename collisions, and loaded-source overrides.  The inventory and its
+     bounded text previews are read-only; diagnostics do not rename entries or
+     reorder the IWAD, external resources, or project.
+  7. Use the port setup button or Tools / Test in Game.  Heresy Editor first
+     searches for BiasedDoom or GZDoom in PATH, nested home/build locations,
+     and platform installation roots.  A typical local build is:
 
        ~/workspace/BiasedDoom/build/biaseddoom
 
+     If automatic discovery finds nothing, select the engine manually.  Test
+     Settings lets you type or paste the path, browse without an extension
+     filter, or run Auto Detect again; its status explains invalid selections.
+     Linux and other Unix executables do not need a `.exe` extension.  Deep
+     searches show their current location and can be cancelled without freezing
+     the editor or discarding the current selection.  When a generated ZMAPINFO
+     is out of date, launch preflight can cancel, launch unchanged, or show the
+     exact preview and update it first.
+
 Heresy Editor supplies `-iwad`, `-file` and `-warp` arguments automatically
-when testing a map.  The `zdoom` profile covers inherited ZDoom map formats and
-specials.  Dedicated definitions for BiasedDoom-only actors and extensions are
-an ongoing compatibility goal.
+when testing a map.  The `biaseddoom` profile includes the inherited ZDoom map
+formats and specials.  Campaign Navigator relationships remain editor metadata
+until Generate Runtime MAPINFO is explicitly confirmed.

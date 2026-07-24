@@ -6,10 +6,32 @@ used by the editor.</p>
 
 <div class='vspace'></div><h2>Current Workflow</h2>
 <ol><li>Open File / New Project or File / Manage Project.
-</li><li>Select the game IWAD.
-</li><li>Select <code>zdoom</code> as the Source Port.
-</li><li>Use the port setup button or Tools / Test in Game and select the
-<code>biaseddoom</code> executable.
+</li><li>In New Project, select the game IWAD, package, and
+<code>biaseddoom</code> Source Port on the first page.
+</li><li>Choose the campaign and resources, then verify the final destination
+summary before creating the package.
+</li><li>Use Campaign Navigator / Map Details for optional titles, episode
+groups, additional campaign entry points, and normal or secret route
+relationships. The first slot remains an implicit entry. Its read-only
+diagnostics identify unreachable maps, potential cycles, and configured targets
+that are missing from the package.
+</li><li>Use File / Generate Runtime MAPINFO to preview and publish those fields
+as a marker-owned root <code>ZMAPINFO</code>. Missing titles fall back visibly
+to map-slot names, and user-authored MAPINFO-family declarations are never
+overwritten.
+</li><li>For PK3 projects, use File / PK3 Metadata for a bounded, read-only view
+of declarations, runtime-source entries, conventional resource groups,
+projected-name collisions, and loaded-source overrides.
+</li><li>Use the port setup button or Tools / Test in Game. Heresy Editor searches
+for BiasedDoom or GZDoom automatically, including nested home and installation
+locations, and accepts extensionless Linux executables. Deep searches show a
+responsive progress dialog with current-location details and cancellation.
+</li><li>Test Settings keeps the engine path editable, offers extension-neutral
+Browse and Auto Detect controls, and explains invalid selections inline.
+Cancelled or unsuccessful rediscovery keeps the current selection.
+</li><li>When marker-owned ZMAPINFO is out of date, Test in Game can cancel,
+launch unchanged, or open the exact preview and update it before launch.
+Missing and user-authored declarations do not prompt.
 </li></ol>
 
 <p class='vspace'>A typical local development build in this workspace is
@@ -18,12 +40,21 @@ used by the editor.</p>
 launches the engine.</p>
 
 <div class='vspace'></div><h2>Compatibility Boundary</h2>
-<p>The current <code>zdoom</code> profile covers inherited ZDoom map formats,
-things, action specials and dynamic lights. It does not yet promise editor
-metadata for every BiasedDoom-only actor or extension. Dedicated BiasedDoom
-definitions remain an active compatibility goal.</p>
+<p>The <code>biaseddoom</code> profile derives from ZDoom and covers its map
+formats, things, action specials and dynamic lights. The pinned BiasedDoom
+release has been audited and adds no map-facing identifiers beyond that base.</p>
 
-<p class='vspace'>Heresy Editor currently edits WAD maps and resources.
-BiasedDoom can load additional PK3 resources when they are supplied separately
-to the engine.</p>
+<p class='vspace'>Heresy Editor edits WAD and PK3 projects. PK3 flat, sprite,
+and texture resources are discovered recursively below their conventional
+namespace directories and exposed in the editor while saves preserve their
+original archive paths. New Project validates its complete three-page workflow
+before the safe package backend writes anything. Campaign graph fields remain
+editor metadata until Generate Runtime MAPINFO is explicitly confirmed. The
+generated root ZMAPINFO is marker-owned and conflict-safe. PK3 Metadata
+shows declarations verbatim and lists runtime sources without interpreting or
+rewriting them. It also reports uppercase eight-character flat, sprite, and
+texture name collisions and the current IWAD/resource/project resolution order
+without renaming entries or reordering sources. Campaign Navigator reports
+managed ZMAPINFO freshness, and Test in Game offers a previewed update when that
+managed output no longer matches current campaign metadata.</p>
 </div>

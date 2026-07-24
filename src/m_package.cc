@@ -5,18 +5,30 @@
 #include "m_package.h"
 
 #include "lib_file.h"
+#include "m_mapinfo.h"
 #include "m_zip.h"
 #include "w_wad.h"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
+#include <initializer_list>
 #include <map>
+#include <optional>
 #include <stdexcept>
 
 namespace
 {
 
 constexpr const char *PROJECT_METADATA_ENTRY = "heresy/project.txt";
+constexpr const char *RUNTIME_MAPINFO_ENTRY = "ZMAPINFO";
+
+bool IsManagedRuntimeMapInfo(const std::vector<uint8_t> &data)
+{
+	const std::string marker(HERESY_MANAGED_ZMAPINFO_MARKER);
+	return data.size() >= marker.size() &&
+			std::equal(marker.begin(), marker.end(), data.begin());
+}
 
 std::string LowerASCII(std::string value)
 {
@@ -24,6 +36,142 @@ std::string LowerASCII(std::string value)
 		if (character >= 'A' && character <= 'Z')
 			character = static_cast<char>(character - 'A' + 'a');
 	return value;
+}
+
+std::string LumpNameForEntry(const std::string &entryName)
+{
+	const size_t slash = entryName.find_last_of('/');
+	std::string filename = entryName.substr(slash == std::string::npos ? 0 :
+			slash + 1);
+	const size_t dot = filename.find_last_of('.');
+	if (dot != std::string::npos && dot > 0)
+		filename.erase(dot);
+	return LowerASCII(std::move(filename));
+}
+
+bool MatchesAny(const std::string &name,
+		std::initializer_list<const char *> candidates)
+{
+	return std::any_of(candidates.begin(), candidates.end(),
+			[&name](const char *candidate)
+			{
+				return name == candidate;
+			});
+}
+
+std::optional<Pk3MetadataKind> MetadataKindForEntry(
+		const std::string &entryName)
+{
+	const size_t slash = entryName.find('/');
+	const std::string folder = slash == std::string::npos ? "" :
+			LowerASCII(entryName.substr(0, slash));
+	const std::string lowerPath = LowerASCII(entryName);
+	const size_t dot = lowerPath.find_last_of('.');
+	const std::string extension = dot == std::string::npos ? "" :
+			lowerPath.substr(dot);
+	if (MatchesAny(folder, { "acs", "actors", "decorate", "zscript" }) ||
+			MatchesAny(extension, { ".acs", ".zs" }))
+	{
+		return Pk3MetadataKind::runtimeSource;
+	}
+
+	const std::string name = LumpNameForEntry(entryName);
+	if (MatchesAny(name, { "mapinfo", "zmapinfo", "umapinfo", "emapinfo",
+			"gameinfo", "musinfo" }))
+	{
+		return Pk3MetadataKind::campaignDefinition;
+	}
+	if (MatchesAny(name, { "animdefs", "brightmap", "cvarinfo", "decaldef",
+			"decaldefs", "fontdefs", "gldefs", "keyconf", "language",
+			"lockdefs", "menudef", "modeldef", "reverbs", "sbarinfo",
+			"skyboxes", "sndinfo", "sndseq", "switches", "terrain",
+			"textures", "voxeldef", "x11r6rgb" }))
+	{
+		return Pk3MetadataKind::resourceDefinition;
+	}
+	if (MatchesAny(name, { "decorate", "dehacked", "loadacs", "zscript" }))
+		return Pk3MetadataKind::runtimeSource;
+	return std::nullopt;
+}
+
+struct ResourceGroupSpec
+{
+	const char *prefix;
+	const char *label;
+	bool projectedByEditor;
+};
+
+constexpr std::array<ResourceGroupSpec, 16> RESOURCE_GROUPS = {{
+	{ "brightmaps", "Brightmaps", false },
+	{ "colormaps", "Colormaps", false },
+	{ "filter", "Game filters", false },
+	{ "flats", "Flats", true },
+	{ "fonts", "Fonts", false },
+	{ "graphics", "Graphics", false },
+	{ "hires", "High-resolution replacements", false },
+	{ "materials", "Materials", false },
+	{ "models", "Models", false },
+	{ "music", "Music", false },
+	{ "patches", "Patches", false },
+	{ "shaders", "Shaders", false },
+	{ "sounds", "Sounds", false },
+	{ "sprites", "Sprites", true },
+	{ "textures", "Textures", true },
+	{ "voxels", "Voxels", false }
+}};
+
+std::optional<size_t> ResourceGroupForEntry(const std::string &entryName)
+{
+	const size_t slash = entryName.find('/');
+	if (slash == std::string::npos || slash == 0)
+		return std::nullopt;
+	const std::string prefix = LowerASCII(entryName.substr(0, slash));
+	for (size_t index = 0; index < RESOURCE_GROUPS.size(); ++index)
+		if (prefix == RESOURCE_GROUPS[index].prefix)
+			return index;
+	return std::nullopt;
+}
+
+bool IsPreviewableText(const std::vector<uint8_t> &data)
+{
+	for (size_t index = 0; index < data.size();)
+	{
+		const uint8_t first = data[index];
+		if (first < 0x80)
+		{
+			if ((first < 0x20 && first != '\t' && first != '\n' && first != '\r') ||
+					first == 0x7f)
+				return false;
+			++index;
+			continue;
+		}
+
+		size_t length = 0;
+		if (first >= 0xc2 && first <= 0xdf)
+			length = 2;
+		else if (first >= 0xe0 && first <= 0xef)
+			length = 3;
+		else if (first >= 0xf0 && first <= 0xf4)
+			length = 4;
+		else
+			return false;
+		if (data.size() - index < length)
+			return false;
+		for (size_t continuation = 1; continuation < length; ++continuation)
+			if ((data[index + continuation] & 0xc0) != 0x80)
+				return false;
+		if ((first == 0xe0 && data[index + 1] < 0xa0) ||
+				(first == 0xc2 && data[index + 1] >= 0x80 &&
+						data[index + 1] <= 0x9f) ||
+				(first == 0xed && data[index + 1] >= 0xa0) ||
+				(first == 0xf0 && data[index + 1] < 0x90) ||
+				(first == 0xf4 && data[index + 1] >= 0x90))
+		{
+			return false;
+		}
+		index += length;
+	}
+	return true;
 }
 
 bool IsPk3MapEntry(const std::string &name)
@@ -48,6 +196,45 @@ SString MapSlotForEntry(const std::string &name)
 	if (slot.length() > 8)
 		return {};
 	return slot;
+}
+
+std::optional<WadNamespace> ResourceNamespaceForEntry(const std::string &name)
+{
+	const size_t slash = name.find('/');
+	if (slash == std::string::npos)
+		return WadNamespace::Global;
+
+	const std::string folder = LowerASCII(name.substr(0, slash));
+	if (folder == "flats")
+		return WadNamespace::Flats;
+	if (folder == "sprites")
+		return WadNamespace::Sprites;
+	if (folder == "textures")
+		return WadNamespace::TextureLumps;
+	return std::nullopt;
+}
+
+std::optional<ResourceNamespaceKind> DiagnosticNamespaceForEntry(
+		const std::string &name)
+{
+	const std::optional<WadNamespace> nameSpace = ResourceNamespaceForEntry(name);
+	if (!nameSpace)
+		return std::nullopt;
+	switch (*nameSpace)
+	{
+		case WadNamespace::Flats: return ResourceNamespaceKind::flat;
+		case WadNamespace::Sprites: return ResourceNamespaceKind::sprite;
+		case WadNamespace::TextureLumps: return ResourceNamespaceKind::texture;
+		case WadNamespace::Global: return std::nullopt;
+	}
+	return std::nullopt;
+}
+
+SString ProjectedLumpNameForEntry(const std::string &entryName)
+{
+	fs::path resourcePath(entryName);
+	return SString(resourcePath.filename().replace_extension().u8string()).
+			asUpper().substr(0, 8);
 }
 
 bool CanWriteFile(const fs::path &path)
@@ -218,31 +405,17 @@ private:
 				continue;
 			}
 
-			const size_t slash = entryName.find('/');
-			if (slash != std::string::npos &&
-					entryName.find('/', slash + 1) != std::string::npos)
-			{
-				continue;
-			}
-
 			ResourceRecord record;
-			if (slash != std::string::npos)
-			{
-				const std::string folder = LowerASCII(entryName.substr(0, slash));
-				if (folder == "flats")
-					record.nameSpace = WadNamespace::Flats;
-				else if (folder == "sprites")
-					record.nameSpace = WadNamespace::Sprites;
-				else if (folder == "textures")
-					record.nameSpace = WadNamespace::TextureLumps;
-				else
-					continue;
-			}
+			const std::optional<WadNamespace> nameSpace =
+					ResourceNamespaceForEntry(entryName);
+			if (!nameSpace)
+				continue;
+			record.nameSpace = *nameSpace;
 
-			fs::path resourcePath(entryName);
+			const fs::path resourcePath(entryName);
 			if (MatchExtensionNoCase(resourcePath, ".wad"))
 				continue;
-			record.lumpName = SString(resourcePath.filename().replace_extension().u8string());
+			record.lumpName = ProjectedLumpNameForEntry(entryName);
 			if (record.lumpName.empty())
 				continue;
 			try
@@ -332,6 +505,30 @@ private:
 					aggregate.serializeLevel(newLevel.second));
 		}
 
+		// Root global declarations are normally projected read-only resources.
+		// ZMAPINFO is the single exception: the explicit runtime generator owns a
+		// marker-protected root entry and updates it through this package view so
+		// later project saves cannot accidentally discard it.
+		const Lump_c *runtimeMapInfo = aggregate.FindLump(RUNTIME_MAPINFO_ENTRY);
+		if (runtimeMapInfo && IsManagedRuntimeMapInfo(runtimeMapInfo->getData()))
+		{
+			const std::vector<uint8_t> &data = runtimeMapInfo->getData();
+			if (archive_->contains(RUNTIME_MAPINFO_ENTRY))
+			{
+				const std::vector<uint8_t> existing =
+						archive_->readEntry(RUNTIME_MAPINFO_ENTRY);
+				if (!IsManagedRuntimeMapInfo(existing) && existing != data)
+				{
+					throw std::runtime_error("Refusing to replace user-authored root "
+							"ZMAPINFO in the PK3 package.");
+				}
+				if (existing != data)
+					archive_->setEntry(RUNTIME_MAPINFO_ENTRY, data);
+			}
+			else
+				archive_->setEntry(RUNTIME_MAPINFO_ENTRY, data);
+		}
+
 		const Lump_c *metadata = aggregate.FindLump(EUREKA_LUMP);
 		if (metadata)
 		{
@@ -354,6 +551,188 @@ private:
 };
 
 } // namespace
+
+const char *M_Pk3MetadataKindName(Pk3MetadataKind kind) noexcept
+{
+	switch (kind)
+	{
+		case Pk3MetadataKind::campaignDefinition:
+			return "Campaign definition";
+		case Pk3MetadataKind::resourceDefinition:
+			return "Resource definition";
+		case Pk3MetadataKind::runtimeSource:
+			return "Runtime source";
+	}
+	return "Metadata";
+}
+
+std::optional<Pk3PackageInventory> M_InspectPk3Package(
+		const fs::path &path, SString *error) noexcept
+{
+	try
+	{
+		if (error)
+			error->clear();
+		if (M_ProjectPackageForPath(path) != ProjectPackage::pk3)
+		{
+			if (error)
+				*error = "Package metadata inspection requires a PK3 or ZIP archive.";
+			return std::nullopt;
+		}
+
+		std::shared_ptr<ZipArchive> archive = ZipArchive::Open(path);
+		if (!archive)
+			throw std::runtime_error("The package could not be opened.");
+
+		Pk3PackageInventory inventory;
+		inventory.path = path;
+		for (const ResourceGroupSpec &group : RESOURCE_GROUPS)
+		{
+			inventory.resources.push_back({ group.prefix, group.label, 0, 0,
+					group.projectedByEditor });
+		}
+
+		const std::vector<ZipEntryInfo> entries = archive->entryInfos();
+		inventory.archiveEntries = entries.size();
+		uint64_t previewBytes = 0;
+		for (const ZipEntryInfo &entry : entries)
+		{
+			if (entry.directory)
+			{
+				++inventory.directoryEntries;
+				continue;
+			}
+			++inventory.totalFiles;
+			inventory.totalSize += entry.uncompressedSize;
+
+			if (IsPk3MapEntry(entry.name))
+			{
+				++inventory.mapFiles;
+				continue;
+			}
+			if (LowerASCII(entry.name) == PROJECT_METADATA_ENTRY)
+			{
+				++inventory.editorFiles;
+				continue;
+			}
+
+			const fs::path resourcePath(entry.name);
+			if (!entry.encrypted && entry.uncompressedSize > 0 &&
+					(entry.compressionMethod == 0 || entry.compressionMethod == 8) &&
+					!MatchExtensionNoCase(resourcePath, ".wad"))
+			{
+				if (const std::optional<ResourceNamespaceKind> nameSpace =
+						DiagnosticNamespaceForEntry(entry.name))
+				{
+					const SString editorName = ProjectedLumpNameForEntry(entry.name);
+					if (editorName.good())
+					{
+						inventory.projectedResources.push_back({ entry.name, editorName,
+								*nameSpace, entry.uncompressedSize });
+					}
+				}
+			}
+
+			if (const std::optional<Pk3MetadataKind> kind =
+					MetadataKindForEntry(entry.name))
+			{
+				Pk3MetadataEntry metadata;
+				metadata.path = entry.name;
+				metadata.kind = *kind;
+				metadata.size = entry.uncompressedSize;
+				if (entry.encrypted)
+				{
+					metadata.previewState = Pk3PreviewState::unavailable;
+					metadata.detail = "Encrypted entry; content was not read.";
+				}
+				else if (entry.uncompressedSize > PK3_METADATA_PREVIEW_LIMIT)
+				{
+					metadata.previewState = Pk3PreviewState::tooLarge;
+					metadata.detail = "Entry exceeds the safe 512 KiB preview limit.";
+				}
+				else if (entry.uncompressedSize >
+						PK3_METADATA_TOTAL_PREVIEW_LIMIT - previewBytes)
+				{
+					metadata.previewState = Pk3PreviewState::tooLarge;
+					metadata.detail = "The package has reached the safe 4 MiB total preview budget.";
+				}
+				else
+				{
+					previewBytes += entry.uncompressedSize;
+					try
+					{
+						const std::vector<uint8_t> content =
+								archive->readEntry(entry.name);
+						if (content.empty())
+						{
+							metadata.previewState = Pk3PreviewState::empty;
+							metadata.detail = "The entry is empty.";
+						}
+						else if (!IsPreviewableText(content))
+						{
+							metadata.previewState = Pk3PreviewState::binary;
+							metadata.detail = "Binary or control data; no text preview is shown.";
+						}
+						else
+						{
+							metadata.previewState = Pk3PreviewState::text;
+							metadata.preview = std::string(content.begin(), content.end());
+							metadata.detail = *kind == Pk3MetadataKind::runtimeSource ?
+									"Displayed verbatim; runtime code is not interpreted." :
+									"Displayed verbatim; declarations are not interpreted.";
+						}
+					}
+					catch (const std::runtime_error &readError)
+					{
+						metadata.previewState = Pk3PreviewState::unavailable;
+						metadata.detail = SString::printf("Content unavailable: %s",
+								readError.what());
+					}
+				}
+				inventory.metadata.push_back(std::move(metadata));
+				continue;
+			}
+
+			if (const std::optional<size_t> group =
+					ResourceGroupForEntry(entry.name))
+			{
+				Pk3ResourceGroup &summary = inventory.resources[*group];
+				++summary.entries;
+				summary.size += entry.uncompressedSize;
+				++inventory.resourceFiles;
+				continue;
+			}
+
+			++inventory.otherFiles;
+		}
+
+		inventory.resources.erase(std::remove_if(inventory.resources.begin(),
+				inventory.resources.end(), [](const Pk3ResourceGroup &group)
+				{
+					return group.entries == 0;
+				}), inventory.resources.end());
+		std::sort(inventory.metadata.begin(), inventory.metadata.end(),
+				[](const Pk3MetadataEntry &left, const Pk3MetadataEntry &right)
+				{
+					if (left.kind != right.kind)
+						return left.kind < right.kind;
+					return left.path.asLower() < right.path.asLower();
+				});
+		return inventory;
+	}
+	catch (const std::exception &exception)
+	{
+		if (error)
+			*error = exception.what();
+		return std::nullopt;
+	}
+	catch (...)
+	{
+		if (error)
+			*error = "The package could not be inspected.";
+		return std::nullopt;
+	}
+}
 
 ProjectPackage M_ProjectPackageForPath(const fs::path &path) noexcept
 {

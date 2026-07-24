@@ -43,6 +43,9 @@ set(source_e
     e_commands.cc
     e_cutpaste.cc
     e_cutpaste.h
+    e_door.cc
+    e_door.h
+    e_design.h
     e_hover.cc
     e_hover.h
     e_linedef.cc
@@ -56,6 +59,8 @@ set(source_e
     e_select.cc
     e_sector.cc
     e_sector.h
+    e_sector_design.cc
+    e_sector_design.h
     e_things.cc
     e_things.h
     e_vertex.cc
@@ -75,6 +80,10 @@ set(source_lib
 )
 
 set(source_m
+    m_campaign_graph.cc
+    m_campaign_graph.h
+    m_mapinfo.cc
+    m_mapinfo.h
     m_config.cc
     m_config.h
     m_document_cache.cc
@@ -98,8 +107,12 @@ set(source_m
     m_package.h
     m_project.cc
     m_project.h
+    m_project_resources.cc
+    m_project_resources.h
     m_recovery.cc
     m_recovery.h
+    m_resource_diagnostics.cc
+    m_resource_diagnostics.h
     m_session.cc
     m_session.h
     m_zip.cc
@@ -131,11 +144,15 @@ set(source_ui
     ui_browser.h
     ui_campaign.cc
     ui_campaign.h
+    ui_package.cc
+    ui_package.h
     ui_canvas.cc
     ui_canvas.h
     ui_default.cc
     ui_default.h
     ui_dialog.cc
+    ui_door.cc
+    ui_door.h
     ui_editor.cc
     ui_editor.h
     ui_file.cc
@@ -146,6 +163,8 @@ set(source_ui
     ui_infobar.h
     ui_keybindingstable.cc
     ui_keybindingstable.h
+    ui_mapinfo.cc
+    ui_mapinfo.h
     ui_linedef.cc
     ui_linedef.h
     ui_menu.cc
@@ -165,6 +184,8 @@ set(source_ui
     ui_scroll.h
     ui_sector.cc
     ui_sector.h
+    ui_sector_design.cc
+    ui_sector_design.h
     ui_sidedef.cc
     ui_sidedef.h
     ui_thing.cc
@@ -236,7 +257,8 @@ add_library(
     WindowsSanitization.h
 )
 
-target_link_libraries(eurekasrc PRIVATE eurekacore)
+find_package(Threads REQUIRED)
+target_link_libraries(eurekasrc PRIVATE eurekacore clipper2 Threads::Threads)
 if(WIN32)
     target_link_libraries(eurekasrc PRIVATE advapi32)
 endif()

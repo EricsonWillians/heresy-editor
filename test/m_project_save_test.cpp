@@ -7,8 +7,10 @@
 #include "m_config.h"
 #include "m_files.h"
 #include "m_package.h"
+#include "m_parse.h"
 #include "m_recovery.h"
 #include "m_session.h"
+#include "m_streams.h"
 #include "testUtils/TempDirContext.hpp"
 
 #include "gtest/gtest.h"
@@ -94,6 +96,27 @@ protected:
 		operation.changeLump(LumpType::header, std::vector<byte>{ after });
 		return document;
 	}
+
+	ProjectMetadata readProjectMetadata(const Wad_file &package)
+	{
+		ProjectMetadata project;
+		const Lump_c *metadata = package.FindLump(EUREKA_LUMP);
+		EXPECT_TRUE(metadata);
+		if (!metadata)
+			return project;
+		LumpInputStream stream(*metadata);
+		SString line;
+		while (stream.readLine(line))
+		{
+			TokenWordParse words(line, true);
+			SString key;
+			SString value;
+			if (words.getNext(key) && words.getNext(value))
+				project.parseField(key, value);
+		}
+		M_ReconcileCampaignMetadata(project);
+		return project;
+	}
 };
 
 TEST_P(ProjectSaveTest, SavesEveryDirtyMapInOnePackageCommit)
@@ -135,6 +158,30 @@ TEST_P(ProjectSaveTest, SavesEveryDirtyMapInOnePackageCommit)
 	EXPECT_EQ(map01->getData(), (std::vector<byte>{ 11 }));
 	EXPECT_EQ(map02->getData(), (std::vector<byte>{ 22 }));
 	EXPECT_TRUE(saved->FindLump(EUREKA_LUMP));
+}
+
+TEST_P(ProjectSaveTest, SaveProjectKeepsUndoAndRedoHistory)
+{
+	std::shared_ptr<Wad_file> package = createPackage();
+	instance.wad.master.ReplaceEditWad(package);
+	instance.loaded.levelName = "MAP01";
+	instance.loaded.levelFormat = MapFormat::doom;
+	instance.level = dirtyDocument(1, 11);
+
+	ASSERT_TRUE(instance.M_SaveProject(true));
+	EXPECT_EQ(instance.level.headerData, (std::vector<byte>{11}));
+	EXPECT_FALSE(instance.level.hasChanges());
+
+	ASSERT_TRUE(instance.level.basis.undo());
+	EXPECT_EQ(instance.level.headerData, (std::vector<byte>{1}));
+	EXPECT_TRUE(instance.level.hasChanges());
+
+	// Saving an accidentally undone state must not destroy the Redo future.
+	ASSERT_TRUE(instance.M_SaveProject(true));
+	EXPECT_FALSE(instance.level.hasChanges());
+	ASSERT_TRUE(instance.level.basis.redo());
+	EXPECT_EQ(instance.level.headerData, (std::vector<byte>{11}));
+	EXPECT_TRUE(instance.level.hasChanges());
 }
 
 TEST_P(ProjectSaveTest, LaterAutosavesRetainUnloadedRecoveryMaps)
@@ -226,6 +273,66 @@ TEST_P(ProjectSaveTest, PersistsActiveAndNavigatorSessionBesidePackage)
 	EXPECT_EQ(session->iwadFile, "doom2.wad");
 	EXPECT_TRUE(session->iwadRelative.is_relative());
 	EXPECT_TRUE(fs::exists(M_ProjectSessionPath(packagePath())));
+}
+
+TEST_P(ProjectSaveTest, PersistsRichCampaignGraphMetadata)
+{
+	std::shared_ptr<Wad_file> package = createPackage();
+	instance.wad.master.ReplaceEditWad(package);
+	instance.loaded.levelName = "MAP01";
+	instance.loaded.project.version = ProjectMetadata::CURRENT_VERSION;
+	instance.loaded.project.name = "Graph Test";
+	instance.loaded.project.package = GetParam();
+	instance.loaded.project.campaign = CampaignMode::custom;
+	instance.loaded.project.mapSlots = { "MAP01", "MAP02" };
+	instance.loaded.project.mapDefinitions = {
+			{ "MAP01", "The Arrival", "Episode One",
+					SString("MAP02"), SString("MAP02") },
+			{ "MAP02", "The End", "Episode One",
+					SString{}, std::nullopt, true }
+	};
+	instance.Project_MarkMetadataDirty();
+	ASSERT_TRUE(instance.Project_WriteAutosave());
+	RecoveryStore recoveries(global::cache_dir / "recovery");
+	std::optional<RecoverySnapshot> snapshot = recoveries.latest(packagePath());
+	ASSERT_TRUE(snapshot);
+	std::shared_ptr<Wad_file> recoveryContext = Wad_file::Open(
+			snapshot->contextFile, WadOpenMode::read);
+	ASSERT_TRUE(recoveryContext);
+	ProjectMetadata recovered = readProjectMetadata(*recoveryContext);
+	const CampaignMapDefinition *recoveredFirst =
+			recovered.mapDefinition("MAP01");
+	ASSERT_TRUE(recoveredFirst);
+	EXPECT_EQ(recoveredFirst->title, "The Arrival");
+	EXPECT_EQ(recoveredFirst->secretExit,
+			std::optional<SString>("MAP02"));
+	const CampaignMapDefinition *recoveredLast =
+			recovered.mapDefinition("MAP02");
+	ASSERT_TRUE(recoveredLast);
+	EXPECT_TRUE(recoveredLast->entryPoint);
+
+	ASSERT_TRUE(instance.M_SaveProject(true));
+	EXPECT_FALSE(instance.Project_MetadataHasChanges());
+
+	std::shared_ptr<Wad_file> reopened = M_OpenEditablePackage(packagePath());
+	ASSERT_TRUE(reopened);
+	ProjectMetadata parsed = readProjectMetadata(*reopened);
+	EXPECT_EQ(parsed.version, ProjectMetadata::CURRENT_VERSION);
+	EXPECT_EQ(parsed.package, GetParam());
+	ASSERT_EQ(parsed.mapDefinitions.size(), 2u);
+	const CampaignMapDefinition *first = parsed.mapDefinition("MAP01");
+	ASSERT_TRUE(first);
+	EXPECT_EQ(first->title, "The Arrival");
+	EXPECT_EQ(first->episode, "Episode One");
+	EXPECT_EQ(first->normalExit, std::optional<SString>("MAP02"));
+	EXPECT_EQ(first->secretExit, std::optional<SString>("MAP02"));
+	const CampaignMapDefinition *last = parsed.mapDefinition("MAP02");
+	ASSERT_TRUE(last);
+	ASSERT_TRUE(last->normalExit.has_value());
+	EXPECT_TRUE(last->normalExit->empty());
+	EXPECT_TRUE(last->entryPoint);
+	EXPECT_EQ(M_CampaignEntryMaps(parsed),
+			(std::vector<SString>{ "MAP01", "MAP02" }));
 }
 
 INSTANTIATE_TEST_SUITE_P(WadAndPk3, ProjectSaveTest,

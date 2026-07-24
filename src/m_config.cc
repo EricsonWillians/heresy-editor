@@ -168,7 +168,7 @@ const opt_desc_t options[] =
 	{	"auto_load_recent",
 		0,
 		OptFlag_preference,
-		"When no given files, load the most recent one saved",
+		"When no project is available, load the most recent loose PWAD",
 		NULL,
 		&config::auto_load_recent
 	},

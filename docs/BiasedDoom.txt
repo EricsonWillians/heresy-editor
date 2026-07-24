@@ -21,33 +21,84 @@ definitions, and support for Doom, Doom II, Heretic, Hexen, and Strife.
 
 For a new project, choose WAD package for maximum classic-port compatibility or
 PK3 package for a BiasedDoom/GZDoom-style mod.  Campaign layout can follow the
-IWAD, contain one map, or use a custom ordered list.  Heresy Editor's Tools /
-Test in Game command invokes the selected engine with:
+IWAD, contain one map, or use a custom ordered list.  New Project presents
+project settings, campaign/resources, and review/create as separate pages; its
+final summary validates the new destination before any package is written.
+Campaign Navigator can attach display titles and episode labels to configured
+maps, mark additional campaign entry points, and model normal and secret routes.
+The first configured slot remains an implicit entry, and Create Next Map follows
+the current map's normal route.  The navigator analyzes the same route graph
+from every entry and flags unreachable maps, potential cycles, and configured
+route targets that are missing from the project package.  The selected-map
+panel identifies the involved routes and corrective Create or Map Details
+action.  This is
+editor project metadata until File / Generate Runtime MAPINFO is explicitly
+run.  That command previews a marker-owned root ZMAPINFO for BiasedDoom,
+GZDoom, or ZDoom, including campaign entries, titles, routes, and endings.
+Missing titles visibly fall back to map-slot names.  Generation refuses all
+user-authored MAPINFO-family declarations instead of overwriting them; only a
+previously generated marker-owned declaration can be updated.
+
+PK3 projects expose resources recursively below the conventional `flats/`,
+`sprites/`, and `textures/` directories in the editor browser.  The projection
+uses WAD-compatible basenames only; saves retain each resource's complete PK3
+path and archive record and only update managed map or project-metadata entries.
+File / PK3 Metadata provides a separate read-only archive inventory.  It shows
+MAPINFO-family and common resource declarations verbatim, lists runtime sources
+without interpreting them, summarizes conventional resource directories, and
+accounts for managed and otherwise preserved files.  Binary, unreadable, and
+oversized declarations are reported without unsafe preview attempts.  The same
+view reports duplicate uppercase eight-character flat, sprite, and texture
+names within the PK3 and overrides across the loaded IWAD, resources, and
+project.  It shows complete package paths and nominal winners where resolution
+is deterministic, while sprite-frame combinations remain explicitly ambiguous;
+it never renames entries or changes source order.
+
+Tools / Test in Game invokes the selected engine with:
 
 - the project IWAD via `-iwad`;
 - resource files and the edited WAD or PK3 via `-file`; and
 - the current map via `-warp`.
 
-Those arguments are supported by BiasedDoom.  Tools / Test in Game keeps an
-existing valid engine selection.  Otherwise it searches these bounded,
-non-recursive locations in order:
+Those arguments are supported by both engines.  Tools / Test in Game keeps an
+existing valid engine selection.  Otherwise the BiasedDoom profile prefers
+BiasedDoom and falls back to GZDoom; the shared ZDoom profile uses the opposite
+preference.  Discovery searches in this order:
 
-1. the explicit `BIASEDDOOM_EXE` environment variable;
+1. the explicit `BIASEDDOOM_EXE` and `GZDOOM_EXE` environment variables;
 2. each directory in the process `PATH`;
 3. an executable beside the editor or in the same installation prefix;
 4. common single- and multi-configuration CMake build directories under a
-   sibling checkout, `~/workspace/BiasedDoom`, or `~/BiasedDoom`; and
-5. conventional per-user and system installation locations.
+   BiasedDoom or GZDoom checkout; and
+5. a recursive, permission-tolerant search of likely workspace, application,
+   home, editor-installation, and platform installation roots.
 
 A typical local development build in this workspace is:
 
     ~/workspace/BiasedDoom/build/biaseddoom
 
-The exact output directory can vary with the BiasedDoom CMake generator and
-build configuration.  Windows builds use `biaseddoom.exe`; packaged macOS
-application bundles and Linux AppImages are recognized.  Invalid or stale
-candidates are skipped.  If automatic discovery finds nothing, Heresy Editor
-opens the engine picker and remembers the user's selection as before.
+The exact output directory can vary with the CMake generator and build
+configuration.  Windows `.exe` builds, packaged macOS application bundles,
+Linux extensionless executables, and AppImages are recognized.  Recursive
+matching is case-insensitive and does not follow directory symlinks.  Invalid,
+stale, or non-executable POSIX candidates are skipped.  Deep searches run on a
+worker behind a responsive progress dialog showing the current location,
+folder count, and candidate count, and can be cancelled at any time.  If
+discovery finds nothing, Heresy Editor opens an extension-neutral engine picker
+and remembers the selection; no `.exe` suffix is required.  Test Settings keeps
+that path directly editable and offers separate Browse and Auto Detect actions.
+An inline status distinguishes an empty or missing path, a folder, a
+non-executable Unix file, an inaccessible path, and a ready executable.
+Cancelled or unsuccessful rediscovery preserves the existing selection.
+
+For explicit BiasedDoom/GZDoom/ZDoom projects, Campaign Navigator also labels
+managed runtime ZMAPINFO as current or out of date.  Test in Game compares the
+marker-owned content with the declaration that current in-memory campaign
+metadata would generate.  Stale output offers Cancel, Launch Anyway, or Review
+and Update; the last choice uses the same exact preview, project save, conflict
+recheck, and atomic package write as File / Generate Runtime MAPINFO.  Missing
+runtime declarations remain optional and user-authored MAPINFO is not compared,
+prompted for, or rewritten.
 
 An explicit project's adjacent `.heresy` file restores its active map,
 Campaign Navigator selection, and portable IWAD hint.  Keep that file beside

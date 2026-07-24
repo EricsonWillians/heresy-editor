@@ -21,7 +21,11 @@
 #include "Instance.h"
 #include "m_config.h"
 #include "m_files.h"
+#include "m_mapinfo.h"
+#include "m_package.h"
+#include "m_session.h"
 #include "m_testmap.h"
+#include "ui_mapinfo.h"
 #include "w_rawdef.h"
 #include "w_texture.h"
 
@@ -42,10 +46,14 @@ class TestMapFixture : public TempDirContext
 {
 protected:
 	void SetUp() override;
+	void TearDown() override;
 	void setPortName(const char* name);
 	void addIWAD();
 	void addResources();
 	void addPWAD();
+	void addPK3();
+	void configureRuntimeProject();
+	void addManagedRuntimeProject(bool stale);
 	std::vector<std::string> getResultLines() const;
 
 	std::vector<std::string> testMapAndGetLines();
@@ -149,6 +157,14 @@ void TestMapFixture::SetUp()
 #endif
 }
 
+void TestMapFixture::TearDown()
+{
+	DLG_Confirm_Override = nullptr;
+	UI_RuntimeMapInfoPreview_Override = nullptr;
+	inst.wad.master.MasterDir_CloseAll();
+	TempDirContext::TearDown();
+}
+
 
 void TestMapFixture::setPortName(const char* name)
 {
@@ -181,6 +197,55 @@ void TestMapFixture::addPWAD()
 	editWadPath = getSubPath("ed it.wad");
 	std::shared_ptr<Wad_file> editWad = Wad_file::Open(editWadPath, WadOpenMode::write);
 	inst.wad.master.ReplaceEditWad(editWad);
+	mDeleteList.push(editWadPath);
+}
+
+void TestMapFixture::addPK3()
+{
+	editWadPath = getSubPath("ed it.pk3");
+	const std::shared_ptr<PackageBackend> backend = M_CreatePackageBackend(
+			editWadPath, ProjectPackage::pk3);
+	ASSERT_TRUE(backend);
+	std::shared_ptr<Wad_file> editWad = backend->openEditable();
+	ASSERT_TRUE(editWad);
+	editWad->writeToDisk();
+	inst.wad.master.ReplaceEditWad(editWad);
+	mDeleteList.push(editWadPath);
+}
+
+void TestMapFixture::configureRuntimeProject()
+{
+	inst.loaded.gameName = "doom2";
+	inst.loaded.levelName = "MAP07";
+	inst.loaded.project.version = ProjectMetadata::CURRENT_VERSION;
+	inst.loaded.project.name = "Runtime Test";
+	inst.loaded.project.package = M_ProjectPackageForPath(editWadPath);
+	inst.loaded.project.campaign = CampaignMode::custom;
+	inst.loaded.project.mapSlots = { "MAP07" };
+	CampaignMapDefinition definition;
+	definition.mapName = "MAP07";
+	definition.title = "Original title";
+	inst.loaded.project.mapDefinitions = { definition };
+}
+
+void TestMapFixture::addManagedRuntimeProject(bool stale)
+{
+	std::shared_ptr<Wad_file> editWad = inst.wad.master.editWad();
+	ASSERT_TRUE(editWad);
+	configureRuntimeProject();
+
+	const auto generated = M_GenerateRuntimeMapInfo(inst.loaded.project,
+			"biaseddoom", "doom2");
+	ASSERT_TRUE(generated);
+	M_StoreManagedRuntimeMapInfo(*editWad, generated->text);
+	editWad->writeToDisk();
+	mDeleteList.push(M_ProjectSessionPath(editWadPath));
+
+	if (stale)
+	{
+		inst.loaded.project.mapDefinition("MAP07")->title = "Updated title";
+		inst.Project_MarkMetadataDirty();
+	}
 }
 
 std::vector<std::string> TestMapFixture::getResultLines() const
@@ -297,6 +362,240 @@ TEST_F(TestMapFixture, TestMapBiasedDoomProfileArguments)
 	ASSERT_EQ(lines, expected);
 }
 
+TEST_F(TestMapFixture, SaveForTestPreservesUndoAndAccidentalUndoRecovery)
+{
+	struct SaveSettingsRestore
+	{
+		fs::path home = global::home_dir;
+		int backupFiles = config::backup_max_files;
+		~SaveSettingsRestore()
+		{
+			global::home_dir = home;
+			config::backup_max_files = backupFiles;
+		}
+	} restoreSaveSettings;
+	global::home_dir = mTempDir;
+	config::backup_max_files = 0;
+	mDeleteList.push(mTempDir / "misc.cfg");
+
+	setPortName("boom");
+	addIWAD();
+	addPWAD();
+	inst.loaded.levelName = "MAP14";
+	inst.loaded.levelFormat = MapFormat::doom;
+	inst.level.headerData = {1};
+	{
+		EditOperation operation(inst.level.basis);
+		operation.changeLump(LumpType::header, std::vector<byte>{2});
+		operation.setMessage("changed the test revision");
+	}
+	ASSERT_TRUE(inst.level.hasChanges());
+
+	DLG_Confirm_Override =
+			[](const std::vector<SString> &, const char *, va_list)
+			{
+				return 1; // Save before launching.
+			};
+	const std::vector<std::string> lines = testMapAndGetLines();
+	DLG_Confirm_Override = nullptr;
+	ASSERT_FALSE(lines.empty());
+	EXPECT_FALSE(inst.level.hasChanges());
+	EXPECT_EQ(inst.level.headerData, (std::vector<byte>{2}));
+
+	// This is the user's post-test Ctrl/Cmd+Z, followed by recovery from
+	// an accidental Undo via Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Y, or Edit / Redo.
+	inst.CMD_Undo();
+	EXPECT_EQ(inst.level.headerData, (std::vector<byte>{1}));
+	EXPECT_TRUE(inst.level.hasChanges());
+	inst.CMD_Redo();
+	EXPECT_EQ(inst.level.headerData, (std::vector<byte>{2}));
+	EXPECT_FALSE(inst.level.hasChanges());
+}
+
+TEST_F(TestMapFixture, CurrentManagedRuntimeMapInfoLaunchesWithoutPrompt)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	addManagedRuntimeProject(false);
+	bool prompted = false;
+	DLG_Confirm_Override = [&prompted](const std::vector<SString> &,
+			const char *, va_list)
+	{
+		prompted = true;
+		return 0;
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_FALSE(prompted);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+}
+
+TEST_F(TestMapFixture, MissingRuntimeMapInfoRemainsOptionalAndDoesNotPrompt)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	configureRuntimeProject();
+	inst.wad.master.editWad()->writeToDisk();
+	bool prompted = false;
+	DLG_Confirm_Override = [&prompted](const std::vector<SString> &,
+			const char *, va_list)
+	{
+		prompted = true;
+		return 0;
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_FALSE(prompted);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+}
+
+TEST_F(TestMapFixture, UserAuthoredRuntimeMapInfoDoesNotPrompt)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	configureRuntimeProject();
+	inst.wad.master.editWad()->AddLump("MAPINFO").Printf(
+			"map MAP07 \"User-owned title\" {}\n");
+	inst.wad.master.editWad()->writeToDisk();
+	bool prompted = false;
+	DLG_Confirm_Override = [&prompted](const std::vector<SString> &,
+			const char *, va_list)
+	{
+		prompted = true;
+		return 0;
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_FALSE(prompted);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+}
+
+TEST_F(TestMapFixture, StaleManagedRuntimeMapInfoCanLaunchUnchanged)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	addManagedRuntimeProject(true);
+	bool prompted = false;
+	DLG_Confirm_Override = [&prompted](const std::vector<SString> &buttons,
+			const char *message, va_list)
+	{
+		prompted = true;
+		EXPECT_EQ(buttons.size(), 3u);
+		EXPECT_NE(std::string(message).find("out of date"), std::string::npos);
+		return 1; // Launch Anyway.
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_TRUE(prompted);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+	const RuntimeMapInfoInspection inspection = M_InspectRuntimeMapInfo(editWadPath,
+			ProjectPackage::wad, *inst.wad.master.editWad());
+	const auto expected = M_GenerateRuntimeMapInfo(inst.loaded.project,
+			"biaseddoom", "doom2");
+	ASSERT_TRUE(expected);
+	EXPECT_EQ(M_RuntimeMapInfoFreshness(inspection, expected->text),
+			RuntimeMapInfoFreshness::stale);
+}
+
+TEST_F(TestMapFixture, StaleManagedRuntimeMapInfoCanCancelLaunch)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	addManagedRuntimeProject(true);
+	DLG_Confirm_Override = [](const std::vector<SString> &, const char *, va_list)
+	{
+		return 0;
+	};
+
+	inst.CMD_TestMap();
+	EXPECT_FALSE(fs::exists(outputPath));
+	EXPECT_FALSE(fs::exists(finishMarkPath));
+}
+
+TEST_F(TestMapFixture, StaleManagedRuntimeMapInfoPreflightCoversPk3Projects)
+{
+	setPortName("biaseddoom");
+	addIWAD();
+	addPK3();
+	addManagedRuntimeProject(true);
+	bool prompted = false;
+	DLG_Confirm_Override = [&prompted](const std::vector<SString> &,
+			const char *, va_list)
+	{
+		prompted = true;
+		return 1;
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_TRUE(prompted);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+	const RuntimeMapInfoInspection inspection = M_InspectRuntimeMapInfo(editWadPath,
+			ProjectPackage::pk3, *inst.wad.master.editWad());
+	const auto expected = M_GenerateRuntimeMapInfo(inst.loaded.project,
+			"biaseddoom", "doom2");
+	ASSERT_TRUE(expected);
+	EXPECT_EQ(M_RuntimeMapInfoFreshness(inspection, expected->text),
+			RuntimeMapInfoFreshness::stale);
+}
+
+TEST_F(TestMapFixture, StaleManagedRuntimeMapInfoCanReviewUpdateAndLaunch)
+{
+	struct BackupSettingRestore
+	{
+		int previous = config::backup_max_files;
+		~BackupSettingRestore()
+		{
+			config::backup_max_files = previous;
+		}
+	} restoreBackupSetting;
+	config::backup_max_files = 0;
+	setPortName("biaseddoom");
+	addIWAD();
+	addPWAD();
+	addManagedRuntimeProject(true);
+	DLG_Confirm_Override = [](const std::vector<SString> &buttons,
+			const char *, va_list)
+	{
+		EXPECT_EQ(buttons.size(), 3u);
+		return 2; // Review and Update.
+	};
+	bool previewed = false;
+	UI_RuntimeMapInfoPreview_Override = [&previewed](
+			const GeneratedRuntimeMapInfo &generated,
+			const RuntimeMapInfoInspection &inspection, const fs::path &,
+			size_t mapCount, bool projectModified)
+	{
+		previewed = true;
+		EXPECT_EQ(inspection.state, RuntimeMapInfoState::managed);
+		EXPECT_NE(generated.text.find("Updated title"), SString::npos);
+		EXPECT_EQ(mapCount, 1u);
+		EXPECT_TRUE(projectModified);
+		return true;
+	};
+
+	const std::vector<std::string> lines = testMapAndGetLines();
+	EXPECT_TRUE(previewed);
+	EXPECT_EQ(lines, (std::vector<std::string>{ portPath.string(), "-iwad",
+			gameWadPath.string(), "-file", editWadPath.string(), "-warp", "7" }));
+	const RuntimeMapInfoInspection inspection = M_InspectRuntimeMapInfo(editWadPath,
+			ProjectPackage::wad, *inst.wad.master.editWad());
+	const auto expected = M_GenerateRuntimeMapInfo(inst.loaded.project,
+			"biaseddoom", "doom2");
+	ASSERT_TRUE(expected);
+	EXPECT_EQ(M_RuntimeMapInfoFreshness(inspection, expected->text),
+			RuntimeMapInfoFreshness::current);
+}
+
 class BiasedDoomFormatLaunchFixture : public TestMapFixture,
 		public ::testing::WithParamInterface<MapFormat>
 {
@@ -344,7 +643,6 @@ TEST_P(BiasedDoomFormatLaunchFixture, SavesBuildsAndLaunchesDirtyMap)
 	addIWAD();
 	addResources();
 	addPWAD();
-	mDeleteList.push(editWadPath);
 
 	inst.loaded.gameName = "doom2";
 	inst.loaded.levelName = "MAP07";
@@ -551,7 +849,7 @@ TEST_F(TestMapFixture, TestMapPortWithoutResourcesBadMap)
 class PortExecutableDiscoveryFixture : public TempDirContext
 {
 protected:
-	fs::path makeDirectory(const char *name)
+	fs::path makeDirectory(const fs::path &name)
 	{
 		const fs::path directory = getSubPath(name);
 		EXPECT_TRUE(FileMakeDir(directory));
@@ -559,21 +857,27 @@ protected:
 		return directory;
 	}
 
+	fs::path makeRegularFile(const fs::path &directory, const char *name)
+	{
+		const fs::path file = directory / name;
+		std::ofstream stream(file);
+		EXPECT_TRUE(stream.is_open());
+		stream << "test file" << std::endl;
+		stream.close();
+		mDeleteList.push(file);
+		return file;
+	}
+
 	fs::path makeExecutable(const fs::path &directory, const char *name)
 	{
-		const fs::path executable = directory / name;
-		std::ofstream stream(executable);
-		EXPECT_TRUE(stream.is_open());
-		stream << "test executable" << std::endl;
-		stream.close();
-		mDeleteList.push(executable);
+		const fs::path executable = makeRegularFile(directory, name);
 #ifndef _WIN32
 		EXPECT_EQ(chmod(executable.string().c_str(), S_IRWXU), 0);
 #endif
 		return executable;
 	}
 
-	const char *executableName() const
+	const char *biasedDoomExecutableName() const
 	{
 #ifdef _WIN32
 		return "biaseddoom.exe";
@@ -581,15 +885,80 @@ protected:
 		return "biaseddoom";
 #endif
 	}
+
+	const char *gzDoomExecutableName() const
+	{
+#ifdef _WIN32
+		return "gzdoom.exe";
+#else
+		return "gzdoom";
+#endif
+	}
 };
+
+TEST_F(PortExecutableDiscoveryFixture, AutoDiscoverySupportMatchesKnownProfiles)
+{
+	EXPECT_TRUE(M_PortExecutableAutoDiscoverySupported("biaseddoom"));
+	EXPECT_TRUE(M_PortExecutableAutoDiscoverySupported("GZDoom"));
+	EXPECT_TRUE(M_PortExecutableAutoDiscoverySupported("ZDOOM"));
+	EXPECT_FALSE(M_PortExecutableAutoDiscoverySupported("boom"));
+	EXPECT_FALSE(M_PortExecutableAutoDiscoverySupported("vanilla"));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, ValidationExplainsEmptyMissingAndDirectoryPaths)
+{
+	const PortExecutablePathValidation empty = M_ValidatePortExecutablePath({});
+	EXPECT_FALSE(empty.valid());
+	EXPECT_EQ(empty.issue, PortExecutablePathIssue::empty);
+	EXPECT_FALSE(empty.message.empty());
+
+	const PortExecutablePathValidation missing =
+			M_ValidatePortExecutablePath(getSubPath("missing-engine"));
+	EXPECT_FALSE(missing.valid());
+	EXPECT_EQ(missing.issue, PortExecutablePathIssue::notFound);
+	EXPECT_FALSE(missing.message.empty());
+
+	const PortExecutablePathValidation directory =
+			M_ValidatePortExecutablePath(makeDirectory("engine-directory"));
+	EXPECT_FALSE(directory.valid());
+	EXPECT_EQ(directory.issue, PortExecutablePathIssue::directory);
+	EXPECT_FALSE(directory.message.empty());
+}
+
+TEST_F(PortExecutableDiscoveryFixture, ValidationAcceptsExecutableWithoutExeSuffix)
+{
+	const fs::path executable = makeExecutable(makeDirectory("engine"), "biaseddoom");
+	const PortExecutablePathValidation validation =
+			M_ValidatePortExecutablePath(executable);
+
+	EXPECT_TRUE(validation.valid());
+	EXPECT_EQ(validation.issue, PortExecutablePathIssue::none);
+	EXPECT_FALSE(validation.message.empty());
+}
+
+#ifndef _WIN32
+TEST_F(PortExecutableDiscoveryFixture, ValidationRejectsFileWithoutExecutePermission)
+{
+	const fs::path file = makeRegularFile(makeDirectory("engine"), "biaseddoom");
+	ASSERT_EQ(chmod(file.string().c_str(), S_IRUSR | S_IWUSR), 0);
+	const PortExecutablePathValidation validation =
+			M_ValidatePortExecutablePath(file);
+
+	EXPECT_FALSE(validation.valid());
+	EXPECT_EQ(validation.issue, PortExecutablePathIssue::notExecutable);
+	EXPECT_FALSE(validation.message.empty());
+}
+#endif
 
 TEST_F(PortExecutableDiscoveryFixture, ConfiguredPathHasHighestPriority)
 {
 	const fs::path configured = makeExecutable(makeDirectory("configured"), "custom-engine");
-	const fs::path pathCandidate = makeExecutable(makeDirectory("path"), executableName());
-	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	const fs::path pathCandidate = makeExecutable(makeDirectory("path"),
+			biasedDoomExecutableName());
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"),
+			biasedDoomExecutableName());
 	PortExecutableSearchLocations locations = {
-		.configuredPath = configured,
+		.configuredPaths = {configured},
 		.searchDirectories = {pathCandidate.parent_path()},
 		.fallbackCandidates = {fallback}
 	};
@@ -597,14 +966,27 @@ TEST_F(PortExecutableDiscoveryFixture, ConfiguredPathHasHighestPriority)
 	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(configured));
 }
 
+TEST_F(PortExecutableDiscoveryFixture, TriesBothConfiguredEnginePaths)
+{
+	const fs::path configured = makeExecutable(makeDirectory("configured"), "custom-gzdoom");
+	PortExecutableSearchLocations locations = {
+		.configuredPaths = {getSubPath("missing-biaseddoom"), configured}
+	};
+
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(configured));
+}
+
 TEST_F(PortExecutableDiscoveryFixture, SearchesPathBeforeFallbackCandidates)
 {
-	const fs::path pathCandidate = makeExecutable(makeDirectory("path"), executableName());
-	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	const fs::path pathCandidate = makeExecutable(makeDirectory("path"),
+			biasedDoomExecutableName());
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"),
+			biasedDoomExecutableName());
 	PortExecutableSearchLocations locations = {
-		.configuredPath = getSubPath("missing"),
+		.configuredPaths = {getSubPath("missing")},
 		.searchDirectories = {getSubPath("also-missing"), pathCandidate.parent_path()},
-		.fallbackCandidates = {fallback}
+		.fallbackCandidates = {fallback},
+		.recursiveRoots = {fallback.parent_path()}
 	};
 
 	ASSERT_EQ(M_FindPortExecutable("BIASEDDOOM", locations), fs::absolute(pathCandidate));
@@ -613,9 +995,10 @@ TEST_F(PortExecutableDiscoveryFixture, SearchesPathBeforeFallbackCandidates)
 TEST_F(PortExecutableDiscoveryFixture, SkipsInvalidCandidates)
 {
 	const fs::path invalidDirectory = makeDirectory("not-an-executable");
-	const fs::path fallback = makeExecutable(makeDirectory("fallback"), executableName());
+	const fs::path fallback = makeExecutable(makeDirectory("fallback"),
+			biasedDoomExecutableName());
 	PortExecutableSearchLocations locations = {
-		.configuredPath = invalidDirectory,
+		.configuredPaths = {invalidDirectory, getSubPath("missing")},
 		.searchDirectories = {},
 		.fallbackCandidates = {getSubPath("missing"), fallback}
 	};
@@ -623,10 +1006,173 @@ TEST_F(PortExecutableDiscoveryFixture, SkipsInvalidCandidates)
 	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(fallback));
 }
 
-TEST_F(PortExecutableDiscoveryFixture, DoesNotGuessExecutablesForOtherProfiles)
+TEST_F(PortExecutableDiscoveryFixture, RecursivelyFindsBiasedDoomWithoutAssumingExeSuffix)
+{
+	const fs::path home = makeDirectory("home");
+	makeDirectory(fs::path("home") / "code");
+	makeDirectory(fs::path("home") / "code" / "ports");
+	makeDirectory(fs::path("home") / "code" / "ports" / "BiasedDoom");
+	makeDirectory(fs::path("home") / "code" / "ports" / "BiasedDoom" / "out");
+	makeDirectory(fs::path("home") / "code" / "ports" / "BiasedDoom" / "out" / "linux");
+	const fs::path executable = makeExecutable(
+			getSubPath(fs::path("home") / "code" / "ports" / "BiasedDoom" / "out" / "linux"),
+			biasedDoomExecutableName());
+	PortExecutableSearchLocations locations = {.recursiveRoots = {home}};
+
+#ifndef _WIN32
+	EXPECT_TRUE(executable.extension().empty());
+#endif
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(executable));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, BiasedDoomProfileFallsBackToRecursiveGZDoom)
+{
+	const fs::path home = makeDirectory("home");
+	makeDirectory(fs::path("home") / "engines");
+	makeDirectory(fs::path("home") / "engines" / "custom-build");
+	const fs::path executable = makeExecutable(
+			getSubPath(fs::path("home") / "engines" / "custom-build"),
+			gzDoomExecutableName());
+	PortExecutableSearchLocations locations = {.recursiveRoots = {home}};
+
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(executable));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, RecursiveSearchReportsProgressUntilFound)
+{
+	const fs::path root = makeDirectory("root");
+	makeDirectory(fs::path("root") / "engines");
+	makeDirectory(fs::path("root") / "engines" / "build");
+	const fs::path executable = makeExecutable(
+			getSubPath(fs::path("root") / "engines" / "build"),
+			biasedDoomExecutableName());
+	PortExecutableSearchLocations locations = {
+		.configuredPaths = {getSubPath("missing-configured")},
+		.fallbackCandidates = {getSubPath("missing-fallback")},
+		.recursiveRoots = {root}
+	};
+	std::vector<PortExecutableSearchProgress> updates;
+	PortExecutableSearchControl control;
+	control.progress = [&](const PortExecutableSearchProgress &progress)
+	{
+		updates.push_back(progress);
+	};
+
+	EXPECT_EQ(M_FindPortExecutable("biaseddoom", locations, &control),
+			fs::absolute(executable));
+	ASSERT_FALSE(updates.empty());
+	EXPECT_EQ(updates.front().phase,
+			PortExecutableSearchPhase::configuredPath);
+	EXPECT_TRUE(std::any_of(updates.begin(), updates.end(),
+			[](const PortExecutableSearchProgress &progress)
+			{
+				return progress.phase ==
+						PortExecutableSearchPhase::recursiveDirectory &&
+						progress.directoriesScanned >= 3;
+			}));
+	for(size_t index = 1; index < updates.size(); ++index)
+	{
+		EXPECT_GE(updates[index].candidatesChecked,
+				updates[index - 1].candidatesChecked);
+		EXPECT_GE(updates[index].directoriesScanned,
+				updates[index - 1].directoriesScanned);
+	}
+}
+
+TEST_F(PortExecutableDiscoveryFixture, CancellationStopsRecursiveSearchPromptly)
+{
+	const fs::path root = makeDirectory("root");
+	makeDirectory(fs::path("root") / "first");
+	makeDirectory(fs::path("root") / "second");
+	makeExecutable(getSubPath(fs::path("root") / "second"),
+			biasedDoomExecutableName());
+	PortExecutableSearchLocations locations = {.recursiveRoots = {root}};
+	bool cancelled = false;
+	size_t reportedDirectories = 0;
+	PortExecutableSearchControl control;
+	control.cancelled = [&]() { return cancelled; };
+	control.progress = [&](const PortExecutableSearchProgress &progress)
+	{
+		if(progress.phase == PortExecutableSearchPhase::recursiveDirectory &&
+				progress.directoriesScanned > 0)
+		{
+			reportedDirectories = progress.directoriesScanned;
+			cancelled = true;
+		}
+	};
+
+	EXPECT_FALSE(M_FindPortExecutable("biaseddoom", locations, &control));
+	EXPECT_TRUE(cancelled);
+	EXPECT_EQ(reportedDirectories, 1u);
+}
+
+TEST_F(PortExecutableDiscoveryFixture, ZDoomProfileAutomaticallyFindsGZDoom)
+{
+	const fs::path directory = makeDirectory("path");
+	const fs::path executable = makeExecutable(directory, gzDoomExecutableName());
+	PortExecutableSearchLocations locations = {.searchDirectories = {directory}};
+
+	ASSERT_EQ(M_FindPortExecutable("zdoom", locations), fs::absolute(executable));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, ProfileEnginePreferenceIsStable)
+{
+	const fs::path directory = makeDirectory("path");
+	const fs::path biasedDoom = makeExecutable(directory, biasedDoomExecutableName());
+	const fs::path gzDoom = makeExecutable(directory, gzDoomExecutableName());
+	PortExecutableSearchLocations locations = {.searchDirectories = {directory}};
+
+	EXPECT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(biasedDoom));
+	EXPECT_EQ(M_FindPortExecutable("zdoom", locations), fs::absolute(gzDoom));
+}
+
+#ifndef _WIN32
+TEST_F(PortExecutableDiscoveryFixture, RecursiveSearchSkipsFilesWithoutExecutePermission)
+{
+	const fs::path root = makeDirectory("root");
+	const fs::path invalid = makeExecutable(root, biasedDoomExecutableName());
+	ASSERT_EQ(chmod(invalid.string().c_str(), S_IRUSR | S_IWUSR), 0);
+	makeDirectory(fs::path("root") / "valid");
+	const fs::path fallback = makeExecutable(getSubPath(fs::path("root") / "valid"),
+			gzDoomExecutableName());
+	PortExecutableSearchLocations locations = {.recursiveRoots = {root}};
+
+	ASSERT_EQ(M_FindPortExecutable("biaseddoom", locations), fs::absolute(fallback));
+}
+#endif
+
+TEST_F(PortExecutableDiscoveryFixture, DoesNotGuessExecutablesForUnrelatedProfiles)
 {
 	const fs::path configured = makeExecutable(makeDirectory("configured"), "custom-engine");
-	PortExecutableSearchLocations locations = {.configuredPath = configured};
+	const fs::path root = makeDirectory("root");
+	makeExecutable(root, biasedDoomExecutableName());
+	PortExecutableSearchLocations locations = {
+		.configuredPaths = {configured},
+		.recursiveRoots = {root}
+	};
 
-	ASSERT_FALSE(M_FindPortExecutable("zdoom", locations));
+	ASSERT_FALSE(M_FindPortExecutable("boom", locations));
+}
+
+TEST_F(PortExecutableDiscoveryFixture, SystemLocationsRecursivelyIncludeHomeAndInstallDirectory)
+{
+	const fs::path installDirectory = makeDirectory("engine-install-root");
+	const fs::path previousInstallDirectory = global::install_dir;
+	global::install_dir = installDirectory;
+	const PortExecutableSearchLocations locations =
+			M_SystemPortExecutableSearchLocations("biaseddoom");
+	global::install_dir = previousInstallDirectory;
+
+	EXPECT_NE(std::find(locations.recursiveRoots.begin(), locations.recursiveRoots.end(),
+			fs::absolute(installDirectory)), locations.recursiveRoots.end());
+
+	const char *homeText = UTF8_getenv("HOME");
+#ifdef _WIN32
+	if(!homeText || !*homeText)
+		homeText = UTF8_getenv("USERPROFILE");
+#endif
+	ASSERT_TRUE(homeText && *homeText);
+	const fs::path home(reinterpret_cast<const char8_t *>(homeText));
+	EXPECT_NE(std::find(locations.recursiveRoots.begin(), locations.recursiveRoots.end(), home),
+			locations.recursiveRoots.end());
 }

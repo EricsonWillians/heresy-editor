@@ -25,6 +25,7 @@
 #include "m_config.h"
 #include "m_testmap.h"
 #include "r_render.h"
+#include "ui_sector_design.h"
 #include "ui_window.h"
 #include "w_wad.h"
 
@@ -44,6 +45,71 @@
 
 #define WINDOW_MIN_W  928
 #define WINDOW_MIN_H  640
+
+namespace
+{
+
+constexpr int DESIGNER_DIVIDER_W = 7;
+constexpr int MIN_DESIGNER_WORKSPACE_W = 480;
+constexpr int MIN_DESIGNER_PANEL_W = PANEL_WIDTH;
+
+class UI_DesignerDivider : public Fl_Box
+{
+public:
+	UI_DesignerDivider(UI_MainWindow &owner, int X, int Y, int W, int H) :
+		Fl_Box(FL_FLAT_BOX, X, Y, W, H, nullptr), owner(owner)
+	{
+		color(DarkerColor(WINDOW_BG));
+		tooltip(
+				"Drag horizontally to resize Smart Sector Designer. "
+				"Double-click to restore the default width.");
+	}
+
+	int handle(int event) override
+	{
+		switch (event)
+		{
+		case FL_ENTER:
+			owner.SetCursor(FL_CURSOR_WE);
+			return 1;
+		case FL_LEAVE:
+			if (!dragging)
+				owner.SetCursor(FL_CURSOR_DEFAULT);
+			return 1;
+		case FL_PUSH:
+			if (Fl::event_clicks())
+			{
+				owner.SetSectorDesignerWidth(PANEL_WIDTH);
+				owner.SetCursor(FL_CURSOR_WE);
+				return 1;
+			}
+			dragging = true;
+			owner.SetCursor(FL_CURSOR_WE);
+			return 1;
+		case FL_DRAG:
+			if (dragging)
+				owner.SetSectorDesignerWidth(
+						owner.w() - Fl::event_x());
+			return 1;
+		case FL_RELEASE:
+			if (dragging)
+			{
+				dragging = false;
+				owner.SetSectorDesignerWidth(
+						owner.w() - Fl::event_x());
+			}
+			return 1;
+		default:
+			return Fl_Box::handle(event);
+		}
+	}
+
+private:
+	UI_MainWindow &owner;
+	bool dragging = false;
+};
+
+} // namespace
 
 //
 // MainWin Constructor
@@ -115,6 +181,11 @@ UI_MainWindow::UI_MainWindow(Instance &inst) :
 	sec_box->hide();
 	add(sec_box);
 
+	sector_design_box = new UI_SectorDesigner(
+			inst, w() - PANEL_WIDTH, BY, PANEL_WIDTH, BH);
+	sector_design_box->hide();
+	add(sector_design_box);
+
 	vert_box = new UI_VertexBox(inst, w() - PANEL_WIDTH, BY, PANEL_WIDTH, BH);
 	add(vert_box);
 
@@ -125,7 +196,13 @@ UI_MainWindow::UI_MainWindow(Instance &inst) :
 	find_box = new UI_FindAndReplace(inst, w() - PANEL_WIDTH, BY, PANEL_WIDTH, BH);
 	find_box->hide();
 	add(find_box);
-	
+
+	sector_design_divider = new UI_DesignerDivider(
+			*this, w() - PANEL_WIDTH - DESIGNER_DIVIDER_W / 2,
+			BY, DESIGNER_DIVIDER_W, BH);
+	sector_design_divider->hide();
+	add(sector_design_divider);
+
 	mapItemBoxes[0] = thing_box;
 	mapItemBoxes[1] = line_box;
 	mapItemBoxes[2] = sec_box;
@@ -139,6 +216,13 @@ UI_MainWindow::UI_MainWindow(Instance &inst) :
 UI_MainWindow::~UI_MainWindow()
 { }
 
+void UI_MainWindow::UpdateSnapToGrid(bool enabled)
+{
+	menu::setSnapToGrid(menu_bar, enabled);
+	if (sector_design_box && sector_design_box->Active())
+		sector_design_box->Refresh();
+}
+
 
 void UI_MainWindow::quit_callback(Fl_Widget *w, void *data)
 {
@@ -149,10 +233,16 @@ void UI_MainWindow::quit_callback(Fl_Widget *w, void *data)
 void UI_MainWindow::NewEditMode(ObjType mode)
 {
 	UnselectPics();
+	sector_design_box->Close();
+	if (sector_design_divider)
+		sector_design_divider->hide();
+	SetCursor(FL_CURSOR_DEFAULT);
+	LayoutPropertyPanel(PANEL_WIDTH);
 
 	thing_box->hide();
 	 line_box->hide();
 	  sec_box->hide();
+	sector_design_box->hide();
 	 vert_box->hide();
 	props_box->hide();
 	 find_box->hide();
@@ -215,6 +305,12 @@ void UI_MainWindow::BrowserMode(::BrowserMode kind)
 
 void UI_MainWindow::HideSpecialPanel()
 {
+	if (sector_design_box->visible())
+		sector_design_box->Close();
+	if (sector_design_divider)
+		sector_design_divider->hide();
+	SetCursor(FL_CURSOR_DEFAULT);
+	LayoutPropertyPanel(PANEL_WIDTH);
 	props_box->hide();
 	 find_box->hide();
 
@@ -244,6 +340,11 @@ void UI_MainWindow::ShowDefaultProps()
 	thing_box->hide();
 	 line_box->hide();
 	  sec_box->hide();
+	sector_design_box->Close();
+	if (sector_design_divider)
+		sector_design_divider->hide();
+	SetCursor(FL_CURSOR_DEFAULT);
+	LayoutPropertyPanel(PANEL_WIDTH);
 	 vert_box->hide();
 	 find_box->hide();
 
@@ -265,12 +366,104 @@ void UI_MainWindow::ShowFindAndReplace()
 	thing_box->hide();
 	 line_box->hide();
 	  sec_box->hide();
+	sector_design_box->Close();
+	if (sector_design_divider)
+		sector_design_divider->hide();
+	SetCursor(FL_CURSOR_DEFAULT);
+	LayoutPropertyPanel(PANEL_WIDTH);
 	 vert_box->hide();
 	props_box->hide();
 
 	 find_box->Open();
 
 	redraw();
+}
+
+
+void UI_MainWindow::ShowSectorDesigner(SectorDesignMode mode)
+{
+	thing_box->hide();
+	 line_box->hide();
+	  sec_box->hide();
+	 vert_box->hide();
+	props_box->hide();
+	 find_box->hide();
+
+	SetSectorDesignerWidth(designer_panel_width);
+	if (sector_design_divider)
+		sector_design_divider->show();
+	sector_design_box->Open(mode);
+	redraw();
+}
+
+
+void UI_MainWindow::HideSectorDesigner()
+{
+	if (sector_design_box->visible())
+		sector_design_box->Close();
+	if (sector_design_divider)
+		sector_design_divider->hide();
+	SetCursor(FL_CURSOR_DEFAULT);
+	LayoutPropertyPanel(PANEL_WIDTH);
+	HideSpecialPanel();
+}
+
+void UI_MainWindow::SetSectorDesignerWidth(int width)
+{
+	const int maximum = std::max(
+			MIN_DESIGNER_PANEL_W,
+			w() - MIN_DESIGNER_WORKSPACE_W);
+	designer_panel_width = clamp(
+			MIN_DESIGNER_PANEL_W, width, maximum);
+	LayoutPropertyPanel(designer_panel_width);
+}
+
+void UI_MainWindow::LayoutPropertyPanel(int width)
+{
+	if (layout_in_progress || !tile)
+		return;
+	layout_in_progress = true;
+
+	const int maximum = std::max(
+			MIN_DESIGNER_PANEL_W,
+			w() - MIN_DESIGNER_WORKSPACE_W);
+	width = clamp(MIN_DESIGNER_PANEL_W, width, maximum);
+	const int panelX = w() - width;
+	const int panelBottom =
+			info_bar ? std::max(0, info_bar->y() - 4) : h();
+
+	if (menu_bar)
+		menu_bar->resize(
+				menu_bar->x(), menu_bar->y(),
+				std::max(1, panelX - 3), menu_bar->h());
+	tile->resize(0, tile->y(), panelX, tile->h());
+
+	for (Fl_Widget *panel :
+		 {static_cast<Fl_Widget *>(thing_box),
+		  static_cast<Fl_Widget *>(line_box),
+		  static_cast<Fl_Widget *>(sec_box),
+		  static_cast<Fl_Widget *>(sector_design_box),
+		  static_cast<Fl_Widget *>(vert_box),
+		  static_cast<Fl_Widget *>(props_box),
+		  static_cast<Fl_Widget *>(find_box)})
+		if (panel &&
+			(panel == sector_design_box ||
+			 width == MIN_DESIGNER_PANEL_W))
+			panel->resize(panelX, 0, width, panelBottom);
+	if (sector_design_divider)
+		sector_design_divider->resize(
+				panelX - DESIGNER_DIVIDER_W / 2, 0,
+				DESIGNER_DIVIDER_W, panelBottom);
+
+	layout_in_progress = false;
+	redraw();
+}
+
+
+bool UI_MainWindow::isSpecialPanelShown()
+{
+	return props_box->visible() || find_box->visible() ||
+		   sector_design_box->visible();
 }
 
 
@@ -433,7 +626,11 @@ void UI_MainWindow::BrowsedItem(::BrowserMode kind, int number, const char *name
 {
 //	fprintf(stderr, "BrowsedItem: kind '%c' --> %d / \"%s\"\n", kind, number, name);
 
-	if (props_box->visible())
+	if (sector_design_box->visible())
+	{
+		sector_design_box->BrowsedItem(kind, number, name, e_state);
+	}
+	else if (props_box->visible())
 	{
 		props_box->BrowsedItem(kind, number, name, e_state);
 	}
@@ -531,6 +728,16 @@ int UI_MainWindow::handle(int event)
 		return 0;
 
 	return Fl_Double_Window::handle(event);
+}
+
+void UI_MainWindow::resize(int X, int Y, int W, int H)
+{
+	Fl_Double_Window::resize(X, Y, W, H);
+	if (!tile)
+		return;
+	LayoutPropertyPanel(
+			sector_design_box && sector_design_box->visible() ?
+				designer_panel_width : PANEL_WIDTH);
 }
 
 void UI_MainWindow::draw()

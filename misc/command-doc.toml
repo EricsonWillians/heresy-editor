@@ -2,12 +2,47 @@
 [CommandDoc.File]
 heading = "File Commands"
 NewProject = """
-Creates a fresh map in a new wad file. If you choose an existing file, it will be overwritten (i.e.
-all existing contents removed).
+Creates a WAD or PK3 project through project-settings, campaign/resources, and review pages. The
+final page validates a new destination; existing packages and known game IWADs are never
+overwritten.
 """
 ManageProject = """
 Manages several important settings about the currently edited wad. That includes which game it is
 for, which source port is being used, and any resource files.
+"""
+CampaignNavigator = """
+Shows configured and additional maps with their title, episode, effective routes, and working
+state. It can edit per-map campaign details, including additional entry points, or open, create,
+duplicate, rename, and delete maps. The first configured slot is always an implicit entry. It
+reports unreachable configured maps, potential route cycles, and route targets that are missing
+from the package, with selected-map remediation details. Analysis is read-only. Campaign graph
+fields are editor metadata until Generate Runtime MAPINFO is explicitly run.
+"""
+GenerateRuntimeMapInfo = """
+Previews and writes a marker-owned root ZMAPINFO for BiasedDoom, GZDoom, or ZDoom projects. It
+translates configured campaign entries, titles, ordered or explicit normal routes, secret routes,
+and endings into engine-facing declarations. Missing titles visibly fall back to map-slot names.
+The operation saves dirty project work first and refuses every user-authored MAPINFO, ZMAPINFO,
+UMAPINFO, or EMAPINFO declaration instead of overwriting it. A previously generated marker-owned
+ZMAPINFO can be regenerated safely.
+"""
+PackageMetadata = """
+Shows a read-only inventory of a PK3 or ZIP project's recognized campaign/resource declarations,
+runtime source entries, conventional resource groups, and other preserved files. It diagnoses
+projected flat/sprite/texture name collisions and overrides in the loaded source order. Text
+previews are verbatim; runtime code is not interpreted, entries are not renamed, and sources are
+not reordered.
+"""
+CreateNextMap = """
+Creates or opens the current map's configured normal-route target. Without an explicit override,
+the next ordered campaign slot is used.
+"""
+SaveProject = """
+Atomically saves all dirty resident maps and project metadata to the current WAD or PK3 package.
+"""
+SaveAll = """
+Saves every dirty resident map and project setting. This currently has the same application-wide
+effect as Save Project because Heresy Editor owns one project window.
 """
 OpenMap = """
 Opens a map for editing. This map can be found the currently edited wad, or the game iwad, or one of
@@ -50,7 +85,8 @@ into the MAP02 slot. Cannot be used on the game iwad.
 """
 RenameMap = """
 Renames the current map in the currently edited wad, or in other words: move the map to a different
-slot. For example, moving MAP01 to the MAP23 slot. Cannot be used on the game iwad.
+slot. For example, moving MAP01 to the MAP23 slot. In explicit projects, configured slots and
+campaign route references follow the rename. Cannot be used on the game iwad.
 """
 DeleteMap = """
 Deletes the current map from the currently edited wad. Cannot be used on the game iwad.
@@ -62,11 +98,13 @@ Quits Heresy Editor. If you have unsaved changes, a dialog box will appear askin
 [CommandDoc.Edit]
 heading = "Edit Commands"
 Undo = """
-Undoes (reverses) the last editing operation. This can be repeated multiple times.
+Undoes (reverses) the last editing operation. This can be repeated multiple times. Saving a map
+or launching Test in Game does not discard map undo history.
 """
 Redo = """
 Redo is the opposite of Undo, it re-instates the editing operation which Undo undid. It can be
-repeated multiple times.
+repeated multiple times. Use Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y to recover an accidental Undo before
+starting a different edit.
 """
 "Insert [flags...]" = """
 Inserts a new vertex, sector or thing into the map. In vertex mode, this will begins line drawing
@@ -226,11 +264,18 @@ Opens the Preferences dialog.
 """
 TestMap = """
 Tests your map by launching the game (using your chosen source port).
-For BiasedDoom projects, use the `zdoom` source-port profile and select the `biaseddoom` executable.
+For BiasedDoom projects, use the `biaseddoom` source-port profile. Test in Game can automatically
+find either BiasedDoom or GZDoom. When a marker-owned runtime ZMAPINFO no longer matches current
+campaign metadata, launch preflight can cancel, launch with it unchanged, or open the exact
+preview and regenerate it before starting the engine. Missing and user-authored declarations do
+not prompt.
 """
 ChangeTestSettings = """
-Opens the test-map settings dialog box to configure what game program to start and with what custom
-parameters.
+Opens Test Settings to configure the game engine and custom parameters. The engine path can be
+typed or pasted directly, selected with the extension-neutral Browse action, or rediscovered with
+Auto Detect for BiasedDoom, GZDoom, and ZDoom profiles. Inline status explains whether the path is
+missing, a folder, non-executable, inaccessible, or ready. Cancelling or completing Auto Detect
+without a match preserves the current selection.
 """
 RecalcSectors = """
 Invalidate the sector info cache for drawing.
@@ -330,7 +375,8 @@ Keywords:
     `sec_render` : the sector rendering mode in 2D view, 0 for nothing, 1 floors, 2 ceilings, 3
     lights, 4 floor brightness, 5 ceiling brightness, 6 sound alert propagation.
 
-    `snap` : whether grid-snapping is active
+    `snap` : whether grid-snapping is active for normal drawing and Smart
+    Sector gestures; this is also the checked View / Snap to Grid menu item
 
     `sprites` : whether sprites are drawn in 2D view (in Things mode)
 """
@@ -507,6 +553,109 @@ negative or positive, and it should be a power of two such as: `1`, `2`, `4`, `8
 
 NOTE: vanilla DOOM, and some source ports, only use multiples of 16 for the lighting values. For
 example, there will be no visible difference between 160 and 170 (the next usable value is 176).
+"""
+SEC_MakeDoor = """
+Reviews and converts the selected sectors, or one highlighted sector, into local smart doors.
+The TARGET box names the exact sectors that will become the doors, while a heavy orange hatch
+marks them on the map. Activating portals are orange and track walls are green. Door face is the
+moving slab texture; Track wall is the narrow side-wall texture. Choose a semantic preset, use
+the searchable Browse picker or preview tiles for loaded textures, or retain Auto inference.
+The review also shows every warning or blocking error.
+
+Selected door sectors must be nonadjacent and each must already have at least two two-sided
+portal boundaries. The command does not create or resize geometry. All doors in a batch are
+validated again and applied as one undoable operation; if any sector has a blocking error, none
+are changed.
+"""
+"SEC_SmartSector [room|polygon|freeform|extrude|inset|corridor|stairs|lift|architecture]" = """
+Opens the nonmodal Smart Sector Designer in 2D Sector mode. The optional
+parameter chooses the initial authoring mode. Ctrl/Cmd+Shift+S opens the
+designer in Room mode; X in Sector mode opens Extrude directly.
+
+The right-side panel plans format-quantized geometry without changing the map,
+shows proposed, retained, opening, door, track, stair, lift, architecture, cut,
+warning, and conflict roles on the canvas, and groups all warnings and blocking
+errors.
+Empty texture fields and Auto property modes inherit surrounding geometry;
+for embedded doors the review resolves Auto from the source geometry and
+shows the exact Face and Track names and tiles that will be applied. Optional
+Special and Tag fields author exact sector behavior. Special supports both
+manual numeric input and the active configuration's searchable described list.
+
+Polygon Profile is ordered from basic convex rooms through fine circles,
+stars, crosses, gears, sawblades, foils, rosettes, and 288-vertex grand
+cathedral tracery. Architecture offers 16 closed-sector layouts from pillars
+and arch piers through cloisters, hypostyle halls, buttress arrays, transepts,
+apses, sanctuaries, and fortified keeps. A footprint inside one ordinary room
+retains that host; a footprint wholly in clear void creates a walkable host
+hall before inserting its supports in the same Undo operation. Functional,
+Classical, Romanesque, Gothic, Industrial, Art Deco, and Infernal sections are
+available in Doom, Hexen, and UDMF. The first unsnapped Architecture press
+locks an existing host, allowing layouts around holes and through concave
+footprints whose center is void. Blocked layouts retain red intent geometry
+and exact invalid-point or conflicting-linedef markers.
+
+Left-click places gesture anchors, right-click removes the last anchor,
+Enter or Space commits a valid plan, Tab cycles automatic corridor routes,
+and either f or F toggles the visible Opposite side state or reverses a
+corridor. While Corridor owns the canvas, the mouse wheel adjusts its width by
+the current grid step; in Inset / Ring it adjusts ring thickness without
+changing inward/outward direction; in Architecture it adjusts Structure size
+by a quarter grid step and respects the selected style's safe minimum. A
+returning U route preserves its empty middle. Room, Polygon, Corridor,
+generated Stairs, and Architecture accept both
+press-drag-release and click-to-place. Extrude supports press-drag-release
+without preselection. Press a wall directly, or start inside a sector and drag
+through the wall to extrude; an interior drag chooses the first crossed
+boundary instead of an unrelated nearby hover line.
+Direction is locked to the chosen chain seam and follows the pointer regardless
+of linedef winding. A normal ruler, numeric depth, filled preview, and panel
+toggle make the side explicit.
+Shift+G toggles Snap to Grid without conflicting with F; lowercase g only
+shows or hides the grid.
+Escape clears the current gesture; Escape again exits the designer. Each
+commit is revalidated and
+applied as one Undo operation, selects its result, and leaves the designer
+active for the next gesture.
+
+Inset, existing-stair, and lift modes consume the current sector selection or
+accept sector targets directly on the canvas. Shift/Ctrl-click toggles batch
+targets; plain clicks on a selected stair path set explicit start/end sectors.
+Lift alcoves use the same wall-to-depth drag advertised by the panel.
+Door endpoints use the same semantic presets and mutation rules as
+`SEC_MakeDoor`; lift actions come from configuration-declared lift presets.
+Protected action geometry is not replaced unless Replace affected sectors is
+explicitly enabled.
+
+Lift mode's guide separates the existing-platform click workflow from the new
+wall-alcove drag workflow. The live plan reports connected platforms, inferred
+lower stops, travel, fresh tags, behavior, and selectable trigger portals.
+
+Extrude accepts a boundary line or selected nonbranching chain. Drag depth is
+measured from the seam where the drag began, or Drag sets depth can be disabled
+to use an exact signed value. Door extrusions can use the stable longest
+segment or explicitly selected segments, with width, offset, and depth
+controls.
+
+Make Sectors works with or without a prior selection, replans before applying,
+and selects the created sectors. Invalid previews show an error count and exact
+blocking reason without changing the map or creating an Undo record. Copy Review
+copies the complete untruncated report; Expand Review opens a live, resizable,
+wrapped and selectable diagnostic view. A blocked keyboard or button commit
+opens that expanded view automatically. An action on a chosen extrusion seam is
+retained by Open or Wall and deliberately replaced only by Smart Door.
+After a successful commit, the expanded diagnostic closes and the empty repeat
+state is shown as WAITING FOR GESTURE with zero errors. Pressing Enter while
+waiting only prompts for the required points, boundary, or selection.
+Inset, Stairs, and Lift wait for a fresh target after applying, preventing an
+accidental repeated Enter. Changing modes atomically clears the old route,
+targets, endpoint semantics, and preview before the new mode accepts input.
+
+View / Snap to Grid is shared with ordinary map drawing. It snaps every
+designer anchor and live drag point to the current grid and refreshes the
+preview immediately. The last explicit setting is restored when the
+application is launched again; format quantization still applies when it is
+disabled.
 """
 "SEC_SelectGroup [flags...]" = """
 Selects a group of contiguous sectors. The flags will control whether neighboring sectors are

@@ -87,6 +87,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -161,11 +162,13 @@ namespace global
 struct LoadingData;
 struct NewResources;
 struct WadData;
+class Wad_file;
 
 template<class... Ts>
 struct overloaded : Ts... { using Ts::operator()...; };
 
-NewResources loadResources(const LoadingData& loading, const WadData& waddata) noexcept(false);
+NewResources loadResources(const LoadingData& loading, const WadData& waddata,
+		std::shared_ptr<Wad_file> editWad) noexcept(false);
 
 /*
  *  Various global functions

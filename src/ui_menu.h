@@ -33,6 +33,7 @@ void updateBindings(Fl_Sys_Menu_Bar *bar);
 void setTestMapDetail(Fl_Sys_Menu_Bar *bar, const SString &text);
 void setUndoDetail(Fl_Sys_Menu_Bar *bar, const SString &verb);
 void setRedoDetail(Fl_Sys_Menu_Bar *bar, const SString &verb);
+void setSnapToGrid(Fl_Sys_Menu_Bar *bar, bool enabled);
 }
 
 #endif  /* __EUREKA_UI_MENU_H__ */

@@ -418,6 +418,28 @@ std::vector<std::string> ZipArchive::entryNames() const
 	return result;
 }
 
+std::vector<ZipEntryInfo> ZipArchive::entryInfos() const
+{
+	std::vector<ZipEntryInfo> result;
+	result.reserve(entries_.size());
+	for (const Entry &entry : entries_)
+	{
+		if (entry.removed)
+			continue;
+		ZipEntryInfo info;
+		info.name = entry.name;
+		info.compressedSize = entry.changed ? entry.replacement.size() :
+				entry.compressedSize;
+		info.uncompressedSize = entry.changed ? entry.replacement.size() :
+				entry.uncompressedSize;
+		info.compressionMethod = entry.changed ? 0 : entry.method;
+		info.encrypted = (entry.flags & 1) != 0;
+		info.directory = !entry.name.empty() && entry.name.back() == '/';
+		result.push_back(std::move(info));
+	}
+	return result;
+}
+
 bool ZipArchive::contains(const std::string &name) const noexcept
 {
 	try

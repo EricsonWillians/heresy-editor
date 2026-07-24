@@ -1,0 +1,308 @@
+Smart Sector Designer
+=====================
+
+Smart Sector Designer is a persistent, review-first workspace for creating and
+finishing sector geometry.  Enter 2D Sector mode and choose Edit -> Smart
+Sector Designer, or open it from the Sector Operations menu.  The normal
+sector panel is replaced until the designer is closed.
+
+Modes
+-----
+
+Room creates rectangles with either press-drag-release or two clicks.  Hold
+Shift for a square or Command/Ctrl to draw around the first point.
+
+Polygon likewise accepts a center-to-radius drag or two clicks.  Its ordered
+Profile selector starts with custom regular 3-through-64-sided geometry, then
+triangle through dodecagon, 16/32/64/96-sided circles, 5/8/12/16-point stars,
+Greek and Maltese crosses, 8/16/24-tooth gears, a 32-tooth sawblade,
+trefoil through octofoil outlines, 8/16/24-lobe rosettes, and finally
+192- and 288-vertex cathedral tracery.  Rotation applies relative to the
+radius gesture.  The concave families expose a separate inner-radius
+percentage.  Fixed profiles disable Sides because their topology is
+intentional and deterministic.  The Review reports the final quantized
+vertex count; integer formats can safely remove collinear detail.
+
+Freeform accepts concave outlines and closes when its first anchor is clicked
+or the plan is committed.
+
+Extrude needs no prior selection.  Press a boundary directly, or press inside
+a sector and drag through the boundary that should grow; an interior gesture
+chooses the first wall crossed in the drag direction.  A deliberately grabbed
+boundary can be extended into a selected nonbranching chain.  Drag sets depth
+perpendicular to the chosen seam, so bent chains remain predictable.  Disable
+it to use the exact signed Depth field; the sign selects the side and the
+extrusion can be committed without placing a depth anchor.  Miter, bevel, and
+segmented round joins are available.  Shift-click additional connected
+boundaries before placing depth.
+
+Inset / Ring offsets selected, nonadjacent sectors, including concave loops
+and holes.  A sector can be targeted directly on the canvas; Shift/Ctrl-click
+adds or removes more without changing the editor's real selection.  Its
+conservative first-use offset avoids collapsing an ordinary 64-unit room.
+While Inset owns the canvas, each mouse-wheel notch changes the absolute ring
+thickness by one current grid step.  The wheel never silently crosses zero:
+positive remains inward and a typed negative Offset remains outward.
+Corridor accepts a start-to-end drag or clicked endpoints; further clicks add
+manual waypoints.  Tab cycles the stable Straight, two L, and Z alternatives.
+While Corridor owns the canvas, the mouse wheel changes Width by one current
+grid step per notch instead of zooming the map; other modes retain normal
+wheel zoom.  A routed corridor which returns to its starting sector keeps an
+enclosed U-shaped middle as void (or as its pre-existing host space) instead
+of painting that incidental loop as corridor floor.
+Endpoint walls and doors stay associated with the endpoint where they were
+picked, even when only one end touches existing geometry.
+When a narrow corridor splits a longer existing wall, apply resolves the
+actual post-split shared seam from its geometry and sector ownership.  Only
+that portal receives Open or Wall flags and middle textures; the solid wall
+segments on either side retain their original sidedef textures.
+
+Stairs slice a dragged, automatically routed, or waypoint footprint into
+steps, or finish a selected connected sector path.  Shift/Ctrl-click toggles
+path sectors.  Plain clicks on an existing multi-sector path choose its start
+and end, including the explicit endpoints required by a branch; numbered
+preview labels show the resolved order.  Rise, count or tread sizing, a fitted
+target floor, and preserved or fixed headroom are reviewed before applying.
+Lift has an always-visible HOW LIFT WORKS guide and supports two deliberate
+workflows.  For existing geometry, click the platform sector; Shift/Ctrl-click
+adds disconnected or connected platform sectors.  For new geometry, drag
+outward from a boundary to create a platform alcove.  Each connected component
+receives one fresh tag.  The lowest adjacent floor is the inferred lower stop,
+and the live Lift plan reports travel and trigger count before applying.
+Trigger portals lists every usable platform boundary and permits exact
+per-linedef inclusion.  Lift behavior is the semantic configuration preset
+that supplies movement, activation and arguments.  Enter assigns the platform
+tag and portal actions with the geometry in one Undo operation.
+
+Architecture accepts a rectangular footprint either initiated inside one
+ordinary host sector or wholly in clear void.  Inside a room it retains the
+host and inserts only supports that stay within that host; the footprint may
+meet the room edge because Margin already controls the actual sections.  In
+particular, the first press locks the host before grid snapping, so a layout
+can surround holes or follow a strongly concave room even when the footprint
+center is not part of that sector.  In void it first creates a walkable host
+hall, then inserts every support into that plan-local host in the same Undo
+operation.  A void hall may not touch or consume existing geometry.
+
+Element offers 16 purpose-specific layouts: a single pillar, paired pillars,
+triumphal-arch piers, corner piers, colonnade, double-row arcade, perimeter
+cloister, hypostyle hall, buttressed bay, flying-buttress array, four-row nave,
+cruciform transept, columned apse, radial rotunda, multi-ring sanctuary, and
+fortified keep.  Bays controls repeated stations where the chosen layout uses
+them; Structure size controls the support section and Margin protects
+circulation at the footprint edge.  Functional square, Classical round,
+Romanesque octagonal, Gothic clustered, Industrial geared, Art Deco sunburst,
+and Infernal star sections are portable straight-lined constructions in Doom,
+Hexen, and UDMF.
+
+While Architecture owns the canvas, each wheel notch changes Structure size
+by one quarter of the current grid step.  The control respects a
+style-specific, format-safe minimum, so intricate clustered or pointed
+sections cannot silently collapse into multiple cells; choosing a more
+detailed style raises a smaller current size to that minimum automatically.
+Every support is a closed sector inheriting its existing or newly generated
+host context.
+Overlapping supports, host-boundary crossings, protected functional hosts,
+existing geometry contact, and ambiguous topology block apply.
+The white footprint envelope and cyan structural sections remain visible
+throughout review.  A blocked layout does not disappear: its intended
+footprint and affected supports turn red, and exact invalid points or
+conflicting existing lines receive red markers.  Selecting the issue centers
+the canvas on that exact preview location.
+
+Connections
+-----------
+
+Extrusion bases, corridor endpoints, and generated stair endpoints can be
+Open, Wall, or Door.  Open creates an ordinary traversable portal.  Wall
+retains a blocking, textured seam.  Door inserts a minimum-depth sector and
+invokes the same format-aware Smart Door planner, preset, arguments,
+activation, orientation, and Face / Track inference as the standalone tool.
+A generated door and its surrounding geometry are one Undo operation.
+
+For extrusion, Auto longest places one door on the longest source segment,
+using the lowest linedef number as a stable tie-breaker.  Selected segments
+can instead place independent doors along one or more chain edges.  Door width
+zero chooses the widest safe opening and automatically reserves eight-unit
+track walls at chain bends; an explicit width is centered in that safe span
+and Door offset moves it along the segment.  Door depth controls the track
+length.  The review blocks widths below eight units, openings that consume a
+bend's track wall, and depths that leave no usable sector behind.  Non-door
+portions of a Door extrusion base remain blocking walls.
+
+If the active game and format has no compatible door preset, Door is disabled
+while Open and Wall remain available.  Lift mode behaves similarly when no
+verified lift preset can be represented.
+
+Review and safety
+-----------------
+
+Every gesture is quantized before validation: integer map units in Doom and
+Hexen maps, and 16.16 precision in UDMF.  Preview and apply use those same
+coordinates.  The overlay distinguishes proposed and retained geometry,
+openings, doors, tracks, stairs, lifts, architecture, cuts, anchors, warnings,
+and conflicts.
+Hatched fills remain readable in both OpenGL and software rendering.
+
+The Review section reports sectors, planned splits, doors, steps, lifts, and
+architectural structures.
+Selecting an issue centers the map on its affected sector, line, or preview
+position.  Copy Review copies the complete summary and every untruncated
+diagnostic.  Expand Review opens the same text in a resizable, wrapped view
+where any portion can be selected and copied; an attempted Enter/Make Sectors
+commit opens this view automatically when blocked.  Blocking errors disable
+Make Sectors.  Apply always plans again, then commits through one EditOperation;
+a stale or invalid plan produces no partial edit and no Undo record.
+
+Existing vertices and exact segments are reused.  Proper crossings are split,
+while partial collinear overlap, nonmanifold or self-intersecting outlines,
+zero-area and snapped-away geometry, slivers, ambiguous generated overlaps,
+and unsafe coordinates are blocked.  Existing action lines and recognized
+door or lift sectors are protected.  A local door or lift trigger shared by an
+ordinary neighboring room protects the functional sector, not that unrelated
+neighbor.  Replace affected sectors is an explicit opt-in for operations which
+intentionally take ownership of protected space.
+
+Properties
+----------
+
+Floor, ceiling, and light can inherit automatically or use absolute or
+relative values.  Empty floor, ceiling, wall, Face, and Track texture fields
+mean Auto.  Unknown resource names warn without blocking, which allows custom
+resources that have not yet been loaded.
+
+Floor flat, Ceiling flat, and Wall texture each have a searchable Choose
+button, a clickable live preview tile, and a green Auto control.  Flat pickers
+list loaded flats and Wall lists loaded wall textures.  Auto previews the
+current contextual inheritance before applying.  In Inset mode these choices
+belong to the selected Ring or Inner result model independently.
+
+For a Door connection, Door face is the moving slab surface and Track wall is
+the narrow side wall inside the doorway.  Choose Face / Choose Track, or click
+their preview tiles, to search the currently loaded wall textures.  The same
+picker and Auto semantics are used by the standalone Smart Door review.  Auto
+first infers from the source portal or wall, falls back deterministically, and
+shows the resolved texture names and tiles before applying.
+
+Special and Tag are optional exact sector values.  Special remains a manual
+numeric field for custom port effects, and Choose Special opens the searchable
+list declared by the active game configuration.  A read-only Meaning row shows
+the selected description, Auto inheritance, or that a manual value is
+undeclared.  Empty fields inherit the model sector for new geometry and
+preserve existing sectors while finishing.  Malformed or out-of-format values
+block applying; undeclared nonzero specials produce a warning so port-specific
+custom effects remain possible.
+
+Inset mode's Edit selector keeps independent property models for the ring and
+the inner result, so either side can inherit context or receive its own
+heights, lighting, and flats.
+
+Extruded Smart Doors
+--------------------
+
+In Extrude mode, set Base seam to Smart Door.  The designer inserts the
+door-depth sector at the chosen source segment, finishes it with the selected
+Smart Door behavior, and creates the remaining extrusion behind it.  Door
+geometry and the room extrusion share one atomic Undo step.
+
+An existing action on the chosen extrusion seam is connection-owned rather
+than treated as geometry hidden inside the new sector.  Open and Wall preserve
+that action and its arguments; Smart Door warns and deliberately replaces it
+with the selected door behavior.
+
+Door face and Track wall each have a persistent green Auto toggle.  Auto clears
+the typed override and re-infers that texture for the current doorway.  The
+review immediately replaces the override with the actual inferred name and
+preview tile, and the atomic apply consumes that same resolved choice.  Choose
+opens the loaded-texture browser.  Door width zero chooses the widest safe
+opening, while Door lines can target the longest segment automatically or
+explicit chain segments.
+
+Extrusion gesture and direction
+-------------------------------
+
+Ctrl/Cmd+Shift+S opens Smart Sector Designer from Sector mode.  X opens it
+directly in Extrude mode; X is also the Smart extrude entry in Sector
+Operations.
+
+Press on a boundary or anywhere inside its sector and drag toward the space
+that should contain the new sector.  Starting inside chooses the crossed wall,
+even when another nearby wall lies inside the normal hover radius.  Releasing
+the primary mouse button locks the preview depth; Enter, Space, or Make Sectors
+applies it.  A click without movement keeps the click-to-place workflow
+available.  Shift-click adds connected boundary lines, and pressing any
+selected member begins a new drag measured from that seam.
+
+The initial press locks direction measurement to its chosen seam.  This
+prevents bent chains from switching sides as the pointer moves, and linedef
+winding never reverses pointer intent.
+A white normal ruler and numeric depth sit over the filled result.  Opposite
+side (F) is an explicit panel control: unchecked always follows the pointer;
+checked deliberately uses the other side.  It resets for each new gesture.
+
+Controls and repeat workflow
+----------------------------
+
+* Left-click places an anchor; Room, Polygon, Architecture, Corridor, and
+  generated Stairs also accept press-drag-release.
+* In Extrude and wall-alcove Lift, press-drag-release locks depth.
+* Inset and Lift accept canvas sector targets.  Shift/Ctrl-click toggles a
+  batch; selected Stairs use plain clicks to set path direction.
+* Right-click removes the last anchor.
+* Enter or Space applies a valid plan.
+* Escape clears the active gesture; Escape again exits while idle.
+* Tab cycles automatic corridor routes.
+* In Corridor mode, the mouse wheel changes Width by the current grid step.
+  In Inset / Ring, it changes thickness while preserving inward/outward intent.
+  In Architecture, it changes Structure size by one quarter grid step and
+  clamps at the current style's safe minimum.
+* f or F toggles the visible Opposite side state or reverses the corridor.
+* Shift+G toggles Snap to Grid; lowercase g only shows or hides the grid.
+* Drag the grip on the designer's left edge to widen or narrow the side area.
+  The map keeps a protected minimum width; double-click the grip to reset it.
+
+View -> Snap to Grid is a shared, checked setting for ordinary sector drawing
+and Smart Sector Designer.  When enabled, anchors and live drag points snap to
+the current grid after Shift's angle constraint is applied.  Turning it on or
+off refreshes the active preview immediately and the explicit choice is
+restored on the next application launch.  Format quantization remains a final
+safety step even when grid snapping is disabled.
+
+Keyboard gestures are consumed while the designer owns the 2D canvas.  The
+designer stays active after apply, selects the resulting sectors, and starts a
+fresh gesture even when nothing was selected beforehand.  Each apply has its
+own Undo record.  A blocked preview shows its error count and Make Sectors
+identifies and navigates to the first exact reason without mutating the map.
+The expanded review remains nonmodal, so it can stay open while the gesture is
+adjusted and updates live with the new plan.  After a successful apply it
+closes, and repeat mode reports WAITING FOR GESTURE with zero errors until the
+next gesture begins.  Enter while waiting only repeats the placement guidance;
+it never reports a failed operation or creates an edit.
+Selection-based Inset, Stairs, and Lift commits deliberately wait for a new
+canvas target afterward, so an accidental second Enter cannot apply the
+operation twice.  Mode changes are atomic: the visible mode, its fields,
+gesture ownership, target sectors, route, door/lift choices, preview, and
+status guidance change together.  Map changes discard stale object references.
+Mode changes, map changes, closing the panel, cancellation, and exceptions
+clear the transient preview.
+
+Configuration
+-------------
+
+Door behavior comes from `door_preset`.  Lift behavior comes from:
+
+    sector_action_preset lift <id> "<label-or-@special>" <special> \
+        <encoded|use_once|use_repeat> <arg1> <arg2> <arg3> <arg4> <arg5>
+
+Lift arguments are integers or `@tag`.  Doom encoded presets assign their
+fresh tag to the platform sector and cannot use `@tag`.  Hexen and UDMF use
+presets require exactly one `@tag`.  Repeating a kind/ID replaces it without
+changing order, and `clear lines` clears both line definitions and semantic
+sector-action presets.
+
+Boundaries
+----------
+
+Curves are portable straight-line approximations.  Remote switches, scripted
+sequences, slopes, 3D floors, polyobjects, prefab libraries, terrain
+generation, and destructive automatic merging remain outside this tool.

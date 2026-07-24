@@ -56,11 +56,13 @@
 #include <FL/Fl_Sys_Menu_Bar.H>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Text_Buffer.H>
+#include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Text_Editor.H>
 #include <FL/Fl_Tile.H>
 #include <FL/Fl_Toggle_Button.H>
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_Widget.H>
+#include <FL/Fl_Wizard.H>
 #include <FL/Fl_Window.H>
 
 #include <FL/fl_ask.H>

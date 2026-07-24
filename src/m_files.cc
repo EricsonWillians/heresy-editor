@@ -28,6 +28,7 @@
 #include "m_package.h"
 #include "m_loadsave.h"
 #include "m_parse.h"
+#include "m_project_resources.h"
 #include "m_streams.h"
 #include "m_testmap.h"
 #include "w_wad.h"
@@ -372,6 +373,18 @@ void RecentKnowledge::parseMiscConfig(std::istream &is)
 				barpath += path;
 			parsePortPath(name, barpath);
 		}
+		else if(keyword == "grid_snap")
+		{
+			SString enabled;
+			if (!parse.getNext(enabled) ||
+				(enabled != "0" && enabled != "1"))
+			{
+				gLog.printf(
+						"Expected 0 or 1 after 'grid_snap' in miscellaneous settings\n");
+				continue;
+			}
+			config::grid_default_snap = enabled == "1";
+		}
 		else
 			gLog.printf("Unknown keyword '%s' in recents config\n", keyword.c_str());
 	}
@@ -423,6 +436,8 @@ void RecentKnowledge::save(const fs::path &home_dir) const
 
 	gLog.printf("Writing recent list to: %s\n", reinterpret_cast<const char *>(filename.u8string().c_str()));
 	os << "# Heresy Editor miscellaneous settings" << std::endl;
+	os << "grid_snap " << (config::grid_default_snap ? 1 : 0)
+	   << std::endl;
 
 	files.Write(os);
 	projects.Write(os);
@@ -482,18 +497,10 @@ void RecentKnowledge::addRecentProject(const fs::path &filename,
 }
 
 
-bool Instance::M_TryOpenMostRecent()
+namespace
 {
-	const RecentMap *selected = nullptr;
-	if (global::recent.getProjects().getSize() > 0)
-		selected = &global::recent.getProjects().Lookup(0);
-	else if (global::recent.getFiles().getSize() > 0)
-		selected = &global::recent.getFiles().Lookup(0);
-	if (!selected)
-		return false;
-
-	RecentMap recentMap = *selected;
-
+bool TryOpenRecentMap(Instance &inst, const RecentMap &recentMap)
+{
 	// M_LoadRecent has already validated the filename, so this should
 	// normally work.
 
@@ -501,14 +508,14 @@ bool Instance::M_TryOpenMostRecent()
 
 	if (! wad)
 	{
-		gLog.printf("Failed to load most recent pwad: %s\n", reinterpret_cast<const char *>(recentMap.file.u8string().c_str()));
+		gLog.printf("Failed to load most recent map package: %s\n", reinterpret_cast<const char *>(recentMap.file.u8string().c_str()));
 		return false;
 	}
 
 	// make sure at least one level can be loaded
 	if (wad->LevelCount() == 0)
 	{
-		gLog.printf("No levels in most recent pwad: %s\n", reinterpret_cast<const char *>(recentMap.file.u8string().c_str()));
+		gLog.printf("No levels in most recent map package: %s\n", reinterpret_cast<const char *>(recentMap.file.u8string().c_str()));
 
 		return false;
 	}
@@ -516,13 +523,29 @@ bool Instance::M_TryOpenMostRecent()
 	/* -- OK -- */
 
 	if (wad->LevelFind(recentMap.map) >= 0)
-		loaded.levelName = recentMap.map;
+		inst.loaded.levelName = recentMap.map;
 	else
-		loaded.levelName.clear();
+		inst.loaded.levelName.clear();
 
-	this->wad.master.ReplaceEditWad(wad);
+	inst.wad.master.ReplaceEditWad(wad);
 
 	return true;
+}
+} // namespace
+
+
+bool Instance::M_TryOpenMostRecent(bool allowLooseFile)
+{
+	// Explicit projects are restored unconditionally. The legacy preference
+	// only controls whether a loose recent PWAD is used as a fallback.
+	if (global::recent.getProjects().getSize() > 0 &&
+		TryOpenRecentMap(*this, global::recent.getProjects().Lookup(0)))
+		return true;
+
+	if (allowLooseFile && global::recent.getFiles().getSize() > 0)
+		return TryOpenRecentMap(*this, global::recent.getFiles().Lookup(0));
+
+	return false;
 }
 
 
@@ -622,13 +645,9 @@ fs::path Instance::M_PickDefaultIWAD() const
 
 static void M_AddResource_Unique(LoadingData &loading, const fs::path & filename)
 {
-	// check if base filename (without path) already exists
 	for (const fs::path &resource : loading.resourceList)
 	{
-		SString A = filename.filename().u8string();
-		SString B = resource.filename().u8string();
-
-		if(A.noCaseEqual(B))
+		if (M_ProjectResourcePathsEqual(filename, resource))
 			return;		// found it
 	}
 
@@ -766,6 +785,7 @@ bool LoadingData::parseEurekaLump(const fs::path &home_dir, const fs::path &old_
 			continue;
 		}
 	}
+	M_ReconcileCampaignMetadata(project);
 
 	/* OK */
 

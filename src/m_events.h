@@ -41,6 +41,7 @@ enum class EditorAction
 	transform,		// user is scaling/rotating some objects
 	adjustOfs,		// user is adjusting the offsets on a sidedef
 	drawLine,		// user is drawing a new line
+	designSector,	// Smart Sector Designer owns canvas gestures
 };
 
 typedef void (Instance:: *nav_release_func_t)();

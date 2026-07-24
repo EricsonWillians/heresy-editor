@@ -509,6 +509,12 @@ line 121 p "W1 Lift Lower /fast"    :tag
 line 120 p "WR Lift Lower /fast"    :tag
 line 122 p "S1 Lift Lower /fast"    :tag
 line 123 p "SR Lift Lower /fast"    :tag
+
+# Smart Sector local lift presets.
+sector_action_preset lift lower-once        @special  21 encoded 0 0 0 0 0
+sector_action_preset lift lower-repeat      @special  62 encoded 0 0 0 0 0
+sector_action_preset lift lower-fast-once   @special 122 encoded 0 0 0 0 0
+sector_action_preset lift lower-fast-repeat @special 123 encoded 0 0 0 0 0
 line 214 p "SR Lift Lower /slow"    :tag
 line 154 p "SR Lift Lower /goldkey" :tag
 line 177 p "SR Lift Lower /power3key"   :tag
@@ -611,6 +617,34 @@ line 153 k "SR Door Silver Key /fast"   :tag
 line 163 k "S1 Door Silver Key /fast"   :tag
 line 157 k "D1 Door Silver Key /stay"
 
+door_preset raise-normal @special   1 encoded 0 0 0 0 0
+door_preset open-normal  @special  31 encoded 0 0 0 0 0
+door_preset raise-fast   @special 117 encoded 0 0 0 0 0
+door_preset open-fast    @special 118 encoded 0 0 0 0 0
+
+door_preset locked-base-key-raise      @special 169 encoded 0 0 0 0 0
+door_preset locked-catacomb-key-raise  @special 225 encoded 0 0 0 0 0
+door_preset locked-chalice-raise       @special 213 encoded 0 0 0 0 0
+door_preset locked-chapel-key-raise    @special 224 encoded 0 0 0 0 0
+door_preset locked-core-key-raise      @special 217 encoded 0 0 0 0 0
+door_preset locked-governor-key-raise  @special 170 encoded 0 0 0 0 0
+door_preset locked-mauler-key-raise    @special 221 encoded 0 0 0 0 0
+door_preset locked-oracle-pass-raise   @special 232 encoded 0 0 0 0 0
+door_preset locked-order-key-raise     @special 190 encoded 0 0 0 0 0
+door_preset locked-brass-key-raise     @special 161 encoded 0 0 0 0 0
+door_preset locked-brass-key-open      @special 156 encoded 0 0 0 0 0
+door_preset locked-gold-key-raise      @special 159 encoded 0 0 0 0 0
+door_preset locked-gold-key-open       @special 158 encoded 0 0 0 0 0
+door_preset locked-id-badge-raise      @special  26 encoded 0 0 0 0 0
+door_preset locked-id-badge-open       @special  32 encoded 0 0 0 0 0
+door_preset locked-id-card-raise       @special  28 encoded 0 0 0 0 0
+door_preset locked-id-card-open        @special  33 encoded 0 0 0 0 0
+door_preset locked-passcard-raise      @special  27 encoded 0 0 0 0 0
+door_preset locked-passcard-open       @special  34 encoded 0 0 0 0 0
+door_preset locked-severed-hand-raise  @special 166 encoded 0 0 0 0 0
+door_preset locked-silver-key-raise    @special 160 encoded 0 0 0 0 0
+door_preset locked-silver-key-open     @special 157 encoded 0 0 0 0 0
+
 line 102 f "S1 Floor down HEF"  :tag
 line  19 f "W1 Floor down HEF"  :tag
 line  45 f "SR Floor down HEF"  :tag
@@ -674,4 +708,3 @@ line  96 g "WR Floor up lowest tex" :tag
 #---- TEXTURE CATEGORIES ----------------
 
 # TODO
-

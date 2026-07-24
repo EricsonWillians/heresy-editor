@@ -51,6 +51,7 @@ try {
         (Join-Path $SourceDirectory 'AUTHORS.md'),
         (Join-Path $SourceDirectory 'GPL.txt'),
         (Join-Path $SourceDirectory 'INSTALL.txt'),
+        (Join-Path $SourceDirectory 'README.md'),
         (Join-Path $SourceDirectory 'README.txt')
     ) -Destination $PackageRoot
 

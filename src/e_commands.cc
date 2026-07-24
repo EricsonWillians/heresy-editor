@@ -28,6 +28,8 @@
 #include "main.h"
 
 #include "e_main.h"
+#include "e_door.h"
+#include "e_sector_design.h"
 #include "e_path.h"
 #include "LineDef.h"
 #include "m_config.h"
@@ -38,17 +40,172 @@
 #include "Sector.h"
 #include "Thing.h"
 #include "ui_about.h"
+#include "ui_door.h"
 #include "ui_misc.h"
+#include "ui_sector_design.h"
 #include "Vertex.h"
 
 
 // config items
 int config::minimum_drag_pixels = 5;
 
+static std::map<SString, SString> lastSmartDoorPresets;
+
 
 void Instance::CMD_Nothing()
 {
 	/* hey jude, don't make it bad */
+}
+
+void Instance::CMD_SEC_MakeDoor()
+{
+	if (edit.render3d || edit.mode != ObjType::sectors)
+	{
+		Beep("Smart Door is available in 2D sector mode");
+		return;
+	}
+
+	std::vector<DoorPreset> presets =
+			M_AvailableDoorPresets(conf, loaded.levelFormat);
+	if (presets.empty())
+	{
+		Beep("Smart Door is unavailable for this game and map format");
+		return;
+	}
+
+	SelectHighlight selectionState = edit.SelectionOrHighlight();
+	if (selectionState == SelectHighlight::empty)
+	{
+		Beep("Select or highlight a sector first");
+		return;
+	}
+
+	struct Cleanup
+	{
+		Instance &inst;
+		bool unselect;
+		~Cleanup()
+		{
+			inst.edit.designAssistPreview.reset();
+			if (unselect)
+				inst.edit.Selected->clear_all();
+			inst.RedrawMap();
+		}
+	} cleanup{*this, selectionState == SelectHighlight::unselect};
+
+	SString key = SString::printf("%s/%d", loaded.gameName.c_str(),
+								  static_cast<int>(loaded.levelFormat));
+	DoorOptions options;
+	auto remembered = lastSmartDoorPresets.find(key);
+	if (remembered != lastSmartDoorPresets.end() &&
+		std::any_of(presets.begin(), presets.end(),
+				[&](const DoorPreset &preset)
+				{
+					return preset.id.noCaseEqual(remembered->second);
+				}))
+	{
+		options.presetId = remembered->second;
+	}
+	else
+	{
+		options.presetId = presets.front().id;
+	}
+
+	try
+	{
+		if (!UI_RunSmartDoorDialog(*this, *edit.Selected, options))
+			return;
+	}
+	catch (const std::exception &error)
+	{
+		Beep("Could not review smart door: %s", error.what());
+		return;
+	}
+
+	DoorPlan applied;
+	try
+	{
+		if (!M_ApplySmartDoors(level, conf, &wad.images, loaded.levelFormat,
+							   *edit.Selected, options, &applied))
+		{
+			auto error = std::find_if(applied.issues.begin(), applied.issues.end(),
+					[](const DoorIssue &issue)
+					{
+						return issue.severity == DoorIssueSeverity::error;
+					});
+			Beep("%s", error == applied.issues.end() ?
+				 "Smart Door validation failed" : error->message.c_str());
+			return;
+		}
+	}
+	catch (const std::exception &error)
+	{
+		Beep("Could not make smart door: %s", error.what());
+		return;
+	}
+
+	lastSmartDoorPresets[key] = options.presetId;
+	if (applied.sectors.size() == 1)
+		Status_Set("%s", "Made 1 smart door");
+	else
+		Status_Set("Made %d smart doors",
+				   static_cast<int>(applied.sectors.size()));
+}
+
+void Instance::CMD_SEC_SmartSector()
+{
+	if (edit.render3d || edit.mode != ObjType::sectors)
+	{
+		Beep("Smart Sector Designer is available in 2D sector mode");
+		return;
+	}
+
+	struct NamedMode
+	{
+		const char *name;
+		SectorDesignMode mode;
+	};
+	static constexpr NamedMode modes[] =
+	{
+		{"room", SectorDesignMode::room},
+		{"polygon", SectorDesignMode::polygon},
+		{"freeform", SectorDesignMode::freeform},
+		{"extrude", SectorDesignMode::extrude},
+		{"inset", SectorDesignMode::inset},
+		{"corridor", SectorDesignMode::corridor},
+		{"stairs", SectorDesignMode::stairs},
+		{"lift", SectorDesignMode::lift},
+		{"architecture", SectorDesignMode::architecture}
+	};
+
+	SectorDesignMode mode = SectorDesignMode::room;
+	if (!EXEC_Param[0].empty())
+	{
+		auto found = std::find_if(std::begin(modes), std::end(modes),
+				[&](const NamedMode &candidate)
+				{
+					return EXEC_Param[0].noCaseEqual(candidate.name);
+				});
+		if (found == std::end(modes))
+		{
+			Beep("Unknown Smart Sector mode: %s",
+				 EXEC_Param[0].c_str());
+			return;
+		}
+		mode = found->mode;
+	}
+
+	try
+	{
+		UI_OpenSectorDesigner(*this, mode);
+	}
+	catch (const std::exception &error)
+	{
+		edit.designAssistPreview.reset();
+		Editor_ClearAction();
+		RedrawMap();
+		Beep("Could not open Smart Sector Designer: %s", error.what());
+	}
 }
 
 
@@ -167,7 +324,9 @@ void Instance::CMD_Undo()
 	}
 
 	RedrawMap();
-	main_win->UpdatePanelObj();
+	if (main_win)
+		main_win->UpdatePanelObj();
+	UI_SectorDesignerRefresh(*this);
 }
 
 
@@ -180,7 +339,9 @@ void Instance::CMD_Redo()
 	}
 
 	RedrawMap();
-	main_win->UpdatePanelObj();
+	if (main_win)
+		main_win->UpdatePanelObj();
+	UI_SectorDesignerRefresh(*this);
 }
 
 
@@ -1441,6 +1602,14 @@ static editor_command_t  command_table[] =
 		&Instance::CMD_CampaignNavigator
 	},
 
+	{	"GenerateRuntimeMapInfo",  "File",
+		&Instance::CMD_GenerateRuntimeMapInfo
+	},
+
+	{	"PackageMetadata",  "File",
+		&Instance::CMD_PackageMetadata
+	},
+
 	{	"OpenMap",  "File",
 		&Instance::CMD_OpenMap
 	},
@@ -1766,6 +1935,16 @@ static editor_command_t  command_table[] =
 
 	{	"SEC_Light", NULL,
 		&Instance::CMD_SEC_Light
+	},
+
+	{	"SEC_MakeDoor", NULL,
+		&Instance::CMD_SEC_MakeDoor
+	},
+
+	{	"SEC_SmartSector", NULL,
+		&Instance::CMD_SEC_SmartSector,
+		/* flags */ NULL,
+		/* keywords */ "room polygon freeform extrude inset corridor stairs lift architecture"
 	},
 
 	{	"SEC_SelectGroup", NULL,

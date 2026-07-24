@@ -54,6 +54,8 @@
 
 class Fl_Multi_Browser;
 class Wad_file;
+class UI_SectorDesigner;
+enum class SectorDesignMode;
 
 void LogViewer_AddLine(const char *str);
 
@@ -77,6 +79,7 @@ public:
 	UI_ThingBox  *thing_box;
 	UI_LineBox   *line_box;
 	UI_SectorBox *sec_box;
+	UI_SectorDesigner *sector_design_box;
 	UI_VertexBox *vert_box;
 
 	UI_FindAndReplace *find_box;
@@ -101,6 +104,7 @@ public:
 	// FLTK methods
 	int handle(int event);
 	void draw();
+	void resize(int X, int Y, int W, int H) override;
 	
 	void propsLoadValues()
 	{
@@ -110,6 +114,7 @@ public:
 
 public:
 	void SetTitle(const SString &wad_name, const SString &map_name, bool read_only);
+	void UpdateSnapToGrid(bool enabled);
 
 	// add or remove the '*' (etc) in the title
 	void UpdateTitle(char want_prefix = 0);
@@ -130,6 +135,13 @@ public:
 
 	void ShowDefaultProps();
 	void ShowFindAndReplace();
+	void ShowSectorDesigner(SectorDesignMode mode);
+	void HideSectorDesigner();
+	void SetSectorDesignerWidth(int width);
+	int SectorDesignerWidth() const
+	{
+		return designer_panel_width;
+	}
 
 	void UpdateTotals(const Document &doc) noexcept;
 
@@ -142,10 +154,7 @@ public:
 
 	void HideSpecialPanel();
 
-	bool isSpecialPanelShown()
-	{
-		return props_box->visible() || find_box->visible();
-	}
+	bool isSpecialPanelShown();
 
 	void Delay(int steps);  // each step is 1/10th second
 
@@ -164,8 +173,12 @@ public:
 
 private:
 	static void quit_callback(Fl_Widget *w, void *data);
+	void LayoutPropertyPanel(int width);
 
 	Instance &mInstance;
+	Fl_Widget *sector_design_divider = nullptr;
+	int designer_panel_width = PANEL_WIDTH;
+	bool layout_in_progress = false;
 };
 
 //------------------------------------------------------------------------

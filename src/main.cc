@@ -974,11 +974,16 @@ static void readPortInfo(std::unordered_map<SString, SString> &parseVars, Loadin
 	}
 }
 
-NewResources loadResources(const LoadingData& loading, const WadData &waddata) noexcept(false)
+NewResources loadResources(const LoadingData& loading, const WadData &waddata,
+		std::shared_ptr<Wad_file> editWad) noexcept(false)
 {
 	auto newres = NewResources();
 	newres.loading = loading;
 	newres.waddata = waddata;
+	if(editWad)
+		newres.waddata.master.ReplaceEditWad(std::move(editWad));
+	else
+		newres.waddata.master.RemoveEditWad();
 
 	gLog.printf("\n");
 	gLog.printf("----- Loading Resources -----\n");
@@ -1063,7 +1068,13 @@ NewResources loadResources(const LoadingData& loading, const WadData &waddata) n
 //
 void Instance::Main_LoadResources(const LoadingData &loading) noexcept(false)
 {
-	auto newres = loadResources(loading, wad);
+	Main_LoadResources(loading, wad.master.editWad());
+}
+
+void Instance::Main_LoadResources(const LoadingData &loading,
+		std::shared_ptr<Wad_file> editWad) noexcept(false)
+{
+	auto newres = loadResources(loading, wad, std::move(editWad));
 
 	// Commit it
 	wad = std::move(newres.waddata);
@@ -1289,6 +1300,7 @@ int EurekaMain(int argc, char *argv[])
 		init_progress = ProgressStatus::loaded;
 
 		global::recent.load(global::home_dir, global::old_linux_home_and_cache_dir);
+		gInstance->grid.SetSnap(config::grid_default_snap);
 
 		M_LoadBindings();
 
@@ -1323,10 +1335,12 @@ int EurekaMain(int argc, char *argv[])
 			//       placed at the correct spot (at the end)
 			gInstance->wad.master.ReplaceEditWad(editWad);
 		}
-		// don't auto-load when --iwad or --warp was used on the command line
-		else if (config::auto_load_recent && ! (!gInstance->loaded.iwadName.empty() || !gInstance->loaded.levelName.empty()))
+		// Explicit projects always reopen. The preference controls only the
+		// loose-PWAD fallback. Command-line --iwad and --warp still win.
+		else if (! (!gInstance->loaded.iwadName.empty() ||
+					!gInstance->loaded.levelName.empty()))
 		{
-			gInstance->M_TryOpenMostRecent();
+			gInstance->M_TryOpenMostRecent(config::auto_load_recent);
 		}
 
 
@@ -1399,6 +1413,8 @@ int EurekaMain(int argc, char *argv[])
 	quit:
 		/* that's all folks! */
 
+		if (!global::home_dir.empty())
+			global::recent.save(global::home_dir);
 		gLog.printf("Quit\n");
 
 		init_progress = ProgressStatus::nothing;
