@@ -42,7 +42,12 @@ previously generated marker-owned declaration can be updated.
 PK3 projects expose resources recursively below the conventional `flats/`,
 `sprites/`, and `textures/` directories in the editor browser.  The projection
 uses WAD-compatible basenames only; saves retain each resource's complete PK3
-path and archive record and only update managed map or project-metadata entries.
+path and archive record. File / Import Surface Textures is the explicit
+exception: after a decoded conflict review, it can add or unambiguously replace
+individual `textures/<name>.<extension>` and `flats/<name>.<extension>` entries
+without rewriting unrelated archive records. Modern images can target walls,
+floors/ceilings, or both and become immediately available to ordinary controls,
+Smart Door, and Smart Sector. See `docs/SurfaceTextures.txt`.
 File / PK3 Metadata provides a separate read-only archive inventory.  It shows
 MAPINFO-family and common resource declarations verbatim, lists runtime sources
 without interpreting them, summarizes conventional resource directories, and
@@ -122,6 +127,9 @@ integration, glTF models, and related extensions remain external resource or
 runtime features.  The extended line, side, and sector properties emitted by
 the generator now survive UDMF load/edit/save cycles; see
 `docs/BiasedDoomInventory.txt` for the audited list and reproducible check.
+Established ZDoom surface panning/scaling/rotation fields are also editable
+through Edit / Surface Texture Transform and rendered consistently in
+OpenGL/software preview; see `docs/SurfaceTransforms.txt`.
 
 
 Compatibility roadmap

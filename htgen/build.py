@@ -33,6 +33,7 @@ site_content = (
     'Main_Changes2.1.1.html',
     'Main_Changes2.2.0.html',
     'Main_Changes2.3.0.html',
+    'Main_Changes2.4.0.html',
     'Main_Credits.html',
     'Main_Download.html',
     'Main_History.html',

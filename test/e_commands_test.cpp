@@ -18,6 +18,10 @@
 
 #include "Instance.h"
 #include "LineDef.h"
+#include "m_config.h"
+#include "Sector.h"
+#include "ui_grid.h"
+#include "ui_window.h"
 #include "Vertex.h"
 #include "w_wad.h"
 #include "gtest/gtest.h"
@@ -795,4 +799,97 @@ TEST_F(SelectNeighborMidLines, CheckDifferentTextureHeights)
 	ASSERT_EQ(inst.edit.Selected->get_ext(8), PART_RT_RAIL);
 	ASSERT_EQ(inst.edit.Selected->get_ext(9), PART_RT_RAIL);
 	ASSERT_EQ(inst.edit.Selected->get_ext(10), PART_RT_RAIL);
+}
+
+TEST(RenderWorkflow, AllLinedefInspectionRestoresModeSelectionAndRendering)
+{
+	Instance inst;
+	for (const v2double_t point :
+			{v2double_t{0, 0}, v2double_t{128, 0},
+			 v2double_t{128, 128}, v2double_t{0, 128}})
+	{
+		auto vertex = std::make_shared<Vertex>();
+		vertex->SetRawXY(MapFormat::doom, point);
+		inst.level.vertices.push_back(vertex);
+	}
+	inst.level.sectors.push_back(std::make_shared<Sector>());
+	for (int index = 0; index < 4; ++index)
+	{
+		auto line = std::make_shared<LineDef>();
+		line->start = index;
+		line->end = (index + 1) % 4;
+		inst.level.linedefs.push_back(line);
+	}
+
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.edit.Selected->set(0);
+	inst.edit.sector_render_mode = SREND_Lighting;
+	inst.edit.error_mode = true;
+
+	UI_MainWindow window(inst);
+	inst.main_win = &window;
+	inst.CMD_InspectAllLines3D();
+
+	EXPECT_TRUE(inst.edit.render3d);
+	ASSERT_TRUE(inst.edit.lineInspection.has_value());
+	EXPECT_EQ(inst.edit.mode, ObjType::linedefs);
+	EXPECT_EQ(inst.edit.Selected->what_type(), ObjType::linedefs);
+	EXPECT_EQ(inst.edit.Selected->count_obj(), 4);
+	EXPECT_FALSE(inst.edit.error_mode);
+	for (int index = 0; index < 4; ++index)
+		EXPECT_TRUE(inst.edit.Selected->get(index));
+
+	inst.CMD_InspectAllLines3D();
+	EXPECT_FALSE(inst.edit.render3d);
+	EXPECT_FALSE(inst.edit.lineInspection.has_value());
+	EXPECT_EQ(inst.edit.mode, ObjType::sectors);
+	EXPECT_EQ(inst.edit.Selected->what_type(), ObjType::sectors);
+	EXPECT_EQ(inst.edit.Selected->count_obj(), 1);
+	EXPECT_TRUE(inst.edit.Selected->get(0));
+	EXPECT_EQ(inst.edit.sector_render_mode, SREND_Lighting);
+	EXPECT_TRUE(inst.edit.error_mode);
+	inst.main_win = nullptr;
+}
+
+TEST(RenderWorkflow, RenderModesCycleForwardBackwardAndThrough3D)
+{
+	Instance inst;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.edit.sector_render_mode = SREND_Lighting;
+	UI_MainWindow window(inst);
+	inst.main_win = &window;
+
+	inst.EXEC_Param[0] = "+1";
+	inst.CMD_CycleRenderMode();
+	EXPECT_EQ(inst.edit.sector_render_mode, SREND_FloorBright);
+	EXPECT_FALSE(inst.edit.render3d);
+
+	inst.EXEC_Param[0] = "-1";
+	inst.CMD_CycleRenderMode();
+	EXPECT_EQ(inst.edit.sector_render_mode, SREND_Lighting);
+
+	inst.edit.sector_render_mode = SREND_SoundProp;
+	inst.EXEC_Param[0] = "+1";
+	inst.CMD_CycleRenderMode();
+	EXPECT_TRUE(inst.edit.render3d);
+
+	inst.CMD_CycleRenderMode();
+	EXPECT_FALSE(inst.edit.render3d);
+	EXPECT_EQ(inst.edit.sector_render_mode, SREND_Nothing);
+	inst.main_win = nullptr;
+}
+
+TEST(MathematicalGridWindow, FitsAndAvoidsAttachedModalState)
+{
+	Instance inst;
+	const bool oldDefaultSnap = config::grid_default_snap;
+	config::grid_default_snap = false;
+	SString reason;
+	EXPECT_TRUE(UI_VerifyMathematicalGridLayout(inst, &reason)) << reason;
+	EXPECT_FALSE(config::grid_default_snap);
+	EXPECT_TRUE(UI_VerifyMathematicalGridWindowPolicy(inst, &reason)) << reason;
+	EXPECT_FALSE(config::grid_default_snap);
+	config::grid_default_snap = oldDefaultSnap;
 }

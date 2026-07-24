@@ -40,6 +40,30 @@ enum class ResourceNamespaceKind
 	texture
 };
 
+enum class PackageResourceKind
+{
+	wallTexture,
+	flat
+};
+
+struct PackageResourceEntry
+{
+	PackageResourceKind kind = PackageResourceKind::wallTexture;
+	SString editorName;
+	SString entryPath;
+	uint64_t size = 0;
+	size_t ordinal = 0;
+};
+
+struct PackageResourceWrite
+{
+	PackageResourceKind kind = PackageResourceKind::wallTexture;
+	SString editorName;
+	SString extension;
+	std::vector<uint8_t> data;
+	std::optional<SString> replaceEntryPath;
+};
+
 struct Pk3MetadataEntry
 {
 	SString path;
@@ -110,5 +134,10 @@ std::shared_ptr<PackageBackend> M_CreatePackageBackend(const fs::path &path,
 std::shared_ptr<Wad_file> M_OpenEditablePackage(const fs::path &path);
 bool M_ValidateEditablePackage(const fs::path &path) noexcept;
 ProjectPackage M_ProjectPackageForPath(const fs::path &path) noexcept;
+
+std::vector<PackageResourceEntry> M_ListPackageResources(
+		const fs::path &path);
+void M_WritePackageResources(const fs::path &path,
+		const std::vector<PackageResourceWrite> &writes);
 
 #endif // HERESY_M_PACKAGE_H

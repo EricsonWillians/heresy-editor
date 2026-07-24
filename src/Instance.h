@@ -91,6 +91,7 @@ public:
 	void CMD_CopyMap();
 	void CMD_CampaignNavigator();
 	void CMD_CreateNextMap();
+	void CMD_CycleRenderMode();
 	void CMD_PackageMetadata();
 	void CMD_CopyProperties();
 	void CMD_DefaultProps();
@@ -109,8 +110,11 @@ public:
 	void CMD_GivenFile();
 	void CMD_GoToCamera();
 	void CMD_GRID_Bump();
+	void CMD_GRID_Configure();
 	void CMD_GRID_Set();
 	void CMD_GRID_Zoom();
+	void CMD_ImportSurfaceTextures();
+	void CMD_InspectAllLines3D();
 	void CMD_InvertSelection();
 	void CMD_JumpToObject();
 	void CMD_LastSelection();
@@ -164,6 +168,7 @@ public:
 	void CMD_SelectNeighbors();
 	void CMD_SetVar();
 	void CMD_Shrink();
+	void CMD_SurfaceTransform();
 	void CMD_TestMap();
 	void CMD_ChangeTestSettings();
 	void CMD_TH_SpinThings();

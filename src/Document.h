@@ -28,6 +28,7 @@
 #include "e_vertex.h"
 #include "LineDef.h"
 #include "Vertex.h"
+#include <limits>
 #include <memory>
 
 class crc32_c;
@@ -60,8 +61,12 @@ public:
 	std::vector<byte> behaviorData;
 	std::vector<byte> scriptsData;
 
-	v2double_t Map_bound1 = { 32767, 32767 };	/* minimum XY value of map */
-	v2double_t Map_bound2 = { -32767, -32767 };	/* maximum XY value of map */
+	v2double_t Map_bound1 = {
+			std::numeric_limits<double>::max(),
+			std::numeric_limits<double>::max() };	/* minimum XY value of map */
+	v2double_t Map_bound2 = {
+			std::numeric_limits<double>::lowest(),
+			std::numeric_limits<double>::lowest() };	/* maximum XY value of map */
 
 
 	Basis basis;

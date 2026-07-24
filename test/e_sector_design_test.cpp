@@ -6190,6 +6190,49 @@ TEST_F(SmartSectorFixture, SmartSectorGesturesHonorSharedGridSnap)
 	panel.Close();
 }
 
+TEST_F(SmartSectorFixture,
+		RotatedGridBuildsRoomAlongConstructionAxes)
+{
+	inst.conf = config;
+	inst.loaded.gameName = "doom2";
+	inst.loaded.levelFormat = MapFormat::udmf;
+	inst.edit.mode = ObjType::sectors;
+	inst.edit.render3d = false;
+	inst.edit.Selected.emplace(ObjType::sectors);
+	inst.grid.ForceStep(32);
+	inst.grid.SetSnap(true);
+	grid::MathSettings settings;
+	settings.rotation = 45.0;
+	inst.grid.SetMathSettings(settings);
+
+	UI_SectorDesigner panel(inst, 0, 0, 308, 700);
+	panel.Open(SectorDesignMode::room);
+	panel.CanvasClick({2.0, 1.0}, 0);
+	panel.CanvasClick({24.0, 69.0}, 0);
+	ASSERT_TRUE(panel.Plan().valid());
+	ASSERT_EQ(panel.Plan().shapes.size(), 1u);
+	const std::vector<v2double_t> &outer =
+			panel.Plan().shapes.front().outer;
+	ASSERT_EQ(outer.size(), 4u);
+
+	const grid::Basis basis = inst.grid.getBasis();
+	const std::vector<v2double_t> expected = {
+			{0.0, 0.0}, basis.primary * 2.0,
+			basis.primary * 2.0 + basis.secondary,
+			basis.secondary};
+	for (const v2double_t &point : expected)
+	{
+		EXPECT_TRUE(std::any_of(
+				outer.begin(), outer.end(),
+				[&](const v2double_t &candidate)
+				{
+					return std::hypot(candidate.x - point.x,
+							candidate.y - point.y) < 0.001;
+				}));
+	}
+	panel.Close();
+}
+
 TEST_F(SmartSectorFixture, TopMenuSnapToggleUsesEditorGridState)
 {
 	inst.grid.ForceStep(16);
@@ -6422,6 +6465,18 @@ TEST(SmartSectorDefaults, DesignerExtrudeAndSnapHaveUnambiguousShortcuts)
 	EXPECT_EQ(bindings.find(
 			"general\tf\tToggle\tsnap"),
 			std::string::npos);
+	EXPECT_NE(bindings.find(
+			"general\tSHIFT-TAB\tInspectAllLines3D"),
+			std::string::npos);
+	EXPECT_NE(bindings.find(
+			"general\tALT-g\tGRID_Configure"),
+			std::string::npos);
+	EXPECT_NE(bindings.find(
+			"general\tSHIFT-F8\tCycleRenderMode\t+1"),
+			std::string::npos);
+	EXPECT_NE(bindings.find(
+			"general\tCMD-F8\tCycleRenderMode\t-1"),
+			std::string::npos);
 
 	const std::string operations = readSourceFile("operations.cfg");
 	EXPECT_NE(operations.find(
@@ -6430,6 +6485,9 @@ TEST(SmartSectorDefaults, DesignerExtrudeAndSnapHaveUnambiguousShortcuts)
 	EXPECT_NE(operations.find(
 			"a\t\"Smart architecture...\"\t\tSEC_SmartSector\tarchitecture"),
 			std::string::npos);
+	EXPECT_NE(operations.find(
+			"i\t\"Inspect all linedefs in 3D\"\tInspectAllLines3D"),
+			std::string::npos);
 
 	const std::string commands =
 			readSourceFile("misc/command-doc.toml");
@@ -6437,6 +6495,9 @@ TEST(SmartSectorDefaults, DesignerExtrudeAndSnapHaveUnambiguousShortcuts)
 			"SEC_SmartSector [room|polygon|freeform|extrude|inset|"
 			"corridor|stairs|lift|architecture]"),
 			std::string::npos);
+	EXPECT_NE(commands.find("CycleRenderMode ="), std::string::npos);
+	EXPECT_NE(commands.find("InspectAllLines3D ="), std::string::npos);
+	EXPECT_NE(commands.find("\"GRID_Configure\" ="), std::string::npos);
 }
 
 } // namespace

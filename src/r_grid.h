@@ -24,15 +24,81 @@
 #include "m_vector.h"
 #include "m_strings.h"
 
+#include <vector>
+
 class Instance;
 
 namespace grid
 {
-static const int values[] = 
+constexpr int kMinimumStep = 1;
+constexpr int kMaximumStep = 65536;
+
+// Ordered coarse/fine cycle used by GRID_Bump.  The grouped menu exposes
+// many more mathematical sequences without making +/- stepping erratic.
+static const int values[] =
 {
-	1024, 512, 256, 192, 128, 64, 32, 16, 8, 4, 2,
+	65536, 32768, 16384, 8192, 4096, 3072, 2048, 1536,
+	1024, 768, 512, 384, 256, 192, 128, 96, 64, 48,
+	32, 24, 16, 12, 8, 6, 4, 3, 2, 1,
 	-1	// off
 };
+
+enum class Pattern
+{
+	orthogonal,
+	oblique,
+	polar
+};
+
+enum class Rounding
+{
+	nearest,
+	lower,
+	upper,
+	towardOrigin,
+	awayFromOrigin
+};
+
+struct MathSettings
+{
+	Pattern pattern = Pattern::orthogonal;
+	Rounding rounding = Rounding::nearest;
+	v2double_t origin = {};
+	double rotation = 0.0;
+	double secondaryRatio = 1.0;
+	double axisAngle = 90.0;
+	int angularDivisions = 16;
+	int majorEvery = 8;
+};
+
+struct Basis
+{
+	v2double_t primary;
+	v2double_t secondary;
+	double determinant = 0.0;
+
+	bool valid() const noexcept;
+};
+
+struct StepPreset
+{
+	const char *group;
+	const char *label;
+	int step;
+};
+
+struct GeometryPreset
+{
+	const char *id;
+	const char *label;
+	const char *description;
+	MathSettings settings;
+};
+
+bool MathSettingsValid(const MathSettings &settings,
+		SString *reason = nullptr) noexcept;
+const std::vector<StepPreset> &StepPresets();
+const std::vector<GeometryPreset> &GeometryPresets();
 
 class Listener
 {
@@ -65,6 +131,8 @@ private:
 	// Init may temporarily synchronize snapping with grid visibility.
 	// Those internal transitions are not user choices to remember.
 	bool initializing = false;
+
+	MathSettings math;
 
 	// map coordinates for centre of canvas
 	v2double_t orig = {};
@@ -107,6 +175,9 @@ public:
 
 	// force grid stepping size to arbitrary value
 	void ForceStep(int new_step);
+	void SetMathSettings(const MathSettings &settings);
+	void SetOrigin(const v2double_t &origin);
+	void ResetMathSettings();
 
 	// compute new grid step from current scale
 	void StepFromScale();
@@ -120,18 +191,16 @@ public:
 	// (or unchanged is the 'snap' flag is off)
 	double SnapX(double map_x) const;
 	double SnapY(double map_y) const;
-	v2double_t Snap(const v2double_t &map) const
-	{
-		return { SnapX(map.x), SnapY(map.y) };
-	}
+	v2double_t Snap(const v2double_t &map) const;
 
 	// return X/Y coordinate snapped to grid (always)
 	int ForceSnapX(double map_x) const;
 	int ForceSnapY(double map_y) const;
-	v2int_t ForceSnap(const v2double_t map) const
-	{
-		return v2int_t{ ForceSnapX(map.x), ForceSnapX(map.y) };
-	}
+	v2double_t ForceSnap(const v2double_t &map) const;
+	std::vector<v2double_t> SnapCandidates(
+			const v2double_t &map) const;
+	Basis getBasis() const noexcept;
+	bool isDefaultOrthogonal() const noexcept;
 
 	// snap X/Y coordinate to ratio lock
 	// (unchanged is the ratio snapping is off)
@@ -155,6 +224,10 @@ public:
 	int getStep() const
 	{
 		return step;
+	}
+	const MathSettings &getMathSettings() const
+	{
+		return math;
 	}
 	bool snaps() const
 	{
@@ -185,7 +258,6 @@ private:
 	void configureSnap(bool snap);
 
 	static const double scale_values[];
-	static const int digit_scales[];
 
 	Listener& listener;
 };

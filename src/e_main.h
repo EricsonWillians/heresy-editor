@@ -99,6 +99,23 @@ struct DesignAssistPreview
 	std::vector<DesignPreviewLabel> labels;
 };
 
+struct LineInspectionState
+{
+	ObjType previousMode;
+	selection_c previousSelection;
+	int previousSectorRenderMode = SREND_Nothing;
+	bool previousErrorMode = false;
+
+	LineInspectionState(ObjType mode, const selection_c &selection,
+			int rendering, bool errorMode) :
+		previousMode(mode),
+		previousSelection(selection),
+		previousSectorRenderMode(rendering),
+		previousErrorMode(errorMode)
+	{
+	}
+};
+
 //
 // this holds some important editor state
 //
@@ -142,6 +159,7 @@ struct Editor_State_t
 	bool show_object_numbers;
 
 	std::optional<DesignAssistPreview> designAssistPreview;
+	std::optional<LineInspectionState> lineInspection;
 
 
 	/* navigation stuff */

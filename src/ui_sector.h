@@ -60,6 +60,7 @@ public:
 	UI_Pic      *f_pic;
 
 	UI_DynIntInput *headroom;
+	Fl_Button *surface_transform;
 
 	enum
 	{
@@ -122,6 +123,7 @@ private:
 	static void   light_callback(Fl_Widget *, void *);
 	static void     tag_callback(Fl_Widget *, void *);
 	static void  button_callback(Fl_Widget *, void *);
+	static void surface_transform_callback(Fl_Widget *, void *);
 };
 
 #endif  /* __EUREKA_UI_SECTOR_H__ */

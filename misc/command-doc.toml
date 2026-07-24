@@ -33,6 +33,15 @@ projected flat/sprite/texture name collisions and overrides in the loaded source
 previews are verbatim; runtime code is not interpreted, entries are not renamed, and sources are
 not reordered.
 """
+ImportSurfaceTextures = """
+Imports one or more PNG, JPEG, TGA, Doom-patch, or traditional raw-flat files into the writable
+project package. Modern images default to both wall and floor/ceiling use; Doom patches are
+wall-only and 4096-byte raw flats are plane-only. The review shows decoded dimensions, alpha,
+package destinations, loaded ownership, active-map references, and safe Rename, explicit Override,
+unambiguous Replace, or Skip conflict policies. The complete batch is revalidated before one
+backed-up atomic package replacement, then surface catalogs and rendering caches refresh without
+discarding map selection, dirty documents, or Undo/Redo history.
+"""
 CreateNextMap = """
 Creates or opens the current map's configured normal-route target. Without an explicit override,
 the next ordered campaign slot is used.
@@ -178,6 +187,27 @@ Finds any unused vertices, sidedefs or sectors and removes them from the map.
 """
 MoveObjectsDialog = ""
 ScaleObjectsDialog = ""
+SurfaceTransform = """
+Opens the format-aware Surface Texture Transform dialog for selected or
+highlighted walls, floors, and ceilings. Wall offsets work in Doom, Hexen,
+and UDMF. Per-part wall panning/scaling and floor/ceiling panning, scaling,
+mirroring, and rotation are enabled only when the active UDMF source-port
+profile declares those fields.
+
+Rendered width and height are entered as percentages of the texture's
+intrinsic dimensions. 100% is native 1:1 mapping. Absolute quick-size buttons
+fit each target's longest source dimension to 64, 128, or 256 map units.
+Fit Both, Width, and Height use each selected surface's actual geometry.
+Every numeric field has holdable minus/plus buttons with coarse and fine
+modifiers.
+
+Live canvas display is always active. The independently movable, resizable
+tool never resizes the main editor. Invalid input and Cancel restore the
+original view without changing dirty state or Undo/Redo. UDMF stores native
+transforms; writable modern-port Doom/Hexen projects create safely renamed
+fitted texture/flat copies when the binary format cannot store scale. Every
+applied batch is one map Undo operation.
+"""
 RotateObjectsDialog = """
 These comands open a dialog window for moving, scaling or rotating a group of selected objects. They
 allow specifying an exact distance to move the objects, or an exact scaling factor, or an exact
@@ -217,6 +247,18 @@ Places the camera (for the 3D view) at the spot on the 2D map view where the mou
 
 Flags:
     `/open3d` : activate the 3D view afterwards.
+"""
+CycleRenderMode = """
+Moves directly through Plain, Floor, Ceiling, Lighting, Floor Brightness,
+Ceiling Brightness, Sound Propagation, and 3D View. A positive parameter moves
+forward and a negative parameter moves backward. The default bindings are
+Shift+F8 and Ctrl/Cmd+F8.
+"""
+InspectAllLines3D = """
+Starts a temporary whole-map wall inspection. In 2D, it remembers the current
+edit mode, object selection, and sector-rendering overlay, selects every
+linedef, and enters 3D View. Tab or Shift+Tab returns to 2D and restores that
+remembered state exactly. Invoking it in an ordinary 3D session returns to 2D.
 """
 JumpToObject = """
 Brings up the "Jump To Object" dialog window, allowing you to jump to the object with a specified
@@ -315,11 +357,21 @@ window size.
 """
 "GRID_Bump <delta>" = """
 Changes the current grid size. The <delta> parameter should be `+1` to increase the size to the next
-usable one, or `-1` to decrease it.
+usable construction step, or `-1` to decrease it. The fast cycle covers
+one-unit detail through 65536-unit large-map planning.
+"""
+"GRID_Configure" = """
+Opens Mathematical Grid & Snapping. It provides 30 geometry presets plus
+editable Cartesian, rotated, rectangular, oblique, triangular/hexagonal, and
+polar grids. Primary/secondary spacing, origin, rotation, inter-axis angle,
+radial divisions, major interval, and directional rounding are previewed live.
+The default binding is Alt+G.
 """
 "GRID_Set <size>" = """
-Sets the current grid size to the given value, which can be anything (i.e. it is not limited to the
-normal values).
+Sets the primary grid spacing to any whole number from 1 through 65536; it is
+not limited to the fast-cycle values. The information bar also exposes 75
+grouped architectural, large-map, decimal, Fibonacci, and powers-of-three
+presets.
 """
 "GRID_Zoom <scale>" = """
 Zooms the map view. The parameter is the scale value, which is positive for N:1 scales and negative

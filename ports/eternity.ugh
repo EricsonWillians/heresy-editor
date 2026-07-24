@@ -53,6 +53,7 @@ feature 3d_midtex 1
 feature tx_start 1
 feature mix_textures_flats 1
 feature slopes 10
+feature udmf_surface_transforms 3
 
 #---- ETERNITY THINGS ------------------
 

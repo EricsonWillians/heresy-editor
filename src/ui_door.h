@@ -18,6 +18,7 @@ class Fl_Button;
 class Fl_Choice;
 class Fl_Hold_Browser;
 class Fl_Box;
+struct ConfigData;
 
 using SmartDoorDialogOverride =
 		std::function<bool(Instance &, const selection_c &, DoorOptions &)>;
@@ -38,6 +39,9 @@ extern LoadedImageChooserOverride UI_LoadedImageChooser_Override;
 
 bool UI_RunSmartDoorDialog(Instance &inst, const selection_c &selection,
 						   DoorOptions &options);
+std::vector<SString> UI_FilterDoorTextures(
+		const ImageSet &images, const ConfigData &config,
+		const SString &filter);
 std::vector<SString> UI_FilterDoorTextures(
 		const ImageSet &images, const SString &filter);
 bool UI_ChooseLoadedImage(Instance &inst, UI_ImageSelectionKind kind,

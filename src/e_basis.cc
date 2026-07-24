@@ -432,6 +432,12 @@ bool Basis::changeSector(int sec, Sector::StringIDAddress field, StringID value)
 
 	return change(ObjType::sectors, sec, field, value.get());
 }
+bool Basis::changeSector(int sec, double Sector::*field, double value)
+{
+	SYS_ASSERT(sec >= 0 && sec < doc.numSectors());
+
+	return change(ObjType::sectors, sec, field, value);
+}
 
 //
 // Change sidedef
@@ -449,6 +455,12 @@ bool Basis::changeSidedef(int side, SideDef::StringIDAddress field, StringID val
 	inst.recent_textures.insert(BA_GetString(value));
 
 	return change(ObjType::sidedefs, side, field, value.get());
+}
+bool Basis::changeSidedef(int side, double SideDef::*field, double value)
+{
+	SYS_ASSERT(side >= 0 && side < doc.numSidedefs());
+
+	return change(ObjType::sidedefs, side, field, value);
 }
 
 //
@@ -669,6 +681,28 @@ void Basis::EditUnit::rawChange(Basis &basis)
 					break;
 				default:
 					BugError("Basis::EditOperation::rawChange(vertexDouble): bad objtype %u\n", (unsigned)objtype);
+					break;
+			}
+		},
+		[&basis, this](double Sector::*field) {
+			switch(objtype)
+			{
+				case ObjType::sectors:
+					std::swap(basis.doc.sectors[objnum].get()->*field, std::get<double>(value));
+					break;
+				default:
+					BugError("Basis::EditOperation::rawChange(sectorDouble): bad objtype %u\n", (unsigned)objtype);
+					break;
+			}
+		},
+		[&basis, this](double SideDef::*field) {
+			switch(objtype)
+			{
+				case ObjType::sidedefs:
+					std::swap(basis.doc.sidedefs[objnum].get()->*field, std::get<double>(value));
+					break;
+				default:
+					BugError("Basis::EditOperation::rawChange(sidedefDouble): bad objtype %u\n", (unsigned)objtype);
 					break;
 			}
 		},

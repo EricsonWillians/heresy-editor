@@ -94,6 +94,24 @@ TEST_F(DocumentFixture, CheckObjects)
 	ASSERT_FALSE(doc.isLinedef(1));
 }
 
+TEST_F(DocumentFixture, LargePositiveCoordinatesProduceExactBounds)
+{
+	for (const v2double_t point :
+			{v2double_t{100000.25, 200000.5},
+			 v2double_t{150000.75, 260000.125}})
+	{
+		auto vertex = std::make_shared<Vertex>();
+		vertex->SetRawXY(MapFormat::udmf, point);
+		doc.vertices.push_back(vertex);
+	}
+
+	doc.CalculateLevelBounds();
+	EXPECT_DOUBLE_EQ(doc.Map_bound1.x, doc.vertices[0]->x());
+	EXPECT_DOUBLE_EQ(doc.Map_bound1.y, doc.vertices[0]->y());
+	EXPECT_DOUBLE_EQ(doc.Map_bound2.x, doc.vertices[1]->x());
+	EXPECT_DOUBLE_EQ(doc.Map_bound2.y, doc.vertices[1]->y());
+}
+
 TEST_F(DocumentFixture, CRC)
 {
 	// Add some objects

@@ -22,6 +22,12 @@ overwritten.
 </li><li>For PK3 projects, use File / PK3 Metadata for a bounded, read-only view
 of declarations, runtime-source entries, conventional resource groups,
 projected-name collisions, and loaded-source overrides.
+</li><li>Use File / Import Surface Textures to add reviewed wall,
+floor/ceiling, or dual-use project images. The importer shows exact ownership
+and destination paths before an atomic package update.
+</li><li>Select map surfaces and use Edit / Surface Texture Transform or
+Alt+T for live panning, fitting, scaling, mirroring, and rotation. Declared
+ZDoom UDMF fields are saved directly.
 </li><li>Use the port setup button or Tools / Test in Game. Heresy Editor searches
 for BiasedDoom or GZDoom automatically, including nested home and installation
 locations, and accepts extensionless Linux executables. Deep searches show a
@@ -56,5 +62,10 @@ rewriting them. It also reports uppercase eight-character flat, sprite, and
 texture name collisions and the current IWAD/resource/project resolution order
 without renaming entries or reordering sources. Campaign Navigator reports
 managed ZMAPINFO freshness, and Test in Game offers a previewed update when that
-managed output no longer matches current campaign metadata.</p>
+managed output no longer matches current campaign metadata. Surface imports
+are the explicit reviewed project-resource mutation path: IWADs and external
+resources remain immutable, intentional overrides are added at project
+precedence, and map Undo/Redo history survives the resource refresh. Standard
+ZDoom sidedef and plane pan/scale/rotation fields are typed, rendered, and
+round-tripped without guessing undeclared namespaces.</p>
 </div>

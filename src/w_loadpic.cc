@@ -371,8 +371,8 @@ ImageFormat W_DetectImageFormat(const Lump_c &lump)
 	byte img_type  = header[2];
 	byte depth     = header[16];
 
-	if (width  > 0 && width  <= 2048 &&
-		height > 0 && height <= 2048 &&
+	if (width  > 0 && width  <= 8192 &&
+		height > 0 && height <= 8192 &&
 		(cmap_type == 0 || cmap_type == 1) &&
 		((img_type | 8) >= 8 && (img_type | 8) <= 11) &&
 		(depth == 8 || depth == 15 || depth == 16 || depth == 24 || depth == 32))

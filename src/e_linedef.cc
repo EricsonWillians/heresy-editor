@@ -35,6 +35,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_surface_transform.h"
 #include "e_objects.h"
 #include "Sector.h"
 #include "SideDef.h"
@@ -384,7 +385,22 @@ void LinedefModule::determineAdjoiner(Objid& result,
 //
 // Calculate reference H
 //
-int LinedefModule::calcReferenceH(const Objid& obj) const
+static WallSurfacePart TransformPartForObject(
+		const LineDef &line, const Objid &object)
+{
+	// Eureka exposes the only visible texture on a one-sided line as the
+	// "lower" render part, but the map stores it in the middle slot.
+	if (!line.TwoSided())
+		return WallSurfacePart::middle;
+
+	if (object.parts & (PART_RT_UPPER | PART_LF_UPPER))
+		return WallSurfacePart::upper;
+	if (object.parts & (PART_RT_RAIL | PART_LF_RAIL))
+		return WallSurfacePart::middle;
+	return WallSurfacePart::lower;
+}
+
+double LinedefModule::calcReferenceH(const Objid& obj) const
 {
 	const LineDef *L  = pointer(obj);
 	const SideDef *SD = sidedefPointer(obj);
@@ -395,9 +411,16 @@ int LinedefModule::calcReferenceH(const Objid& obj) const
 			return 256;
 
 		const Sector &front = doc.getSector(*SD);
+		const SurfaceTransform transform =
+				M_EffectiveWallSurfaceTransform(*SD,
+						WallSurfacePart::middle,
+						inst.loaded.levelFormat, inst.conf);
 
 		if (L->flags & MLF_LowerUnpegged)
-			return front.floorh + inst.wad.images.W_GetTextureHeight(inst.conf, SD->MidTex());
+			return front.floorh +
+					inst.wad.images.W_GetTextureHeight(
+							inst.conf, SD->MidTex()) /
+					std::abs(transform.scaleY);
 
 		return front.ceilh;
 	}
@@ -415,7 +438,16 @@ int LinedefModule::calcReferenceH(const Objid& obj) const
 	if (obj.parts & (PART_RT_UPPER | PART_LF_UPPER))
 	{
 		if (! (L->flags & MLF_UpperUnpegged))
-			return back->ceilh + inst.wad.images.W_GetTextureHeight(inst.conf, SD->UpperTex());
+		{
+			const SurfaceTransform transform =
+					M_EffectiveWallSurfaceTransform(*SD,
+							WallSurfacePart::upper,
+							inst.loaded.levelFormat, inst.conf);
+			return back->ceilh +
+					inst.wad.images.W_GetTextureHeight(
+							inst.conf, SD->UpperTex()) /
+					std::abs(transform.scaleY);
+		}
 
 		return front->ceilh;
 	}
@@ -440,6 +472,45 @@ void LinedefModule::doAlignX(EditOperation &op, const Objid& cur,
 	const SideDef *adj_SD = sidedefPointer(adj);
 
 	bool on_left = adj_L->TouchesVertex((cur.parts & PART_LF_ALL) ? cur_L->end : cur_L->start);
+
+	const auto capabilities = M_SurfaceTransformCapabilities(
+			inst.loaded.levelFormat, inst.conf);
+	if (capabilities.wallPartOffsets)
+	{
+		const SideDef *cur_SD = sidedefPointer(cur);
+		SurfaceTransform current = M_WallSurfaceTransform(
+				*cur_SD, TransformPartForObject(*cur_L, cur));
+		SurfaceTransform adjacent = M_WallSurfaceTransform(
+				*adj_SD, TransformPartForObject(*adj_L, adj));
+		if (!M_SurfaceTransformValid(current, false))
+			current = {};
+		if (!M_SurfaceTransformValid(adjacent, false))
+			adjacent = {};
+
+		const double adjacentEffective =
+				adj_SD->x_offset + adjacent.offsetX;
+		double newEffective;
+		if (on_left)
+		{
+			newEffective = (adjacentEffective +
+					doc.calcLength(*adj_L)) *
+					adjacent.scaleX / current.scaleX;
+		}
+		else
+		{
+			newEffective = adjacentEffective *
+					adjacent.scaleX / current.scaleX -
+					doc.calcLength(*cur_L);
+		}
+
+		current.offsetX = newEffective - cur_SD->x_offset;
+		const Side where =
+				(cur.parts & PART_LF_ALL) ? Side::left : Side::right;
+		M_ChangeWallSurfaceTransform(op,
+				cur_L->WhatSideDef(where),
+				TransformPartForObject(*cur_L, cur), current);
+		return;
+	}
 
 	int new_offset = adj_SD->x_offset;
 
@@ -498,10 +569,40 @@ void LinedefModule::doAlignY(EditOperation &op, const Objid& cur, const Objid& a
 
 	// requirement: adj_tex_h + adj_y_off = cur_tex_h + cur_y_off
 
-	int cur_texh = calcReferenceH(cur);
-	int adj_texh = calcReferenceH(adj);
+	const double cur_texh = calcReferenceH(cur);
+	const double adj_texh = calcReferenceH(adj);
 
-	int new_offset = adj_texh + adj_SD->y_offset - cur_texh;
+	const auto capabilities = M_SurfaceTransformCapabilities(
+			inst.loaded.levelFormat, inst.conf);
+	if (capabilities.wallPartOffsets)
+	{
+		const LineDef *adj_L = pointer(adj);
+		SurfaceTransform current = M_WallSurfaceTransform(
+				*SD, TransformPartForObject(*L, cur));
+		SurfaceTransform adjacent = M_WallSurfaceTransform(
+				*adj_SD, TransformPartForObject(*adj_L, adj));
+		if (!M_SurfaceTransformValid(current, false))
+			current = {};
+		if (!M_SurfaceTransformValid(adjacent, false))
+			adjacent = {};
+
+		const double adjacentEffective =
+				adj_SD->y_offset + adjacent.offsetY;
+		const double newEffective =
+				(adj_texh + adjacentEffective) *
+				adjacent.scaleY / current.scaleY - cur_texh;
+		current.offsetY = newEffective - SD->y_offset;
+
+		const Side where =
+				(cur.parts & PART_LF_ALL) ? Side::left : Side::right;
+		M_ChangeWallSurfaceTransform(op, L->WhatSideDef(where),
+				TransformPartForObject(*L, cur), current);
+		if (new_flags != L->flags)
+			op.changeLinedef(cur.num, &LineDef::flags, new_flags);
+		return;
+	}
+
+	int new_offset = iround(adj_texh + adj_SD->y_offset - cur_texh);
 
 
 	// normalize value  [TODO: handle BOOM non-power-of-two heights]
@@ -535,6 +636,27 @@ void LinedefModule::doClearOfs(EditOperation &op, const Objid& cur, int align_fl
 
 	if (sd < 0)  // should not happen
 		return;
+
+	const auto capabilities = M_SurfaceTransformCapabilities(
+			inst.loaded.levelFormat, inst.conf);
+	if (capabilities.wallPartOffsets)
+	{
+		const LineDef *line = pointer(cur);
+		const SideDef &side = *doc.sidedefs[sd];
+		SurfaceTransform transform = M_WallSurfaceTransform(
+				side, TransformPartForObject(*line, cur));
+		if (align_flags & LINALIGN_X)
+		{
+			const double desired = (align_flags & LINALIGN_Right) ?
+					-doc.calcLength(*pointer(cur)) : 0.0;
+			transform.offsetX = desired - side.x_offset;
+		}
+		if (align_flags & LINALIGN_Y)
+			transform.offsetY = -side.y_offset;
+		M_ChangeWallSurfaceTransform(op, sd,
+				TransformPartForObject(*line, cur), transform);
+		return;
+	}
 
 	if (align_flags & LINALIGN_X)
 	{

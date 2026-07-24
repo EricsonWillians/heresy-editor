@@ -160,6 +160,8 @@ private:
 	bool SearchMatch(Browser_Item *item) const;
 
 	void Populate_Images(BrowserMode imkind, const std::map<SString, Img_c> & img_list);
+	void Populate_SurfaceImages(BrowserMode imkind,
+			const std::map<SString, const Img_c *> &images);
 	void Populate_Sprites();
 
 	void Populate_ThingTypes();
@@ -174,6 +176,7 @@ private:
 	static void   search_callback(Fl_Widget *w, void *data);
 
 	static void   hide_callback(Fl_Widget *w, void *data);
+	static void import_callback(Fl_Widget *w, void *data);
 	static void  repop_callback(Fl_Widget *w, void *data);
 	static void   sort_callback(Fl_Widget *w, void *data);
 };

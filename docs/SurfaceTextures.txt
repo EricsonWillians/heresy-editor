@@ -1,0 +1,104 @@
+Surface texture import
+======================
+
+Heresy Editor can add image resources directly to the current writable WAD or
+PK3 project. Choose File -> Import Surface Textures, or use Import from the
+Texture/Flat Browser or any searchable wall, floor, or ceiling chooser. The
+native file chooser accepts one or many PNG, JPG/JPEG, TGA, or LMP files.
+
+Choosing a surface
+------------------
+
+Each reviewed file has one of three uses:
+
+* All surfaces writes both a wall texture and a floor/ceiling flat. This is the
+  default for PNG, JPEG, and TGA files.
+* Walls writes only the texture namespace.
+* Floors / Ceilings writes only the flat namespace.
+
+A valid Doom patch defaults to Walls and cannot be used as a flat by this
+importer. A traditional 4096-byte raw flat defaults to Floors / Ceilings and
+cannot be used as a wall. Modern encoded images require a port profile with
+standalone image namespace support; classic PNAMES/TEXTURE1 composition and
+palette conversion are intentionally not synthesized.
+
+The importer detects content from its bytes rather than trusting the filename
+extension and decodes it before enabling Import. Review shows the detected
+format, alpha, intrinsic pixel dimensions, source size, and exact destination.
+Files are limited to 256 MiB, batches to 1 GiB, and decoded images to
+8192 by 8192 pixels.
+
+Package destinations
+--------------------
+
+For WAD projects, wall resources are stored between TX_START/TX_END and plane
+resources between F_START/F_END. Existing valid marker pairs are reused;
+otherwise isolated pairs are added outside map lump groups. For PK3 projects,
+the destinations are `textures/<NAME>.<extension>` and
+`flats/<NAME>.<extension>`. All Surfaces deliberately creates both entries so
+wall and plane resolution is deterministic.
+
+The editor preserves unrelated WAD lumps, maps, metadata, and PK3 records. It
+creates the normal rotating package backup, serializes the reviewed writes in
+memory, validates a same-directory temporary package, and atomically replaces
+the destination. If the current map belongs to a read-only IWAD or resource,
+the command offers Create PWAD and resumes after Export Map makes that package
+active.
+
+Names and conflicts
+-------------------
+
+Map resource names are portable uppercase identifiers of at most eight
+characters. Unsupported characters become underscores. Names are never
+silently truncated over an existing resource, overwritten, or shadowed.
+Review examines the complete loaded order—IWAD, external resources, and the
+project—across both texture and flat namespaces, including classic composite
+IWAD texture names.
+
+Each item has an explicit policy:
+
+* Rename imported is the safe default. It chooses deterministic suffixes such
+  as `_2` and `_3`.
+* Override loaded keeps an IWAD or external resource immutable and adds a
+  later project definition with the requested name.
+* Replace project is available only when every requested destination resolves
+  to one unambiguous project entry.
+* Skip removes the item from the write while retaining the rest of a valid
+  reviewed batch.
+
+Override and Replace require a second confirmation. It lists the exact old and
+new destinations, load precedence, namespace, and active-map references whose
+appearance may change. Duplicate project resources, case-only PK3 ambiguity,
+reserved structural names, unresolved batch collisions, changed sources, and
+stale packages block the entire transaction.
+
+Using imported surfaces
+-----------------------
+
+After a successful import, Heresy Editor reopens the package and reloads only
+wall and plane images. The first imported item is selected in the appropriate
+browser. It is immediately available in linedef upper/middle/lower controls,
+sector floor and ceiling controls, Smart Door Face/Track selection, and Smart
+Sector property selectors.
+
+The original pixel dimensions are retained. New assignments use normal 1:1
+engine scale and default offsets. Alignment commands, texture-height
+calculations, split-linedef offset correction, pegging, wall rendering, and
+floor/ceiling tiling therefore use the same image data as IWAD resources.
+Import never rewrites existing sidedef offsets, UDMF scale properties, sector
+properties, map selection, dirty resident documents, canvas position, or
+Undo/Redo histories.
+
+To change the visible size, select the assigned surface and use Edit ->
+Surface Texture Transform or Alt+T. The always-live tool works from the
+retained intrinsic dimensions, reports the resulting tile and surface sizes,
+and offers geometry-aware Both/Width/Height fitting. Compatible UDMF profiles
+store per-part wall scaling and floor/ceiling panning, scaling, mirroring, and
+rotation without resampling. Doom/Hexen maps retain integer wall offsets; a
+writable modern-port project can fit or mirror by creating a safely renamed,
+resampled project copy while preserving this imported source. See
+`docs/SurfaceTransforms.txt`.
+
+Cancel, closing Review, cancelling the chooser, or a blocking validation error
+does not create a backup or change the package or editor state. Resource
+package changes themselves are not part of map Undo/Redo.

@@ -105,6 +105,16 @@ Completed BiasedDoom roadmap
    placeholder cross-vault and one-crossbeam output with purposeful stepped
    vault and connected two-axis lattice topology; preserve lattice openings as
    host sectors and report their exact preview/apply counts
+-  DONE: add the Stage 26 Surface Texture Importer with decoded multi-file
+   wall/plane/all-surface review, full loaded-order conflict ownership,
+   preservation-safe WAD/PK3 namespace writes, atomic backup/revalidation,
+   modern flat decoding, immediate effective catalogs, and Undo/Redo-safe
+   resource refresh
+-  DONE: add fast all-linedef 3D inspection with exact mode/selection/render
+   restoration, direct forward/back rendering-mode shortcuts and menu actions,
+   plus a live mathematical grid with 30 lattice/polar presets, 75 grouped
+   spacings, custom origin/rotation/rounding, UDMF large-coordinate bounds,
+   shared Smart Sector snapping, persistence, and UI/core regression coverage
 
 See docs/Projects.txt and docs/BiasedDoom.txt for the maintained roadmap.
 
@@ -238,6 +248,9 @@ NO:  an auto-save feature (e.g. save every N minutes unless no
      changes occurred in the last N minutes)
 
 NO:  a name-only mode for texture and flat browsers
+
+DONE: format-aware wall/floor/ceiling texture transforms with UDMF scaling,
+      mirroring, rotation, large intrinsic dimensions, and atomic Undo/Redo
 
 NO:  exchange object numbers
 

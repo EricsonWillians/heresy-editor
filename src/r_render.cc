@@ -725,9 +725,28 @@ void Instance::Render3D_Setup()
 
 void Render3D_Enable(Instance &inst, bool _enable)
 {
+	std::optional<LineInspectionState> inspection;
+	if (!_enable && inst.edit.lineInspection)
+	{
+		inspection = std::move(inst.edit.lineInspection);
+		inst.edit.lineInspection.reset();
+	}
+
 	inst.Editor_ClearAction();
 
 	inst.edit.render3d = _enable;
+
+	if (inspection)
+	{
+		inst.edit.mode = inspection->previousMode;
+		inst.edit.Selected = std::move(
+				inspection->previousSelection);
+		inst.edit.sector_render_mode =
+				inspection->previousSectorRenderMode;
+		inst.edit.error_mode = inspection->previousErrorMode;
+		if (inst.main_win)
+			inst.main_win->NewEditMode(inst.edit.mode);
+	}
 
 	inst.edit.highlight.clear();
 	inst.edit.clicked.clear();

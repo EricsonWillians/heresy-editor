@@ -1456,6 +1456,17 @@ void UI_SectorDesigner::WriteControls()
 SectorDesignRequest UI_SectorDesigner::CurrentRequest() const
 {
 	SectorDesignRequest current = request_;
+	if (inst_.grid.snaps() &&
+			inst_.grid.getMathSettings().pattern != grid::Pattern::polar)
+	{
+		const grid::Basis basis = inst_.grid.getBasis();
+		if (basis.valid())
+		{
+			current.useConstructionBasis = true;
+			current.constructionPrimary = basis.primary;
+			current.constructionSecondary = basis.secondary;
+		}
+	}
 	if (current.mode == SectorDesignMode::lift)
 		current.extrudeUseDragDepth = true;
 	current.anchors = fixedAnchors_;

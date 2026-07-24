@@ -50,6 +50,8 @@ typedef std::map<int, std::vector<Img_c>> sprite_map_t;	// can have one or eight
 class ImageSet
 {
 public:
+	using SurfaceImageCatalog = std::map<SString, const Img_c *>;
+
 	const Img_c &IM_SpecialTex(const Palette &palette);
 	Img_c &getMutableSpecialTexture(const Palette &palette)
 	{
@@ -105,6 +107,10 @@ public:
 	{
 		return flats;
 	}
+	SurfaceImageCatalog getWallSurfaceImages(
+			const ConfigData &config) const;
+	SurfaceImageCatalog getPlaneSurfaceImages(
+			const ConfigData &config) const;
 
 	void W_ClearSprites();
 
@@ -226,6 +232,10 @@ struct WadData
 	}
 	
 	void reloadResources(const std::shared_ptr<Wad_file> &gameWad, const ConfigData &config, const std::vector<std::shared_ptr<Wad_file>> &resourceWads) noexcept(false);
+	void reloadSurfaceImages(const std::shared_ptr<Wad_file> &gameWad,
+			const ConfigData &config,
+			const std::vector<std::shared_ptr<Wad_file>> &resourceWads)
+			noexcept(false);
 
 	ImageSet images;
 	Palette palette;

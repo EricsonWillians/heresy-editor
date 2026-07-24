@@ -26,6 +26,8 @@
 #include "m_parse.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <limits>
 #include <vector>
 
 #include "ui_window.h"
@@ -1046,7 +1048,19 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 		{ grid_spriterend = new Fl_Check_Button(50, 215, 270, 25, " default sprites to ON");
 		}
 		{ grid_size = new Fl_Choice(420, 90, 95, 25, "default grid size ");
-		  grid_size->add("1024|512|256|192|128|64|32|16|8|4|2");
+		  SString choices;
+		  for (int value : grid::values)
+		  {
+			if (value < grid::kMinimumStep)
+				continue;
+			if (choices.good())
+				choices += "|";
+			choices += SString::printf("%d", value);
+		  }
+		  grid_size->add(choices.c_str());
+		  grid_size->tooltip(
+				  "Default spacing from 1 to 65536; use Alt+G for "
+				  "rotated, oblique, polar, and custom grids");
 		}
 		{ gen_scrollbars = new Fl_Check_Button(300, 125, 245, 25, " enable scroll-bars for map view");
 		}
@@ -1498,17 +1512,23 @@ void UI_Preferences::Run()
 
 int UI_Preferences::GridSizeToChoice(int size)
 {
-	if (size > 512) return 0;
-	if (size > 256) return 1;
-	if (size > 128) return 2;
-	if (size >  64) return 3;
-	if (size >  32) return 4;
-	if (size >  16) return 5;
-	if (size >   8) return 6;
-	if (size >   4) return 7;
-	if (size >   2) return 8;
-
-	return 9;
+	int bestIndex = 0;
+	long long bestDistance = std::numeric_limits<long long>::max();
+	int index = 0;
+	for (int value : grid::values)
+	{
+		if (value < grid::kMinimumStep)
+			continue;
+		const long long distance = std::llabs(
+				static_cast<long long>(value) - size);
+		if (distance < bestDistance)
+		{
+			bestIndex = index;
+			bestDistance = distance;
+		}
+		++index;
+	}
+	return bestIndex;
 }
 
 

@@ -29,6 +29,7 @@
 #include "main.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "e_basis.h"
 #include "e_hover.h"
@@ -92,19 +93,28 @@ void ObjectsModule::createSquare(EditOperation &op, int model) const
 	else
 		doc.sectors[new_sec]->SetDefaults(inst.conf);
 
-	double x1 = inst.grid.QuantSnapX(inst.edit.map.x, false);
-	double y1 = inst.grid.QuantSnapX(inst.edit.map.y, false);
-
-	double x2 = x1 + config::new_sector_size;
-	double y2 = y1 + config::new_sector_size;
+	const v2double_t anchor = inst.grid.ForceSnap(inst.edit.map.xy);
+	const grid::Basis basis = inst.grid.getBasis();
+	const double primaryLength =
+			std::hypot(basis.primary.x, basis.primary.y);
+	const double secondaryLength =
+			std::hypot(basis.secondary.x, basis.secondary.y);
+	const v2double_t primary = primaryLength > 0.0 ?
+			basis.primary * (config::new_sector_size / primaryLength) :
+			v2double_t{static_cast<double>(config::new_sector_size), 0.0};
+	const v2double_t secondary = secondaryLength > 0.0 ?
+			basis.secondary * (config::new_sector_size / secondaryLength) :
+			v2double_t{0.0, static_cast<double>(config::new_sector_size)};
+	const v2double_t points[] = {
+			anchor, anchor + secondary,
+			anchor + primary + secondary, anchor + primary};
 
 	for (int i = 0 ; i < 4 ; i++)
 	{
 		int new_v = op.addNew(ObjType::vertices);
 		auto V = doc.vertices[new_v];
 
-		V->SetRawX(inst.loaded.levelFormat, (i >= 2) ? x2 : x1);
-		V->SetRawY(inst.loaded.levelFormat, (i==1 || i==2) ? y2 : y1);
+		V->SetRawXY(inst.loaded.levelFormat, points[i]);
 
 		int new_sd = op.addNew(ObjType::sidedefs);
 
@@ -153,8 +163,8 @@ void ObjectsModule::insertThing() const
 					T->options |= flag.value;
 		}
 
-		T->SetRawX(inst.loaded.levelFormat, inst.grid.SnapX(inst.edit.map.x));
-		T->SetRawY(inst.loaded.levelFormat, inst.grid.SnapY(inst.edit.map.y));
+		T->SetRawXY(inst.loaded.levelFormat,
+				inst.grid.Snap(inst.edit.map.xy));
 
 		inst.recent_things.insert_number(T->type);
 
@@ -2266,6 +2276,27 @@ void ObjectsModule::quantizeThings(EditOperation &op, selection_c &list) const
 			continue;
 		}
 
+		if (!inst.grid.isDefaultOrthogonal())
+		{
+			for (const v2double_t &candidate :
+					inst.grid.SnapCandidates({T->x(), T->y()}))
+			{
+				const int checkX = iround(candidate.x);
+				const int checkY = iround(candidate.y);
+				if (spotInUse(ObjType::things, checkX, checkY))
+					continue;
+				op.changeThing(*it, &Thing::xf,
+						MakeValidCoordF(inst.loaded.levelFormat,
+								candidate.x));
+				op.changeThing(*it, &Thing::yf,
+						MakeValidCoordF(inst.loaded.levelFormat,
+								candidate.y));
+				moved.set(*it);
+				break;
+			}
+			continue;
+		}
+
 		for (int pass = 0 ; pass < 4 ; pass++)
 		{
 			int new_x = inst.grid.QuantSnapX(T->x(), pass & 1);
@@ -2355,6 +2386,27 @@ void ObjectsModule::quantizeVertices(EditOperation &op, selection_c &list) const
 		}
 
 		byte mode = vert_modes[*it];
+
+		if (!inst.grid.isDefaultOrthogonal())
+		{
+			for (const v2double_t &candidate :
+					inst.grid.SnapCandidates({V->x(), V->y()}))
+			{
+				const int checkX = iround(candidate.x);
+				const int checkY = iround(candidate.y);
+				if (spotInUse(ObjType::vertices, checkX, checkY))
+					continue;
+				op.changeVertex(*it, &Vertex::xf,
+						MakeValidCoordF(inst.loaded.levelFormat,
+								candidate.x));
+				op.changeVertex(*it, &Vertex::yf,
+						MakeValidCoordF(inst.loaded.levelFormat,
+								candidate.y));
+				moved.set(*it);
+				break;
+			}
+			continue;
+		}
 
 		for (int pass = 0 ; pass < 4 ; pass++)
 		{

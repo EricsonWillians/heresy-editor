@@ -33,6 +33,8 @@
 
 #include "ui_window.h"
 
+#include <cmath>
+
 class Udmf_Token
 {
 private:
@@ -571,8 +573,6 @@ static bool UDMF_ParseSidedefField(SideDef *SD, const Udmf_Token& field,
 {
 	// Note: sector numbers are validated later on
 
-	// TODO: consider how to handle "offsetx_top" (etc), if at all
-
 	if (field.Match("sector"))
 		SD->sector = value.DecodeInt();
 	else if (field.Match("texturetop"))
@@ -585,6 +585,30 @@ static bool UDMF_ParseSidedefField(SideDef *SD, const Udmf_Token& field,
 		SD->x_offset = value.DecodeInt();
 	else if (field.Match("offsety"))
 		SD->y_offset = value.DecodeInt();
+	else if (field.Match("offsetx_top"))
+		SD->offsetx_top = value.DecodeFloat();
+	else if (field.Match("offsety_top"))
+		SD->offsety_top = value.DecodeFloat();
+	else if (field.Match("scalex_top"))
+		SD->scalex_top = value.DecodeFloat();
+	else if (field.Match("scaley_top"))
+		SD->scaley_top = value.DecodeFloat();
+	else if (field.Match("offsetx_mid"))
+		SD->offsetx_mid = value.DecodeFloat();
+	else if (field.Match("offsety_mid"))
+		SD->offsety_mid = value.DecodeFloat();
+	else if (field.Match("scalex_mid"))
+		SD->scalex_mid = value.DecodeFloat();
+	else if (field.Match("scaley_mid"))
+		SD->scaley_mid = value.DecodeFloat();
+	else if (field.Match("offsetx_bottom"))
+		SD->offsetx_bottom = value.DecodeFloat();
+	else if (field.Match("offsety_bottom"))
+		SD->offsety_bottom = value.DecodeFloat();
+	else if (field.Match("scalex_bottom"))
+		SD->scalex_bottom = value.DecodeFloat();
+	else if (field.Match("scaley_bottom"))
+		SD->scaley_bottom = value.DecodeFloat();
 	else
 		return false;
 
@@ -608,6 +632,26 @@ static bool UDMF_ParseSectorField(Sector *S, const Udmf_Token& field,
 		S->type = value.DecodeInt();
 	else if (field.Match("id"))
 		S->tag = value.DecodeInt();
+	else if (field.Match("xpanningfloor"))
+		S->xpanningfloor = value.DecodeFloat();
+	else if (field.Match("ypanningfloor"))
+		S->ypanningfloor = value.DecodeFloat();
+	else if (field.Match("xscalefloor"))
+		S->xscalefloor = value.DecodeFloat();
+	else if (field.Match("yscalefloor"))
+		S->yscalefloor = value.DecodeFloat();
+	else if (field.Match("rotationfloor"))
+		S->rotationfloor = value.DecodeFloat();
+	else if (field.Match("xpanningceiling"))
+		S->xpanningceiling = value.DecodeFloat();
+	else if (field.Match("ypanningceiling"))
+		S->ypanningceiling = value.DecodeFloat();
+	else if (field.Match("xscaleceiling"))
+		S->xscaleceiling = value.DecodeFloat();
+	else if (field.Match("yscaleceiling"))
+		S->yscaleceiling = value.DecodeFloat();
+	else if (field.Match("rotationceiling"))
+		S->rotationceiling = value.DecodeFloat();
 	else
 		return false;
 
@@ -823,6 +867,13 @@ static void UDMF_WriteProperties(const UdmfProperties &properties, Lump_c *lump)
 		lump->Printf("%s = %s;\n", property.name.c_str(), property.value.c_str());
 }
 
+static void UDMF_WriteDouble(Lump_c *lump, const char *name,
+		double value, double defaultValue)
+{
+	if (std::isfinite(value) && value != defaultValue)
+		lump->Printf("%s = %.16g;\n", name, value);
+}
+
 static void UDMF_WriteThings(const Document &document,
 		const ConfigData &config, Lump_c *lump)
 {
@@ -972,6 +1023,19 @@ static void UDMF_WriteSideDefs(const Document &doc, Lump_c *lump)
 		if (side->y_offset != 0)
 			lump->Printf("offsety = %d;\n", side->y_offset);
 
+		UDMF_WriteDouble(lump, "offsetx_top", side->offsetx_top, 0.0);
+		UDMF_WriteDouble(lump, "offsety_top", side->offsety_top, 0.0);
+		UDMF_WriteDouble(lump, "scalex_top", side->scalex_top, 1.0);
+		UDMF_WriteDouble(lump, "scaley_top", side->scaley_top, 1.0);
+		UDMF_WriteDouble(lump, "offsetx_mid", side->offsetx_mid, 0.0);
+		UDMF_WriteDouble(lump, "offsety_mid", side->offsety_mid, 0.0);
+		UDMF_WriteDouble(lump, "scalex_mid", side->scalex_mid, 1.0);
+		UDMF_WriteDouble(lump, "scaley_mid", side->scaley_mid, 1.0);
+		UDMF_WriteDouble(lump, "offsetx_bottom", side->offsetx_bottom, 0.0);
+		UDMF_WriteDouble(lump, "offsety_bottom", side->offsety_bottom, 0.0);
+		UDMF_WriteDouble(lump, "scalex_bottom", side->scalex_bottom, 1.0);
+		UDMF_WriteDouble(lump, "scaley_bottom", side->scaley_bottom, 1.0);
+
 		// use NormalizeTex to ensure no double quote
 
 		if (side->UpperTex() != "-")
@@ -1009,6 +1073,17 @@ static void UDMF_WriteSectors(const Document &doc, Lump_c *lump)
 			lump->Printf("special = %d;\n", sec->type);
 		if (sec->tag != 0)
 			lump->Printf("id = %d;\n", sec->tag);
+
+		UDMF_WriteDouble(lump, "xpanningfloor", sec->xpanningfloor, 0.0);
+		UDMF_WriteDouble(lump, "ypanningfloor", sec->ypanningfloor, 0.0);
+		UDMF_WriteDouble(lump, "xscalefloor", sec->xscalefloor, 1.0);
+		UDMF_WriteDouble(lump, "yscalefloor", sec->yscalefloor, 1.0);
+		UDMF_WriteDouble(lump, "rotationfloor", sec->rotationfloor, 0.0);
+		UDMF_WriteDouble(lump, "xpanningceiling", sec->xpanningceiling, 0.0);
+		UDMF_WriteDouble(lump, "ypanningceiling", sec->ypanningceiling, 0.0);
+		UDMF_WriteDouble(lump, "xscaleceiling", sec->xscaleceiling, 1.0);
+		UDMF_WriteDouble(lump, "yscaleceiling", sec->yscaleceiling, 1.0);
+		UDMF_WriteDouble(lump, "rotationceiling", sec->rotationceiling, 0.0);
 
 		UDMF_WriteProperties(sec->udmf_properties, lump);
 

@@ -39,6 +39,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_surface_transform.h"
 #include "w_rawdef.h"
 #include "w_texture.h"
 #include "r_render.h"
@@ -85,7 +86,8 @@ public:
 	int kind;
 
 	// heights for the surface (h1 is below h2)
-	int h1, h2, tex_h;
+	int h1, h2;
+	double tex_h;
 
 	const Img_c *img;
 	img_pixel_t col;  /* used when no image */
@@ -98,13 +100,14 @@ public:
 	int y_clip;
 
 	bool fullbright;
+	SurfaceTransform transform;
 
 	Instance &inst;
 
 public:
 	explicit DrawSurf(Instance &inst) : kind(K_INVIS), h1(), h2(), tex_h(),
 				 img(NULL), col(), y_clip(),
-				 fullbright(false), inst(inst)
+				 fullbright(false), transform(), inst(inst)
 	{ }
 
 	~DrawSurf()
@@ -415,6 +418,9 @@ public:
 			ceil.y_clip = DrawSurf::SOLID_ABOVE;
 
 			ceil.FindFlat(front->CeilTex());
+			ceil.transform = M_EffectivePlaneSurfaceTransform(
+					*front, PlaneSurfacePart::ceiling,
+					inst.loaded.levelFormat, inst.conf);
 		}
 
 		if (front->floorh < inst.r_view.z && ! self_ref)
@@ -426,6 +432,9 @@ public:
 			floor.y_clip = DrawSurf::SOLID_BELOW;
 
 			floor.FindFlat(front->FloorTex());
+			floor.transform = M_EffectivePlaneSurfaceTransform(
+					*front, PlaneSurfacePart::floor,
+					inst.loaded.levelFormat, inst.conf);
 		}
 
 		if (! back)
@@ -438,13 +447,18 @@ public:
 			lower.y_clip = DrawSurf::SOLID_ABOVE | DrawSurf::SOLID_BELOW;
 
 			lower.FindTex(sd->MidTex(), ld);
+			lower.transform = M_EffectiveWallSurfaceTransform(
+					*sd, WallSurfacePart::middle,
+					inst.loaded.levelFormat, inst.conf);
 
 			if (lower.img && (ld->flags & MLF_LowerUnpegged))
-				lower.tex_h = lower.h1 + lower.img->height();
+				lower.tex_h = lower.h1 +
+						lower.img->height() /
+						std::abs(lower.transform.scaleY);
 			else
 				lower.tex_h = lower.h2;
 
-			lower.tex_h += sd->y_offset;
+			lower.tex_h += sd->y_offset + lower.transform.offsetY;
 			return;
 		}
 
@@ -458,13 +472,18 @@ public:
 			upper.y_clip = DrawSurf::SOLID_ABOVE;
 
 			upper.FindTex(sd->UpperTex(), ld);
+			upper.transform = M_EffectiveWallSurfaceTransform(
+					*sd, WallSurfacePart::upper,
+					inst.loaded.levelFormat, inst.conf);
 
 			if (upper.img && ! (ld->flags & MLF_UpperUnpegged))
-				upper.tex_h = upper.h1 + upper.img->height();
+				upper.tex_h = upper.h1 +
+						upper.img->height() /
+						std::abs(upper.transform.scaleY);
 			else
 				upper.tex_h = upper.h2;
 
-			upper.tex_h += sd->y_offset;
+			upper.tex_h += sd->y_offset + upper.transform.offsetY;
 		}
 
 		if (back->floorh > front->floorh && ! self_ref)
@@ -475,6 +494,9 @@ public:
 			lower.y_clip = DrawSurf::SOLID_BELOW;
 
 			lower.FindTex(sd->LowerTex(), ld);
+			lower.transform = M_EffectiveWallSurfaceTransform(
+					*sd, WallSurfacePart::lower,
+					inst.loaded.levelFormat, inst.conf);
 
 			// note "sky_upper" here, needed to match original DOOM behavior
 			if (ld->flags & MLF_LowerUnpegged)
@@ -482,7 +504,7 @@ public:
 			else
 				lower.tex_h = lower.h2;
 
-			lower.tex_h += sd->y_offset;
+			lower.tex_h += sd->y_offset + lower.transform.offsetY;
 		}
 
 		/* Mid-Masked texture */
@@ -496,31 +518,47 @@ public:
 		rail.FindTex(sd->MidTex(), ld);
 		if (! rail.img)
 			return;
+		rail.transform = M_EffectiveWallSurfaceTransform(
+				*sd, WallSurfacePart::middle,
+				inst.loaded.levelFormat, inst.conf);
 
 		front = sec;
 		back  = inst.level.sectors[back_sd->sector].get();
 
 		int c_h = std::min(front->ceilh,  back->ceilh);
 		int f_h = std::max(front->floorh, back->floorh);
-		int r_h = rail.img->height();
+		const double r_h =
+				rail.img->height() / std::abs(rail.transform.scaleY);
+		const double yOffset = sd->y_offset + rail.transform.offsetY;
+		auto renderHeight = [](double value)
+		{
+			constexpr double safeHeight = 1000000000.0;
+			return static_cast<int>(std::round(
+					std::clamp(value, -safeHeight, safeHeight)));
+		};
 
 		if (f_h >= c_h)
 			return;
 
 		if (ld->flags & MLF_LowerUnpegged)
 		{
-			rail.h1 = f_h + sd->y_offset;
-			rail.h2 = rail.h1 + r_h;
+			const double bottom = f_h + yOffset;
+			const double top = bottom + r_h;
+			rail.h1 = renderHeight(bottom);
+			rail.h2 = renderHeight(top);
+			rail.tex_h = top;
 		}
 		else
 		{
-			rail.h2 = c_h + sd->y_offset;
-			rail.h1 = rail.h2 - r_h;
+			const double top = c_h + yOffset;
+			const double bottom = top - r_h;
+			rail.h2 = renderHeight(top);
+			rail.h1 = renderHeight(bottom);
+			rail.tex_h = top;
 		}
 
 		rail.kind = DrawSurf::K_TEXTURE;
 		rail.y_clip = 0;
-		rail.tex_h = rail.h2;
 
 		// clip railing, unless sectors on both sides are identical or
 		// we have a sky upper
@@ -1455,13 +1493,32 @@ public:
 		dest += x + y1 * inst.r_view.screen_w;
 
 		int light = dw->sec->light;
+		const double radians =
+				surf.transform.rotation * M_PI / 180.0;
+		const double cosine = std::cos(radians);
+		const double sine = std::sin(radians);
+		auto wrap = [](double coordinate, int size)
+		{
+			const auto integral =
+					static_cast<long long>(std::floor(coordinate));
+			const long long result = integral % size;
+			return static_cast<int>(result < 0 ? result + size : result);
+		};
 
 		for ( ; y1 <= y2 ; y1++, dest += inst.r_view.screen_w)
 		{
 			float dist = YToDist(y1, surf.tex_h);
 
-			int tx = int( inst.r_view.x - static_cast<double>(t_sin) * dist) & (tw - 1);
-			int ty = int(-inst.r_view.y + static_cast<double>(t_cos) * dist) & (th - 1);
+			const double worldX =
+					inst.r_view.x - static_cast<double>(t_sin) * dist;
+			const double worldY =
+					inst.r_view.y - static_cast<double>(t_cos) * dist;
+			const double rotatedX = cosine * worldX + sine * worldY;
+			const double rotatedY = -sine * worldX + cosine * worldY;
+			const int tx = wrap(rotatedX * surf.transform.scaleX +
+					surf.transform.offsetX, tw);
+			const int ty = wrap(-(rotatedY * surf.transform.scaleY +
+					surf.transform.offsetY), th);
 
 			*dest = src[ty * tw + tx];
 
@@ -1487,27 +1544,34 @@ public:
 
 		float cur_ang = dw->delta_ang - XToAngle(x);
 
-		int tx = int(dw->t_dist - tan(cur_ang) * dw->dist);
-
-		tx = (dw->sd->x_offset + tx) & (tw - 1);
+		const double wallX = dw->t_dist - tan(cur_ang) * dw->dist;
+		long long txValue = static_cast<long long>(std::floor(
+				(wallX + dw->sd->x_offset + surf.transform.offsetX) *
+				surf.transform.scaleX));
+		int tx = static_cast<int>(txValue % tw);
+		if (tx < 0)
+			tx += tw;
 
 		/* compute texture Y coords */
 
-		float hh = static_cast<float>(surf.tex_h) - YToSecH(y1, dw->cur_iz);
-		float dh = static_cast<float>(surf.tex_h) - YToSecH(y2, dw->cur_iz);
+		double hh = (surf.tex_h - YToSecH(y1, dw->cur_iz)) *
+				surf.transform.scaleY;
+		double dh = (surf.tex_h - YToSecH(y2, dw->cur_iz)) *
+				surf.transform.scaleY;
 
-		dh = (dh - hh) / static_cast<float>(std::max(1, y2 - y1));
-		hh += 0.2f;
+		dh = (dh - hh) / static_cast<double>(std::max(1, y2 - y1));
+		hh += 0.2;
 
 		src  += tx;
 		dest += x + y1 * inst.r_view.screen_w;
 
 		for ( ; y1 <= y2 ; y1++, hh += dh, dest += inst.r_view.screen_w)
 		{
-			int ty = int(floor(hh)) % th;
-
-			// handle negative values (use % twice)
-			ty = (ty + th) % th;
+			double wrapped = std::fmod(std::floor(hh),
+					static_cast<double>(th));
+			if (wrapped < 0)
+				wrapped += th;
+			const int ty = static_cast<int>(wrapped);
 
 			img_pixel_t pix = src[ty * tw];
 

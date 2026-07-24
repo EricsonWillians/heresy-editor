@@ -95,8 +95,10 @@ add_executable(
     m_session_test.cpp
     m_select_test.cpp
     m_streams_test.cpp
+    m_surface_transform_test.cpp
     m_zip_test.cpp
     m_testmap_test.cpp
+    m_texture_import_test.cpp
     m_udmf_test.cpp
     main_test.cpp
     r_grid_test.cpp

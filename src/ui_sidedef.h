@@ -61,6 +61,7 @@ public:
 
 	Fl_Button *add_button;
 	Fl_Button *del_button;
+	Fl_Button *transform_button;
 
 	Instance &inst;
 
@@ -106,6 +107,7 @@ private:
 	static void sector_callback(Fl_Widget *, void *);
 	static void    add_callback(Fl_Widget *, void *);
 	static void delete_callback(Fl_Widget *, void *);
+	static void transform_callback(Fl_Widget *, void *);
 };
 
 #endif  /* __EUREKA_UI_SIDEDEF_H__ */

@@ -44,6 +44,7 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_surface_transform.h"
 #include "m_vector.h"
 #include "r_grid.h"
 #include "r_subdiv.h"
@@ -446,7 +447,9 @@ void UI_Canvas::DrawMap()
 	// draw the grid first since it's in the background
 	if (inst.grid.isShown())
 	{
-		if (config::grid_style == 0)
+		if (!inst.grid.isDefaultOrthogonal())
+			DrawGrid_Mathematical();
+		else if (config::grid_style == 0)
 			DrawGrid_Normal();
 		else
 			DrawGrid_Dotty();
@@ -553,6 +556,187 @@ void UI_Canvas::DrawGrid_Normal()
 				DrawMapLine(map_lx, gy, map_hx, gy);
 	}
 
+
+	DrawAxes(config::normal_axis_col);
+}
+
+void UI_Canvas::DrawGrid_Mathematical()
+{
+	const grid::MathSettings &settings =
+			inst.grid.getMathSettings();
+	const v2double_t corners[] = {
+			{map_lx, map_ly}, {map_lx, map_hy},
+			{map_hx, map_ly}, {map_hx, map_hy}};
+	const int majorEvery = settings.majorEvery;
+
+	if (settings.pattern == grid::Pattern::polar)
+	{
+		double maximumRadius = 0.0;
+		for (const v2double_t &corner : corners)
+			maximumRadius = std::max(maximumRadius,
+					std::hypot(corner.x - settings.origin.x,
+							corner.y - settings.origin.y));
+		const double nearestX = std::clamp(
+				settings.origin.x, map_lx, map_hx);
+		const double nearestY = std::clamp(
+				settings.origin.y, map_ly, map_hy);
+		const double minimumRadius = std::hypot(
+				nearestX - settings.origin.x,
+				nearestY - settings.origin.y);
+		const long long firstVisibleRing = std::max(1LL,
+				static_cast<long long>(std::floor(
+						minimumRadius / inst.grid.getStep())));
+		const long long lastVisibleRing = static_cast<long long>(
+				std::ceil(maximumRadius / inst.grid.getStep()));
+		long long radialStride = std::max(1LL,
+				static_cast<long long>(std::ceil(3.0 /
+						std::max(0.01, inst.grid.getStep() *
+								inst.grid.getScale()))));
+		const long long radialSpan = std::max(
+				0LL, lastVisibleRing - firstVisibleRing + 1);
+		if (radialSpan / radialStride > 120)
+			radialStride = std::max(radialStride,
+					(radialSpan + 119) / 120);
+		const int segments = std::clamp(
+				settings.angularDivisions * 2, 48, 120);
+		const long long firstRing =
+				((firstVisibleRing + radialStride - 1) /
+						radialStride) * radialStride;
+
+		for (long long ring = firstRing;
+				ring <= lastVisibleRing; ring += radialStride)
+		{
+			RenderColor(ring % majorEvery == 0 ?
+					config::normal_main_col :
+					config::normal_small_col);
+			const double radius = ring * inst.grid.getStep();
+			v2double_t previous{
+					settings.origin.x + radius, settings.origin.y};
+			for (int segment = 1; segment <= segments; ++segment)
+			{
+				const double radians =
+						2.0 * M_PI * segment / segments;
+				const v2double_t point{
+						settings.origin.x + radius * std::cos(radians),
+						settings.origin.y + radius * std::sin(radians)};
+				DrawMapLine(previous.x, previous.y, point.x, point.y);
+				previous = point;
+			}
+		}
+
+		const int rayStride = std::max(1,
+				(settings.angularDivisions + 179) / 180);
+		const double rotation = settings.rotation * M_PI / 180.0;
+		for (int ray = 0; ray < settings.angularDivisions;
+				ray += rayStride)
+		{
+			RenderColor(ray % majorEvery == 0 ?
+					config::normal_main_col :
+					config::normal_small_col);
+			const double radians = rotation +
+					2.0 * M_PI * ray / settings.angularDivisions;
+			DrawMapLine(settings.origin.x, settings.origin.y,
+					settings.origin.x + maximumRadius * std::cos(radians),
+					settings.origin.y + maximumRadius * std::sin(radians));
+		}
+	}
+	else
+	{
+		const grid::Basis basis = inst.grid.getBasis();
+		if (!basis.valid())
+			return;
+		auto coefficients = [&](const v2double_t &point)
+		{
+			const v2double_t local = point - settings.origin;
+			return v2double_t{
+					(local.x * basis.secondary.y -
+							local.y * basis.secondary.x) /
+							basis.determinant,
+					(basis.primary.x * local.y -
+							basis.primary.y * local.x) /
+							basis.determinant};
+		};
+		double minimumA = std::numeric_limits<double>::infinity();
+		double maximumA = -std::numeric_limits<double>::infinity();
+		double minimumB = std::numeric_limits<double>::infinity();
+		double maximumB = -std::numeric_limits<double>::infinity();
+		for (const v2double_t &corner : corners)
+		{
+			const v2double_t value = coefficients(corner);
+			minimumA = std::min(minimumA, value.x);
+			maximumA = std::max(maximumA, value.x);
+			minimumB = std::min(minimumB, value.y);
+			maximumB = std::max(maximumB, value.y);
+		}
+		const double primaryPixels = std::hypot(
+				basis.primary.x, basis.primary.y) *
+				inst.grid.getScale();
+		const double secondaryPixels = std::hypot(
+				basis.secondary.x, basis.secondary.y) *
+				inst.grid.getScale();
+		long long strideA = std::max(1LL, static_cast<long long>(
+				std::ceil(3.0 / std::max(0.01, primaryPixels))));
+		long long strideB = std::max(1LL, static_cast<long long>(
+				std::ceil(3.0 / std::max(0.01, secondaryPixels))));
+		const long long countA = static_cast<long long>(
+				std::ceil(maximumA) - std::floor(minimumA) + 1);
+		const long long countB = static_cast<long long>(
+				std::ceil(maximumB) - std::floor(minimumB) + 1);
+		if (countA / strideA > 180)
+			strideA = std::max<long long>(
+					strideA, (countA + 179) / 180);
+		if (countB / strideB > 180)
+			strideB = std::max<long long>(
+					strideB, (countB + 179) / 180);
+
+		const long long firstA = static_cast<long long>(
+				std::floor(minimumA)) - 1;
+		const long long lastA = static_cast<long long>(
+				std::ceil(maximumA)) + 1;
+		const long long firstB = static_cast<long long>(
+				std::floor(minimumB)) - 1;
+		const long long lastB = static_cast<long long>(
+				std::ceil(maximumB)) + 1;
+		for (long long a = firstA; a <= lastA; a += strideA)
+		{
+			RenderColor(a == 0 ? config::normal_axis_col :
+					a % majorEvery == 0 ? config::normal_main_col :
+					config::normal_small_col);
+			const v2double_t start = settings.origin +
+					basis.primary * a + basis.secondary * (minimumB - 2);
+			const v2double_t end = settings.origin +
+					basis.primary * a + basis.secondary * (maximumB + 2);
+			DrawMapLine(start.x, start.y, end.x, end.y);
+		}
+		for (long long b = firstB; b <= lastB; b += strideB)
+		{
+			RenderColor(b == 0 ? config::normal_axis_col :
+					b % majorEvery == 0 ? config::normal_main_col :
+					config::normal_small_col);
+			const v2double_t start = settings.origin +
+					basis.secondary * b + basis.primary * (minimumA - 2);
+			const v2double_t end = settings.origin +
+					basis.secondary * b + basis.primary * (maximumA + 2);
+			DrawMapLine(start.x, start.y, end.x, end.y);
+		}
+		RenderColor(config::normal_axis_col);
+		if (minimumA <= 0.0 && maximumA >= 0.0)
+		{
+			const v2double_t start =
+					settings.origin + basis.secondary * (minimumB - 2);
+			const v2double_t end =
+					settings.origin + basis.secondary * (maximumB + 2);
+			DrawMapLine(start.x, start.y, end.x, end.y);
+		}
+		if (minimumB <= 0.0 && maximumB >= 0.0)
+		{
+			const v2double_t start =
+					settings.origin + basis.primary * (minimumA - 2);
+			const v2double_t end =
+					settings.origin + basis.primary * (maximumA + 2);
+			DrawMapLine(start.x, start.y, end.x, end.y);
+		}
+	}
 
 	DrawAxes(config::normal_axis_col);
 }
@@ -1355,8 +1539,9 @@ void UI_Canvas::CheckGridSnap()
 	if (!inst.grid.snaps() || !config::grid_snap_indicator)
 		return;
 
-	double new_snap_x = inst.grid.SnapX(inst.edit.map.x);
-	double new_snap_y = inst.grid.SnapY(inst.edit.map.y);
+	const v2double_t snapped = inst.grid.Snap(inst.edit.map.xy);
+	double new_snap_x = snapped.x;
+	double new_snap_y = snapped.y;
 
 	if (snap_x == new_snap_x && snap_y == new_snap_y)
 		return;
@@ -2126,8 +2311,49 @@ void UI_Canvas::DrawSelection(selection_c * list)
 //
 void UI_Canvas::DrawMapLine(double map_x1, double map_y1, double map_x2, double map_y2)
 {
-    RenderLine(SCREENX(map_x1), SCREENY(map_y1),
-            SCREENX(map_x2), SCREENY(map_y2));
+	if (!std::isfinite(map_x1) || !std::isfinite(map_y1) ||
+			!std::isfinite(map_x2) || !std::isfinite(map_y2))
+		return;
+
+	// Clip in map space before converting to integer screen coordinates.
+	// This matters for large UDMF maps and polar grids whose pivot can be far
+	// outside the viewport: converting a billion-unit offscreen endpoint
+	// first can overflow even though a small part of the line is visible.
+	const double dx = map_x2 - map_x1;
+	const double dy = map_y2 - map_y1;
+	double first = 0.0;
+	double last = 1.0;
+	auto clip = [&](double direction, double distance)
+	{
+		if (std::abs(direction) < 1e-20)
+			return distance >= 0.0;
+		const double amount = distance / direction;
+		if (direction < 0.0)
+		{
+			if (amount > last)
+				return false;
+			first = std::max(first, amount);
+		}
+		else
+		{
+			if (amount < first)
+				return false;
+			last = std::min(last, amount);
+		}
+		return first <= last;
+	};
+	if (!clip(-dx, map_x1 - map_lx) ||
+			!clip(dx, map_hx - map_x1) ||
+			!clip(-dy, map_y1 - map_ly) ||
+			!clip(dy, map_hy - map_y1))
+		return;
+
+	const double clippedX1 = map_x1 + first * dx;
+	const double clippedY1 = map_y1 + first * dy;
+	const double clippedX2 = map_x1 + last * dx;
+	const double clippedY2 = map_y1 + last * dy;
+	RenderLine(SCREENX(clippedX1), SCREENY(clippedY1),
+			SCREENX(clippedX2), SCREENY(clippedY2));
 }
 
 
@@ -2573,6 +2799,32 @@ void UI_Canvas::RenderSector(int num)
 	if(!img_h)
 		img_h = 64;
 
+	const bool ceilingSurface =
+			inst.edit.sector_render_mode == SREND_Ceiling ||
+			inst.edit.sector_render_mode == SREND_CeilBright;
+	const SurfaceTransform surfaceTransform =
+			M_EffectivePlaneSurfaceTransform(
+			*inst.level.sectors[num],
+			ceilingSurface ? PlaneSurfacePart::ceiling :
+					PlaneSurfacePart::floor,
+			inst.loaded.levelFormat, inst.conf);
+	const double radians =
+			surfaceTransform.rotation * M_PI / 180.0;
+	const double surfaceCosine = std::cos(radians);
+	const double surfaceSine = std::sin(radians);
+	auto transformedTexel = [&](double mapX, double mapY)
+	{
+		const double rotatedX =
+				surfaceCosine * mapX + surfaceSine * mapY;
+		const double rotatedY =
+				-surfaceSine * mapX + surfaceCosine * mapY;
+		return std::pair<double, double>{
+				rotatedX * surfaceTransform.scaleX +
+						surfaceTransform.offsetX,
+				rotatedY * surfaceTransform.scaleY +
+						surfaceTransform.offsetY};
+	};
+
 
 #ifdef NO_OPENGL
 	int tw = img ? img->width()  : 1;
@@ -2653,9 +2905,14 @@ void UI_Canvas::RenderSector(int num)
 			uint8_t *dest = rgb_buf + ((x - rgb_x) + (y - rgb_y) * rgb_w) * 3;
 			uint8_t *dest_end = dest + span_w * 3;
 
-			// the logic here for non-64x64 textures matches the software
-			// 3D renderer, but is different than ZDoom (which scales them).
-			int ty = (0 - (int)MAPY(y)) & (th - 1);
+			auto wrap = [](double coordinate, int size)
+			{
+				const auto integral =
+						static_cast<long long>(std::floor(coordinate));
+				const long long result = integral % size;
+				return static_cast<int>(
+						result < 0 ? result + size : result);
+			};
 
 			if (light_and_tex)
 			{
@@ -2665,7 +2922,10 @@ void UI_Canvas::RenderSector(int num)
 
 				for (; dest < dest_end ; dest += 3, x++)
 				{
-					int tx = (int)MAPX(x) & (tw - 1);
+					const auto [textureX, textureY] =
+							transformedTexel(MAPX(x), MAPY(y));
+					const int tx = wrap(textureX, tw);
+					const int ty = wrap(-textureY, th);
 
 					img_pixel_t pix = src_pix[ty * tw + tx];
 
@@ -2680,7 +2940,10 @@ void UI_Canvas::RenderSector(int num)
 			{
 				for (; dest < dest_end ; dest += 3, x++)
 				{
-					int tx = (int)MAPX(x) & (tw - 1);
+					const auto [textureX, textureY] =
+							transformedTexel(MAPX(x), MAPY(y));
+					const int tx = wrap(textureX, tw);
+					const int ty = wrap(-textureY, th);
 
 					img_pixel_t pix = src_pix[ty * tw + tx];
 
@@ -2725,7 +2988,11 @@ void UI_Canvas::RenderSector(int num)
 
 			if (img)
 			{
-				glTexCoord2f(poly->mx[p] / static_cast<float>(img_w), poly->my[p] / static_cast<float>(img_h));
+				const auto [textureX, textureY] =
+						transformedTexel(poly->mx[p], poly->my[p]);
+				glTexCoord2f(
+						static_cast<float>(textureX / img_w),
+						static_cast<float>(textureY / img_h));
 			}
 
 			glVertex2i(sx, sy);

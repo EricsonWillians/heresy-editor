@@ -50,6 +50,7 @@
 #include "ui_window.h"
 
 #include <algorithm>
+#include <limits>
 
 // config items
 int config::default_edit_mode = 3;  // Vertices
@@ -400,8 +401,10 @@ void Document::CalculateLevelBounds() noexcept
 		return;
 	}
 
-	Map_bound1.x = 32767; Map_bound2.x = -32767;
-	Map_bound1.y = 32767; Map_bound2.y = -32767;
+	Map_bound1.x = Map_bound1.y =
+			std::numeric_limits<double>::max();
+	Map_bound2.x = Map_bound2.y =
+			std::numeric_limits<double>::lowest();
 
 	UpdateLevelBounds(0);
 }
@@ -1276,6 +1279,7 @@ void Editor_State_t::defaultState()
 
 	error_mode = false;
 	show_object_numbers = false;
+	lineInspection.reset();
 
 	sector_render_mode = config::sector_render_default;
 	 thing_render_mode =  config::thing_render_default;
