@@ -1017,7 +1017,7 @@ void grid::State::AdjustStep(int delta)
 	}
 	else if(!delta)	// this is for snapping to the closest grid
 	{
-		long long bestDistance = std::numeric_limits<long long>::max();
+		long long bestDistance = (std::numeric_limits<long long>::max)();
 		for (int i = 0; i < NUM_GRID_VALUES - 1; ++i)
 		{
 			const long long distance =

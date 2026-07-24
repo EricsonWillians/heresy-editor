@@ -1513,7 +1513,7 @@ void UI_Preferences::Run()
 int UI_Preferences::GridSizeToChoice(int size)
 {
 	int bestIndex = 0;
-	long long bestDistance = std::numeric_limits<long long>::max();
+	long long bestDistance = (std::numeric_limits<long long>::max)();
 	int index = 0;
 	for (int value : grid::values)
 	{

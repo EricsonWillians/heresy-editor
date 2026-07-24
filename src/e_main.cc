@@ -402,7 +402,7 @@ void Document::CalculateLevelBounds() noexcept
 	}
 
 	Map_bound1.x = Map_bound1.y =
-			std::numeric_limits<double>::max();
+			(std::numeric_limits<double>::max)();
 	Map_bound2.x = Map_bound2.y =
 			std::numeric_limits<double>::lowest();
 

@@ -62,8 +62,8 @@ public:
 	std::vector<byte> scriptsData;
 
 	v2double_t Map_bound1 = {
-			std::numeric_limits<double>::max(),
-			std::numeric_limits<double>::max() };	/* minimum XY value of map */
+			(std::numeric_limits<double>::max)(),
+			(std::numeric_limits<double>::max)() };	/* minimum XY value of map */
 	v2double_t Map_bound2 = {
 			std::numeric_limits<double>::lowest(),
 			std::numeric_limits<double>::lowest() };	/* maximum XY value of map */

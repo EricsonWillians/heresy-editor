@@ -1233,10 +1233,10 @@ private:
 								entered.offsetY;
 						const double minimum =
 								instance_.loaded.levelFormat == MapFormat::udmf ?
-								std::numeric_limits<int>::min() : -32768.0;
+								(std::numeric_limits<int>::min)() : -32768.0;
 						const double maximum =
 								instance_.loaded.levelFormat == MapFormat::udmf ?
-								std::numeric_limits<int>::max() : 32767.0;
+								(std::numeric_limits<int>::max)() : 32767.0;
 						if (!NearlyEqual(x, std::round(x)) ||
 								!NearlyEqual(y, std::round(y)))
 						{

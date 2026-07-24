@@ -151,7 +151,7 @@ struct sector_extra_info_t
 	{
 		first_line = last_line = -1;
 
-		bound_x1 = bound_y1 = std::numeric_limits<double>::max();
+		bound_x1 = bound_y1 = (std::numeric_limits<double>::max)();
 		bound_x2 = bound_y2 = std::numeric_limits<double>::lowest();
 
 		sub.Clear();

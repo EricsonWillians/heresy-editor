@@ -990,7 +990,8 @@ void M_WritePackageResources(const fs::path &path,
 		ValidateResourceName(write.editorName);
 		if (write.data.empty())
 			throw std::runtime_error("Cannot import an empty resource.");
-		if (write.data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+		if (write.data.size() >
+				static_cast<size_t>((std::numeric_limits<int>::max)()))
 			throw std::runtime_error("A resource is too large for the package.");
 	}
 	std::set<std::pair<PackageResourceKind, SString>> uniqueWrites;
