@@ -364,8 +364,10 @@ one-unit detail through 65536-unit large-map planning.
 Opens Mathematical Grid & Snapping. It provides 30 geometry presets plus
 editable Cartesian, rotated, rectangular, oblique, triangular/hexagonal, and
 polar grids. Primary/secondary spacing, origin, rotation, inter-axis angle,
-radial divisions, major interval, and directional rounding are previewed live.
-The default binding is Alt+G.
+radial divisions, major interval, directional rounding, and accessible
+High-Contrast Dark, Vintage Phosphor, Blueprint Light, or Custom visibility
+are previewed live. The exact snap target is an outlined top-layer reticle with a
+pointer guide. The default binding is Alt+G.
 """
 "GRID_Set <size>" = """
 Sets the primary grid spacing to any whole number from 1 through 65536; it is

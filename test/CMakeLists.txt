@@ -100,6 +100,7 @@ add_executable(
     m_testmap_test.cpp
     m_texture_import_test.cpp
     m_udmf_test.cpp
+    m_units_test.cpp
     main_test.cpp
     r_grid_test.cpp
 	SafeOutFileTest.cpp

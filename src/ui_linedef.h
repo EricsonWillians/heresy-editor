@@ -55,6 +55,8 @@ private:
 	UI_DynIntInput *length;
 	UI_DynIntInput *tag;
 
+	SString lengthTooltip;  // real-world length shown as tooltip (persistent storage)
+
 	UI_ArgsBox *argsBox;
 
 	UI_SideBox *front;
