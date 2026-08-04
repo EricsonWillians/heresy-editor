@@ -243,8 +243,11 @@ void UI_SectorBox::height_callback(Fl_Widget *w, void *data)
 	int f_h = atoi(box->floor_h->value());
 	int c_h = atoi(box->ceil_h->value());
 
-	f_h = clamp(-32767, f_h, 32767);
-	c_h = clamp(-32767, c_h, 32767);
+	// Binary formats store int16 heights; UDMF allows the full int range.
+	const int minH = MinSectorHeight(box->inst.loaded.levelFormat);
+	const int maxH = MaxSectorHeight(box->inst.loaded.levelFormat);
+	f_h = clamp(minH, f_h, maxH);
+	c_h = clamp(minH, c_h, maxH);
 
 	if (! box->inst.edit.Selected->empty())
 	{
@@ -298,7 +301,8 @@ void UI_SectorBox::headroom_callback(Fl_Widget *w, void *data)
 			{
 				int new_h = box->inst.level.sectors[*it]->floorh + room;
 
-				new_h = clamp(-32767, new_h, 32767);
+				new_h = clamp(MinSectorHeight(box->inst.loaded.levelFormat), new_h,
+						  MaxSectorHeight(box->inst.loaded.levelFormat));
 
 				op.changeSector(*it, Sector::F_CEILH, new_h);
 			}

@@ -19,7 +19,10 @@
 #include "e_basis.h"
 #include "m_game.h"
 #include "Sector.h"
+#include "Thing.h"
 #include "gtest/gtest.h"
+
+#include <limits>
 
 TEST(Sector, HeadRoom)
 {
@@ -28,6 +31,19 @@ TEST(Sector, HeadRoom)
 	sector.floorh = 100;
 	sector.ceilh = 345;
 	ASSERT_EQ(sector.HeadRoom(), 245);
+}
+
+TEST(Sector, HeightRangePerFormat)
+{
+	// Binary formats are limited to int16 heights.
+	ASSERT_EQ(MinSectorHeight(MapFormat::doom), -32767);
+	ASSERT_EQ(MaxSectorHeight(MapFormat::doom), 32767);
+	ASSERT_EQ(MinSectorHeight(MapFormat::hexen), -32767);
+	ASSERT_EQ(MaxSectorHeight(MapFormat::hexen), 32767);
+
+	// UDMF allows the full int range.
+	ASSERT_EQ(MinSectorHeight(MapFormat::udmf), std::numeric_limits<int>::min());
+	ASSERT_EQ(MaxSectorHeight(MapFormat::udmf), std::numeric_limits<int>::max());
 }
 
 TEST(Sector, Texture)

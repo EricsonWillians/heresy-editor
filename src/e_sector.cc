@@ -113,7 +113,8 @@ void Instance::CMD_SEC_Floor()
 		{
 			const auto S = level.sectors[*it];
 
-			int new_h = clamp(-32767, S->floorh + diff, S->ceilh);
+			// Binary formats store int16 heights; UDMF allows the full int range.
+			int new_h = clamp(MinSectorHeight(loaded.levelFormat), S->floorh + diff, S->ceilh);
 
 			op.changeSector(*it, Sector::F_FLOORH, new_h);
 		}
@@ -149,7 +150,7 @@ void Instance::CMD_SEC_Ceil()
 		{
 			const auto S = level.sectors[*it];
 
-			int new_h = clamp(S->floorh, S->ceilh + diff, 32767);
+			int new_h = clamp(S->floorh, S->ceilh + diff, MaxSectorHeight(loaded.levelFormat));
 
 			op.changeSector(*it, Sector::F_CEILH, new_h);
 		}

@@ -23,6 +23,14 @@
 #include "UdmfProperty.h"
 
 struct ConfigData;
+enum class MapFormat;
+
+// Valid range for sector floor/ceiling heights in a given map format.
+// The binary Doom/Hexen formats store heights as int16, while UDMF keeps
+// full 32-bit ints (engines such as GZDoom allow heights up to their own
+// map coordinate limits).
+int MinSectorHeight(MapFormat format) noexcept;
+int MaxSectorHeight(MapFormat format) noexcept;
 
 struct Sector
 {

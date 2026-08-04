@@ -2315,9 +2315,17 @@ void Document::SaveSectors(Wad_file &wad) const
 {
 	Lump_c &lump = wad.AddLump("SECTORS");
 
+	// The binary format stores heights as int16. Out-of-range values would
+	// silently wrap, so count them and warn instead of corrupting quietly.
+	int numBadHeights = 0;
+
 	for (const auto& sec : sectors)
 	{
 		raw_sector_t raw{};
+
+		if (sec->floorh < -32767 || sec->floorh > 32767 ||
+			sec->ceilh  < -32767 || sec->ceilh  > 32767)
+			numBadHeights++;
 
 		raw.floorh = LE_S16(sec->floorh);
 		raw.ceilh  = LE_S16(sec->ceilh);
@@ -2330,6 +2338,18 @@ void Document::SaveSectors(Wad_file &wad) const
 		raw.tag   = LE_U16(sec->tag);
 
 		lump.Write(&raw, sizeof(raw));
+	}
+
+	if (numBadHeights > 0)
+	{
+		gLog.printf("WARNING: %d sector(s) have heights outside the int16 range "
+					"of the binary map format; they were truncated on save.\n",
+					numBadHeights);
+		DLG_Notify("%d sector(s) have floor/ceiling heights outside the\n"
+				   "-32767..32767 range of the binary map format.\n\n"
+				   "They were truncated on save. Use the UDMF format\n"
+				   "for heights beyond that range.",
+				   numBadHeights);
 	}
 }
 
