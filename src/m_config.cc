@@ -158,7 +158,7 @@ const opt_desc_t options[] =
 	{	"udmftest",
 		0,
 		OptFlag_hide,
-		"Enable the unfinished UDMF support",
+		"Deprecated: UDMF support is always enabled",
 		NULL,
 		&global::udmf_testing
 	},
