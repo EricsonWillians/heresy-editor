@@ -97,8 +97,12 @@ set(source_m
     m_iwad.h
     m_game.cc
     m_game.h
+    m_grid_theme.cc
+    m_grid_theme.h
     m_keys.cc
     m_keys.h
+    m_units.cc
+    m_units.h
     m_loadsave.cc
     m_loadsave.h
     m_nodes.cc

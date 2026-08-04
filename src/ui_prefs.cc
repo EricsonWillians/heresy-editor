@@ -23,9 +23,11 @@
 
 #include "main.h"
 #include "m_config.h"
+#include "m_grid_theme.h"
 #include "m_parse.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <limits>
 #include <vector>
@@ -36,6 +38,7 @@
 #include "ui_keybindingstable.h"
 
 #include <FL/Fl_Color_Chooser.H>
+#include <FL/Fl_Value_Slider.H>
 #include <FL/fl_draw.H>
 
 
@@ -669,6 +672,11 @@ private:
 
 	static void  close_callback(Fl_Widget *w, void *data);
 	static void  color_callback(Fl_Button *w, void *data);
+	static void  grid_theme_callback(Fl_Widget *w, void *data);
+	static void  grid_opacity_callback(Fl_Widget *w, void *data);
+	void updateGridThemePreview();
+	void updateGridThemeGuidance();
+	void captureCustomGridPalette();
 
 	static void bind_key_callback(Fl_Button *w, void *data);
 	static void edit_key_callback(Fl_Button *w, void *data);
@@ -763,6 +771,8 @@ public:
 	Fl_Int_Input    *edit_sectorsize;
 	Fl_Input        *edit_userratio;
 	Fl_Choice       *edit_lineinfo;
+	Fl_Choice       *edit_measure;
+	Fl_Int_Input    *edit_measure_scale;
 
 	Fl_Check_Button *brow_smalltex;
 	Fl_Check_Button *brow_combo;
@@ -772,6 +782,9 @@ public:
 	Fl_Check_Button *gen_scrollbars;
 
 	Fl_Choice *grid_cur_style;
+	Fl_Choice *grid_visual_theme;
+	Fl_Value_Slider *grid_opacity_slider;
+	Fl_Box *grid_theme_help;
 	Fl_Check_Button *grid_snap;
 	Fl_Check_Button *grid_enabled;
 	Fl_Choice *grid_size;
@@ -790,6 +803,12 @@ public:
 	Fl_Button *normal_main;
 	Fl_Button *normal_flat;
 	Fl_Button *normal_small;
+	Fl_Button *snap_target;
+	Fl_Button *snap_halo;
+	Fl_Button *snap_guide;
+	grid::VisualPalette custom_grid_palette_;
+	int displayed_grid_theme_ = -1;
+	int original_grid_opacity_ = 75;
 
 	/* 3D Tab */
 
@@ -1013,6 +1032,15 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 		{ edit_lineinfo = new Fl_Choice(440, 180, 105, 25, "line info:");
 		  edit_lineinfo->add("NONE|Length|Angle|Ratio|Len+Ang|Len+Ratio");
 		}
+		{ edit_measure = new Fl_Choice(440, 210, 105, 25, "measurements:");
+		  edit_measure->add("OFF|Metric (m/km)|Imperial (ft/mi)");
+		  edit_measure->tooltip("Show real-world sizes alongside map units in the\n"
+					"status bar, grid indicator and on-canvas line labels.");
+		}
+		{ edit_measure_scale = new Fl_Int_Input(440, 240, 105, 25, "units per meter:");
+		  edit_measure_scale->tooltip("Map units per meter (32 = classic Doom scale,\n"
+					"so a 56-unit player is about 1.75 m tall).");
+		}
 
 		{ Fl_Box* o = new Fl_Box(25, 295, 355, 30, "Browser Options");
 		  o->labelfont(FL_BOLD);
@@ -1069,59 +1097,103 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 		{ grid_hide_free = new Fl_Check_Button(300, 185, 245, 25, " hide grid in FREE mode");
 		}
 
-		{ Fl_Box* o = new Fl_Box(25, 270, 355, 30, "Grid Colors");
+		{ Fl_Box* o = new Fl_Box(25, 258, 220, 30, "Grid Visibility");
 		  o->labelfont(FL_BOLD);
 		  o->align(Fl_Align(FL_ALIGN_LEFT|FL_ALIGN_INSIDE));
 		}
+		{ grid_visual_theme = new Fl_Choice(
+				  410, 258, 150, 25, "visibility theme ");
+		  for (const grid::VisualThemeDescriptor &theme :
+				  grid::VisualThemes())
+			  grid_visual_theme->add(theme.label);
+		  grid_visual_theme->callback(grid_theme_callback, this);
+		  grid_visual_theme->tooltip(
+				  "Choose an accessible grid and snap palette; edit any "
+				  "swatch below to create a Custom theme");
+		}
+		{ grid_opacity_slider = new Fl_Value_Slider(
+				  150, 406, 200, 22, "Grid opacity ");
+		  grid_opacity_slider->type(FL_HOR_NICE_SLIDER);
+		  grid_opacity_slider->align(FL_ALIGN_LEFT);
+		  grid_opacity_slider->range(20.0, 100.0);
+		  grid_opacity_slider->step(5.0);
+		  grid_opacity_slider->callback(
+				  (Fl_Callback*)grid_opacity_callback, this);
+		  grid_opacity_slider->tooltip(
+				  "Fade grid lines toward the canvas "
+				  "(lower percent = more transparent)");
+		}
 
-		{ normal_axis = new Fl_Button(150 + 0*55, 300, 45, 25, "Normal Grid : ");
+		{ normal_axis = new Fl_Button(150 + 0*55, 288, 45, 25, "Normal Grid : ");
 		  normal_axis->box(FL_BORDER_BOX);
 		  normal_axis->align(FL_ALIGN_LEFT);
 		  normal_axis->callback((Fl_Callback*)color_callback, this);
 		  normal_axis->tooltip("X/Y axis color");
 		}
-		{ normal_main = new Fl_Button(150 + 1*55, 300, 45, 25, "");
+		{ normal_main = new Fl_Button(150 + 1*55, 288, 45, 25, "");
 		  normal_main->box(FL_BORDER_BOX);
 		  normal_main->align(FL_ALIGN_RIGHT);
 		  normal_main->callback((Fl_Callback*)color_callback, this);
 		  normal_main->tooltip("large square color");
 		}
-		{ normal_flat = new Fl_Button(150 + 2*55, 300, 45, 25, "");
+		{ normal_flat = new Fl_Button(150 + 2*55, 288, 45, 25, "");
 		  normal_flat->box(FL_BORDER_BOX);
 		  normal_flat->align(FL_ALIGN_RIGHT);
 		  normal_flat->callback((Fl_Callback*)color_callback, this);
 		  normal_flat->tooltip("64x64 square color");
 		}
-		{ normal_small = new Fl_Button(150 + 3*55, 300, 45, 25, "");
+		{ normal_small = new Fl_Button(150 + 3*55, 288, 45, 25, "");
 		  normal_small->box(FL_BORDER_BOX);
 		  normal_small->align(FL_ALIGN_RIGHT);
 		  normal_small->callback((Fl_Callback*)color_callback, this);
 		  normal_small->tooltip("small square color");
 		}
 
-		{ dotty_axis = new Fl_Button(150 + 0*55, 340, 45, 25, "Dotty Grid : ");
+		{ dotty_axis = new Fl_Button(150 + 0*55, 328, 45, 25, "Dotty Grid : ");
 		  dotty_axis->box(FL_BORDER_BOX);
 		  dotty_axis->align(FL_ALIGN_LEFT);
 		  dotty_axis->callback((Fl_Callback*)color_callback, this);
 		  dotty_axis->tooltip("X/Y axis color");
 		}
-		{ dotty_major = new Fl_Button(150 + 1*55, 340, 45, 25, "");
+		{ dotty_major = new Fl_Button(150 + 1*55, 328, 45, 25, "");
 		  dotty_major->box(FL_BORDER_BOX);
 		  dotty_major->align(FL_ALIGN_RIGHT);
 		  dotty_major->callback((Fl_Callback*)color_callback, this);
 		  dotty_major->tooltip("large square color");
 		}
-		{ dotty_minor = new Fl_Button(150 + 2*55, 340, 45, 25, "");
+		{ dotty_minor = new Fl_Button(150 + 2*55, 328, 45, 25, "");
 		  dotty_minor->box(FL_BORDER_BOX);
 		  dotty_minor->align(FL_ALIGN_RIGHT);
 		  dotty_minor->callback((Fl_Callback*)color_callback, this);
 		  dotty_minor->tooltip("small square color");
 		}
-		{ dotty_point = new Fl_Button(150 + 3*55, 340, 45, 25, "");
+		{ dotty_point = new Fl_Button(150 + 3*55, 328, 45, 25, "");
 		  dotty_point->box(FL_BORDER_BOX);
 		  dotty_point->align(FL_ALIGN_RIGHT);
 		  dotty_point->callback((Fl_Callback*)color_callback, this);
 		  dotty_point->tooltip("dot color");
+		}
+		{ snap_target = new Fl_Button(150 + 0*55, 368, 45, 25, "Snap Reticle : ");
+		  snap_target->box(FL_BORDER_BOX);
+		  snap_target->align(FL_ALIGN_LEFT);
+		  snap_target->callback((Fl_Callback*)color_callback, this);
+		  snap_target->tooltip("exact snapped target and reticle color");
+		}
+		{ snap_halo = new Fl_Button(150 + 1*55, 368, 45, 25, "");
+		  snap_halo->box(FL_BORDER_BOX);
+		  snap_halo->callback((Fl_Callback*)color_callback, this);
+		  snap_halo->tooltip("dark reticle outline for bright map surfaces");
+		}
+		{ snap_guide = new Fl_Button(150 + 2*55, 368, 45, 25, "");
+		  snap_guide->box(FL_BORDER_BOX);
+		  snap_guide->callback((Fl_Callback*)color_callback, this);
+		  snap_guide->tooltip("pointer-to-target quantization guide color");
+		}
+		{ grid_theme_help = new Fl_Box(380, 292, 180, 100);
+		  grid_theme_help->box(FL_THIN_DOWN_BOX);
+		  grid_theme_help->align(
+				  FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
+		  grid_theme_help->labelsize(12);
 		}
 
 		o->end();
@@ -1151,7 +1223,7 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 #endif
 		}
 		{ rend_far_clip = new Fl_Choice(195, 160, 100, 30, "Far clip distance: ");
-		  rend_far_clip->add("32768|16384|8192|4096|2048|1024");
+		  rend_far_clip->add("1048576|262144|65536|32768|16384|8192|4096|2048|1024");
 #ifdef NO_OPENGL
 		  rend_far_clip->hide();
 #endif
@@ -1246,7 +1318,7 @@ void UI_Preferences::close_callback(Fl_Widget *w, void *data)
 
 void UI_Preferences::color_callback(Fl_Button *w, void *data)
 {
-//	UI_Preferences *dialog = (UI_Preferences *)data;
+	UI_Preferences *dialog = (UI_Preferences *)data;
 
 	uchar r, g, b;
 
@@ -1258,6 +1330,231 @@ void UI_Preferences::color_callback(Fl_Button *w, void *data)
 	w->color(fl_rgb_color(r, g, b));
 
 	w->redraw();
+
+	if (w == dialog->normal_axis || w == dialog->normal_main ||
+			w == dialog->normal_flat || w == dialog->normal_small ||
+			w == dialog->dotty_axis || w == dialog->dotty_major ||
+			w == dialog->dotty_minor || w == dialog->dotty_point ||
+			w == dialog->snap_target || w == dialog->snap_halo ||
+			w == dialog->snap_guide)
+	{
+		dialog->grid_visual_theme->value(grid::kCustomVisualTheme);
+		dialog->displayed_grid_theme_ = grid::kCustomVisualTheme;
+		dialog->captureCustomGridPalette();
+		dialog->updateGridThemeGuidance();
+	}
+}
+
+void UI_Preferences::grid_theme_callback(Fl_Widget *, void *data)
+{
+	static_cast<UI_Preferences *>(data)->updateGridThemePreview();
+}
+
+void UI_Preferences::grid_opacity_callback(Fl_Widget *, void *data)
+{
+	UI_Preferences *prefs = static_cast<UI_Preferences *>(data);
+	config::grid_opacity = clamp(20,
+			static_cast<int>(prefs->grid_opacity_slider->value()), 100);
+	gInstance->RedrawMap();
+}
+
+void UI_Preferences::updateGridThemePreview()
+{
+	const int selected =
+			grid::NormalizeVisualTheme(grid_visual_theme->value());
+	if (displayed_grid_theme_ == grid::kCustomVisualTheme &&
+			selected != grid::kCustomVisualTheme)
+		captureCustomGridPalette();
+	grid_visual_theme->value(selected);
+	const grid::VisualPalette palette =
+			selected == grid::kCustomVisualTheme ?
+					custom_grid_palette_ :
+					grid::VisualPaletteFor(selected);
+
+	normal_axis->color(palette.normalAxis);
+	normal_main->color(palette.normalMain);
+	normal_flat->color(palette.normalFlat);
+	normal_small->color(palette.normalSmall);
+	dotty_axis->color(palette.dottyAxis);
+	dotty_major->color(palette.dottyMajor);
+	dotty_minor->color(palette.dottyMinor);
+	dotty_point->color(palette.dottyPoint);
+	snap_target->color(palette.snapTarget);
+	snap_halo->color(palette.snapHalo);
+	snap_guide->color(palette.snapGuide);
+	displayed_grid_theme_ = selected;
+	updateGridThemeGuidance();
+
+	const std::array<Fl_Widget *, 12> widgets = {
+			normal_axis, normal_main, normal_flat, normal_small,
+			dotty_axis, dotty_major, dotty_minor, dotty_point,
+			snap_target, snap_halo, snap_guide, grid_theme_help};
+	for (Fl_Widget *widget : widgets)
+		widget->redraw();
+}
+
+namespace
+{
+
+struct InkContrastResult
+{
+	double ratio = 21.0;  // 21:1 is the maximum possible WCAG ratio
+	const char *name = nullptr;
+};
+
+//  Weakest map-ink color of the palette, measured against its canvas.
+InkContrastResult MinInkContrast(const grid::VisualPalette &palette)
+{
+	const grid::MapInk &ink = palette.ink;
+	const struct { const char *name; rgb_color_t color; } entries[] = {
+		{"linedef", ink.linedef},
+		{"wall", ink.wall},
+		{"special line", ink.special},
+		{"tagged line", ink.tagged},
+		{"blocking line", ink.blocking},
+		{"sector tag", ink.sectorTag},
+		{"sector tag+type", ink.sectorTagType},
+		{"sector type", ink.sectorType},
+		{"thing", ink.thing},
+		{"vertex", ink.vertex},
+		{"selection", ink.select},
+		{"highlight", ink.highlight},
+		{"highlight+selection", ink.highlightSel},
+		{"camera", ink.camera},
+		{"error", ink.error},
+		{"tagged feedback", ink.taggedLight},
+		{"sound block", ink.soundBlock},
+		{"sound prop maybe", ink.propMaybe},
+		{"sound prop level 1", ink.propLevel1},
+		{"sound prop level 2", ink.propLevel2},
+	};
+
+	InkContrastResult worst;
+	for (const auto &entry : entries)
+	{
+		const double ratio =
+				grid::ContrastRatio(entry.color, palette.canvas);
+		if (ratio < worst.ratio)
+			worst = {ratio, entry.name};
+	}
+	return worst;
+}
+
+//  Weakest grid line color of the palette, measured against its canvas.
+double MinGridContrast(const grid::VisualPalette &palette)
+{
+	return std::min({
+			grid::ContrastRatio(palette.normalAxis, palette.canvas),
+			grid::ContrastRatio(palette.normalMain, palette.canvas),
+			grid::ContrastRatio(palette.normalFlat, palette.canvas),
+			grid::ContrastRatio(palette.normalSmall, palette.canvas),
+			grid::ContrastRatio(palette.dottyAxis, palette.canvas),
+			grid::ContrastRatio(palette.dottyMajor, palette.canvas),
+			grid::ContrastRatio(palette.dottyMinor, palette.canvas),
+			grid::ContrastRatio(palette.dottyPoint, palette.canvas)});
+}
+
+} // namespace
+
+void UI_Preferences::updateGridThemeGuidance()
+{
+	const int selected =
+			grid::NormalizeVisualTheme(grid_visual_theme->value());
+	if (selected != grid::kCustomVisualTheme)
+	{
+		//  built-in theme: report the measured worst-case ratios so the
+		//  themes can be compared objectively
+		const grid::VisualPalette palette =
+				grid::VisualPaletteFor(selected);
+		const double gridContrast = MinGridContrast(palette);
+		const InkContrastResult ink = MinInkContrast(palette);
+
+		grid_theme_help->copy_label(SString::printf(
+				"%s  [grid %.1f:1, ink %.1f:1 (%s)]",
+				grid::VisualThemeInfo(selected).description,
+				gridContrast, ink.ratio, ink.name).c_str());
+		grid_theme_help->labelcolor(
+				(gridContrast < 3.0 || ink.ratio < 3.0) ?
+						fl_rgb_color(175, 42, 42) : FL_FOREGROUND_COLOR);
+		grid_theme_help->redraw();
+		return;
+	}
+
+	const rgb_color_t black = rgbMake(0, 0, 0);
+	const double minimumGridContrast = std::min({
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(normal_axis->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(normal_main->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(normal_flat->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(normal_small->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(dotty_axis->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(dotty_major->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(dotty_minor->color()), black),
+			grid::ContrastRatio(
+					static_cast<rgb_color_t>(dotty_point->color()), black)});
+	const double targetContrast = grid::ContrastRatio(
+			static_cast<rgb_color_t>(snap_target->color()),
+			static_cast<rgb_color_t>(snap_halo->color()));
+
+	//  the Custom theme always uses the classic map ink; still verify it
+	//  so the guidance covers every color drawn over the canvas
+	const InkContrastResult ink =
+			MinInkContrast(grid::VisualPaletteFor(grid::kCustomVisualTheme));
+
+	if (minimumGridContrast < 3.0 || targetContrast < 4.5 ||
+			ink.ratio < 3.0)
+	{
+		grid_theme_help->copy_label(SString::printf(
+				"Custom warning: weak contrast (grid %.1f:1, target %.1f:1, "
+				"ink %.1f:1 '%s'). Brighten the grid or choose High Contrast.",
+				minimumGridContrast, targetContrast, ink.ratio,
+				ink.name).c_str());
+		grid_theme_help->labelcolor(fl_rgb_color(175, 42, 42));
+	}
+	else
+	{
+		grid_theme_help->copy_label(SString::printf(
+				"Custom palette: minimum grid contrast %.1f:1; "
+				"target/halo %.1f:1; ink %.1f:1 (%s).",
+				minimumGridContrast, targetContrast, ink.ratio,
+				ink.name).c_str());
+		grid_theme_help->labelcolor(FL_FOREGROUND_COLOR);
+	}
+	grid_theme_help->redraw();
+}
+
+void UI_Preferences::captureCustomGridPalette()
+{
+	custom_grid_palette_.canvas = rgbMake(0, 0, 0);
+	custom_grid_palette_.gridHalo = rgbMake(5, 8, 12);
+	custom_grid_palette_.normalAxis =
+			static_cast<rgb_color_t>(normal_axis->color());
+	custom_grid_palette_.normalMain =
+			static_cast<rgb_color_t>(normal_main->color());
+	custom_grid_palette_.normalFlat =
+			static_cast<rgb_color_t>(normal_flat->color());
+	custom_grid_palette_.normalSmall =
+			static_cast<rgb_color_t>(normal_small->color());
+	custom_grid_palette_.dottyAxis =
+			static_cast<rgb_color_t>(dotty_axis->color());
+	custom_grid_palette_.dottyMajor =
+			static_cast<rgb_color_t>(dotty_major->color());
+	custom_grid_palette_.dottyMinor =
+			static_cast<rgb_color_t>(dotty_minor->color());
+	custom_grid_palette_.dottyPoint =
+			static_cast<rgb_color_t>(dotty_point->color());
+	custom_grid_palette_.snapTarget =
+			static_cast<rgb_color_t>(snap_target->color());
+	custom_grid_palette_.snapHalo =
+			static_cast<rgb_color_t>(snap_halo->color());
+	custom_grid_palette_.snapGuide =
+			static_cast<rgb_color_t>(snap_guide->color());
 }
 
 
@@ -1490,6 +1787,8 @@ void UI_Preferences::Run()
 	if (want_discard)
 	{
 		gLog.printf("Preferences: discarded changes\n");
+		config::grid_opacity = original_grid_opacity_;
+		gInstance->RedrawMap();
 		undo_stack_.clear();
 		redo_stack_.clear();
 		return;
@@ -1566,6 +1865,8 @@ void UI_Preferences::LoadValues()
 	edit_def_port->value(config::default_port.c_str());
 	edit_def_mode->value(clamp(0, config::default_edit_mode, 3));
 	edit_lineinfo->value(clamp(0, config::highlight_line_info, 5));
+	edit_measure->value(clamp(0, config::measure_system, 2));
+	edit_measure_scale->value(SString(config::measure_units_per_meter).c_str());
 
 	edit_sectorsize->value(SString(config::new_sector_size).c_str());
 	edit_samemode->value(config::same_mode_clears_selection ? 1 : 0);
@@ -1594,18 +1895,16 @@ void UI_Preferences::LoadValues()
 	grid_flatrender->value(config::sector_render_default ? 1 : 0);
 	grid_spriterend->value(config::thing_render_default ? 1 : 0);
 	grid_indicator->value(config::grid_snap_indicator ? 1 : 0);
+	grid_visual_theme->value(grid::ConfiguredVisualTheme());
+	original_grid_opacity_ = config::grid_opacity;
+	grid_opacity_slider->value(config::grid_opacity);
+	custom_grid_palette_ =
+			grid::VisualPaletteFor(grid::kCustomVisualTheme);
+	displayed_grid_theme_ = -1;
 
 	gen_scrollbars ->value(config::map_scroll_bars ? 1 : 0);
 
-	dotty_axis ->color(config::dotty_axis_col);
-	dotty_major->color(config::dotty_major_col);
-	dotty_minor->color(config::dotty_minor_col);
-	dotty_point->color(config::dotty_point_col);
-
-	normal_axis ->color(config::normal_axis_col);
-	normal_main ->color(config::normal_main_col);
-	normal_flat ->color(config::normal_flat_col);
-	normal_small->color(config::normal_small_col);
+	updateGridThemePreview();
 
 	/* 3D Tab */
 
@@ -1618,18 +1917,24 @@ void UI_Preferences::LoadValues()
 	rend_high_detail->value(config::render_high_detail ? 1 : 0);
 	rend_lock_grav->value(config::render_lock_gravity ? 1 : 0);
 
-	if (config::render_far_clip > 24000)
+	if (config::render_far_clip > 500000)
 		rend_far_clip->value(0);
-	else if (config::render_far_clip > 12000)
+	else if (config::render_far_clip > 130000)
 		rend_far_clip->value(1);
-	else if (config::render_far_clip > 6000)
+	else if (config::render_far_clip > 50000)
 		rend_far_clip->value(2);
-	else if (config::render_far_clip > 3000)
+	else if (config::render_far_clip > 24000)
 		rend_far_clip->value(3);
-	else if (config::render_far_clip > 1500)
+	else if (config::render_far_clip > 12000)
 		rend_far_clip->value(4);
-	else
+	else if (config::render_far_clip > 6000)
 		rend_far_clip->value(5);
+	else if (config::render_far_clip > 3000)
+		rend_far_clip->value(6);
+	else if (config::render_far_clip > 1500)
+		rend_far_clip->value(7);
+	else
+		rend_far_clip->value(8);
 
 	/* Nodes Tab */
 
@@ -1713,6 +2018,10 @@ void UI_Preferences::SaveValues()
 	config::default_edit_mode = edit_def_mode->value();
 	config::highlight_line_info = edit_lineinfo->value();
 
+	config::measure_system = clamp(0, edit_measure->value(), 2);
+	config::measure_units_per_meter = atoi(edit_measure_scale->value());
+	config::measure_units_per_meter = clamp(1, config::measure_units_per_meter, 1024);
+
 	config::new_sector_size = atoi(edit_sectorsize->value());
 	config::new_sector_size = clamp(4, config::new_sector_size, 8192);
 
@@ -1754,20 +2063,32 @@ void UI_Preferences::SaveValues()
 	config::grid_default_size = atoi(grid_size->mvalue()->text);
 	config::grid_hide_in_free_mode = grid_hide_free ->value() ? true : false;
 	config::grid_snap_indicator    = grid_indicator ->value() ? true : false;
+	config::grid_visual_theme = grid::NormalizeVisualTheme(
+			grid_visual_theme->value());
+	config::grid_opacity = clamp(20,
+			static_cast<int>(grid_opacity_slider->value()), 100);
 	config::sector_render_default  = grid_flatrender->value() ? 1 : 0;
 	config::thing_render_default   = grid_spriterend->value() ? 1 : 0;
 
 	config::map_scroll_bars = gen_scrollbars ->value() ? true : false;
 
-	config::dotty_axis_col  = (rgb_color_t) dotty_axis ->color();
-	config::dotty_major_col = (rgb_color_t) dotty_major->color();
-	config::dotty_minor_col = (rgb_color_t) dotty_minor->color();
-	config::dotty_point_col = (rgb_color_t) dotty_point->color();
+	if (config::grid_visual_theme == grid::kCustomVisualTheme)
+		captureCustomGridPalette();
+	config::dotty_axis_col = custom_grid_palette_.dottyAxis;
+	config::dotty_major_col = custom_grid_palette_.dottyMajor;
+	config::dotty_minor_col = custom_grid_palette_.dottyMinor;
+	config::dotty_point_col = custom_grid_palette_.dottyPoint;
 
-	config::normal_axis_col  = (rgb_color_t) normal_axis ->color();
-	config::normal_main_col  = (rgb_color_t) normal_main ->color();
-	config::normal_flat_col  = (rgb_color_t) normal_flat ->color();
-	config::normal_small_col = (rgb_color_t) normal_small->color();
+	config::normal_axis_col = custom_grid_palette_.normalAxis;
+	config::normal_main_col = custom_grid_palette_.normalMain;
+	config::normal_flat_col = custom_grid_palette_.normalFlat;
+	config::normal_small_col = custom_grid_palette_.normalSmall;
+	config::grid_snap_target_col = custom_grid_palette_.snapTarget;
+	config::grid_snap_halo_col = custom_grid_palette_.snapHalo;
+	config::grid_snap_guide_col = custom_grid_palette_.snapGuide;
+
+	gInstance->gridUpdateSnap();
+	gInstance->RedrawMap();
 
 	/* Nodes Tab */
 

@@ -381,6 +381,22 @@ const opt_desc_t options[] =
 		&config::grid_default_size
 	},
 
+	{	"measure_system",
+		0,
+		OptFlag_preference,
+		"Real-world measurement system: 0 = OFF, 1 = metric, 2 = imperial",
+		NULL,
+		&config::measure_system
+	},
+
+	{	"measure_units_per_meter",
+		0,
+		OptFlag_preference,
+		"Map units per meter for real-world measurements",
+		NULL,
+		&config::measure_units_per_meter
+	},
+
 	{	"grid_default_snap",
 		0,
 		OptFlag_preference,
@@ -416,9 +432,33 @@ const opt_desc_t options[] =
 	{	"grid_snap_indicator",
 		0,
 		OptFlag_preference,
-		"show a cross at the grid-snapped location",
+		"show a high-visibility reticle at the grid-snapped location",
 		NULL,
 		&config::grid_snap_indicator
+	},
+
+	{	"grid_snap_target_col",
+		0,
+		OptFlag_preference,
+		"snap-target color for the custom grid visibility theme",
+		NULL,
+		&config::grid_snap_target_col
+	},
+
+	{	"grid_snap_halo_col",
+		0,
+		OptFlag_preference,
+		"snap-target halo color for the custom grid visibility theme",
+		NULL,
+		&config::grid_snap_halo_col
+	},
+
+	{	"grid_snap_guide_col",
+		0,
+		OptFlag_preference,
+		"pointer-to-snap guide color for the custom grid visibility theme",
+		NULL,
+		&config::grid_snap_guide_col
 	},
 
 	{	"grid_style",
@@ -427,6 +467,25 @@ const opt_desc_t options[] =
 		"grid style : 0 = squares, 1 = dotty",
 		NULL,
 		&config::grid_style
+	},
+
+	{	"grid_visual_theme",
+		0,
+		OptFlag_preference,
+		"grid visibility theme: -1 = migrate legacy colors, "
+		"0 = high-contrast dark, 1 = vintage phosphor, "
+		"2 = blueprint light, 3 = custom",
+		NULL,
+		&config::grid_visual_theme
+	},
+
+	{	"grid_opacity",
+		0,
+		OptFlag_preference,
+		"grid line opacity percent (20-100), fades grid toward "
+		"the canvas on every visibility theme",
+		NULL,
+		&config::grid_opacity
 	},
 
 	{	"gui_theme",

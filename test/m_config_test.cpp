@@ -689,6 +689,10 @@ TEST(MConfigBlank, InstanceMDefaultUserState)
 static const int LINFO_Length = 1;
 
 int  config::grid_style;  // 0 = squares, 1 = dotty
+int config::grid_visual_theme = -1;
+rgb_color_t config::grid_snap_target_col = rgbMake(255, 110, 255);
+rgb_color_t config::grid_snap_halo_col = rgbMake(0, 0, 0);
+rgb_color_t config::grid_snap_guide_col = rgbMake(220, 140, 255);
 int config::gui_scheme    = 1;  // gtk+
 bool config::bsp_on_save    = true;
 bool config::bsp_force_v5        = false;
@@ -701,19 +705,19 @@ rgb_color_t config::gui_custom_ig = rgbMake(255, 255, 255);
 rgb_color_t config::gui_custom_fg = rgbMake(0, 0, 0);
 bool config::swap_sidedefs = false;
 bool config::bsp_compressed        = false;
-rgb_color_t config::dotty_axis_col  = rgbMake(0, 128, 255);
+rgb_color_t config::dotty_axis_col  = rgbMake(170, 170, 170);
 int  config::grid_ratio_low  = 1;  // (low must be > 0)
 bool config::begin_maximized  = false;
 bool config::bsp_force_zdoom    = false;
-rgb_color_t config::dotty_major_col = rgbMake(0, 0, 238);
-rgb_color_t config::dotty_minor_col = rgbMake(0, 0, 187);
-rgb_color_t config::dotty_point_col = rgbMake(0, 0, 255);
+rgb_color_t config::dotty_major_col = rgbMake(92, 92, 92);
+rgb_color_t config::dotty_minor_col = rgbMake(60, 60, 60);
+rgb_color_t config::dotty_point_col = rgbMake(170, 170, 170);
 int  config::grid_ratio_high = 3;  // custom ratio (high must be >= low)
 bool config::map_scroll_bars  = true;
 int  config::new_sector_size = 128;
-rgb_color_t config::normal_axis_col  = rgbMake(0, 128, 255);
-rgb_color_t config::normal_main_col  = rgbMake(0, 0, 238);
-rgb_color_t config::normal_flat_col  = rgbMake(60, 60, 120);
+rgb_color_t config::normal_axis_col  = rgbMake(170, 170, 170);
+rgb_color_t config::normal_main_col  = rgbMake(92, 92, 92);
+rgb_color_t config::normal_flat_col  = rgbMake(68, 68, 68);
 int  config::render_far_clip = 32768;
 rgb_color_t config::transparent_col = rgbMake(0, 255, 255);
 bool config::auto_load_recent = false;
@@ -727,7 +731,7 @@ int config::floor_bump_small  = 1;
 int config::light_bump_small  = 4;
 int config::light_bump_medium = 16;
 int config::light_bump_large  = 64;
-rgb_color_t config::normal_small_col = rgbMake(60, 60, 120);
+rgb_color_t config::normal_small_col = rgbMake(56, 56, 56);
 bool config::browser_small_tex = false;
 int config::default_edit_mode = 3;  // Vertices
 int  config::grid_default_size = 64;
