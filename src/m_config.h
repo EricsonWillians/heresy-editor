@@ -147,6 +147,8 @@ extern int  render_pixel_aspect;
 extern int  render_far_clip;
 extern bool render_high_detail;
 extern bool render_lock_gravity;
+extern int  render_mlook_turn;
+extern int  render_mlook_move;
 extern bool render_missing_bright;
 extern bool render_unknown_bright;
 

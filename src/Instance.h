@@ -208,6 +208,7 @@ public:
 	void R3D_NAV_TurnRight_release();
 	void R3D_Down();
 	void R3D_DropToFloor();
+	void R3D_Home();
 	void R3D_Right();
 	void R3D_Set();
 	void R3D_Toggle();

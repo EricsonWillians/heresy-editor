@@ -68,16 +68,17 @@ Tested packages and matching SHA-256 checksums are published on the
 
 macOS packages are ad-hoc signed for integrity but are not Apple-notarized.
 
-## What's new in 2.5.0
+## What's new in 2.6.0
 
-Version 2.5.0 makes the construction grid legible at a glance with semantic
-High-Contrast Dark, Vintage Phosphor, Blueprint Light, and Custom visibility
-themes, adds optional metric/imperial measurement readouts across the canvas,
-linedef overlay, and status bar, and removes the 16-bit ceiling on sector
-heights for UDMF maps — with an explicit warning when a binary-format save
-would truncate out-of-range heights.
+Version 2.6.0 overhauls the 3D view with first-person navigation: FPS-style
+mouse-look (on by default, with configurable sensitivity), WASD movement
+with SHIFT to run, SPACE to jump, and CTRL to crouch, automatic camera
+recovery, and a theme-colored wireframe of the level whenever the camera
+strays into the void. UDMF can now be selected as the map format for new
+maps and projects, and creating a fresh map no longer leaves stale
+rendering behind.
 
-Read the complete [2.5.0 changelog](changelogs/2.5.0.md).
+Read the complete [2.6.0 changelog](changelogs/2.6.0.md).
 
 ## Quick start
 
@@ -193,6 +194,15 @@ The editor temporarily selects every wall, then <kbd>Tab</kbd> or
 and 2D rendering overlay. <kbd>Shift</kbd>+<kbd>F8</kbd> cycles forward through
 all seven 2D render overlays and 3D; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+
 <kbd>F8</kbd> cycles backward. F8 remains the direct rendering menu.
+
+The 3D view itself is fully first-person. Mouse-look engages automatically
+when you enter it — <kbd>M</kbd> or <kbd>Esc</kbd> releases the pointer —
+<kbd>W</kbd>/<kbd>A</kbd>/<kbd>S</kbd>/<kbd>D</kbd> move, <kbd>Shift</kbd>
+runs, <kbd>Space</kbd> jumps, and left <kbd>Ctrl</kbd> crouches. Turn and
+move sensitivity are configurable in Preferences → 3D View. If the camera
+ever leaves the map, the background turns black and the whole level is
+drawn as a theme-colored wireframe so it is easy to fly back inside, and
+<kbd>H</kbd> teleports the camera to the player start at any time.
 
 Read the [Mathematical grid and inspection guide](docs/MathematicalGrid.txt).
 

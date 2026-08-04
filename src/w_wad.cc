@@ -39,8 +39,7 @@
 
 #include <assert.h>
 
-// UDMF support is unfinished and hence disabled by default.
-bool global::udmf_testing = false;
+bool global::udmf_testing = true;
 
 
 #define MAX_LUMPS_IN_A_LEVEL	21

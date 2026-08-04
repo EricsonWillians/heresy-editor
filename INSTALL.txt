@@ -55,7 +55,7 @@ portable package layout.  Pull requests build and test the full platform matrix
 without publishing artifacts.  A maintainer can also publish artifacts from a
 manual workflow run.
 
-Pushing a version tag such as `v2.5.0` runs the same complete matrix and then
+Pushing a version tag such as `v2.6.0` runs the same complete matrix and then
 publishes the packages as a GitHub Release.  The tag must match the project
 version in CMakeLists.txt and have a matching `changelogs/<version>.md` file.
 Release publication verifies every checksum before uploading the packages,

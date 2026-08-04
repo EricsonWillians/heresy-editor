@@ -158,7 +158,7 @@ const opt_desc_t options[] =
 	{	"udmftest",
 		0,
 		OptFlag_hide,
-		"Enable the unfinished UDMF support",
+		"Deprecated: UDMF support is always enabled",
 		NULL,
 		&global::udmf_testing
 	},
@@ -662,6 +662,22 @@ const opt_desc_t options[] =
 		"Locked gravity in 3D view -- cannot move up or down",
 		NULL,
 		&config::render_lock_gravity
+	},
+
+	{	"render_mlook_turn",
+		0,
+		OptFlag_preference,
+		"Mouse-look turning speed in 3D view (percent)",
+		NULL,
+		&config::render_mlook_turn
+	},
+
+	{	"render_mlook_move",
+		0,
+		OptFlag_preference,
+		"Mouse-look forward/back speed in 3D view (percent)",
+		NULL,
+		&config::render_mlook_move
 	},
 
 	{	"render_missing_bright",

@@ -57,6 +57,11 @@ public:
 
 	bool gravity = true;  // when true, walk on ground
 
+	bool mouselook = false;  // FPS-style mouse-look mode (not persistent)
+
+	// last pointer position during mouse-look (window coords, -1 = invalid)
+	int mlook_last_x = -1, mlook_last_y = -1;
+
 	std::vector<int> thing_sectors;
 
 	// current mouse coords (in window), invalid if -1
@@ -93,6 +98,9 @@ namespace global
 void Render3D_RegisterCommands();
 
 void Render3D_Enable(Instance &inst, bool _enable);
+
+// toggle FPS-style mouse-look mode (pointer is hidden and warped to center)
+void Render3D_MouseLook(Instance &inst, bool enable);
 
 // this is basically the FLTK draw() method
 void Render3D_Draw(Instance &inst, int ox, int oy, int ow, int oh, int pixel_w, int pixel_h);

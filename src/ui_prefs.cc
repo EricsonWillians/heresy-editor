@@ -817,6 +817,9 @@ public:
 	Fl_Check_Button *rend_high_detail;
 	Fl_Check_Button *rend_lock_grav;
 
+	Fl_Int_Input *rend_mlook_turn;
+	Fl_Int_Input *rend_mlook_move;
+
 	Fl_Choice *rend_far_clip;
 
 	/* Nodes Tab */
@@ -1227,6 +1230,16 @@ UI_Preferences::UI_Preferences(const opt_desc_t *options) :
 #ifdef NO_OPENGL
 		  rend_far_clip->hide();
 #endif
+		}
+		{ rend_mlook_turn = new Fl_Int_Input(190, 195, 95, 25, "Mouse-look turn speed: ");
+
+		  Fl_Box* o = new Fl_Box(300, 195, 250, 25, "(percent, default is 100)");
+		  o->align(Fl_Align(FL_ALIGN_LEFT|FL_ALIGN_INSIDE));
+		}
+		{ rend_mlook_move = new Fl_Int_Input(190, 225, 95, 25, "Mouse-look move speed: ");
+
+		  Fl_Box* o = new Fl_Box(300, 225, 250, 25, "(percent, default is 100)");
+		  o->align(Fl_Align(FL_ALIGN_LEFT|FL_ALIGN_INSIDE));
 		}
 
 		o->end();
@@ -1917,6 +1930,14 @@ void UI_Preferences::LoadValues()
 	rend_high_detail->value(config::render_high_detail ? 1 : 0);
 	rend_lock_grav->value(config::render_lock_gravity ? 1 : 0);
 
+	{
+		char mlook_buf[16];
+		snprintf(mlook_buf, sizeof(mlook_buf), "%d", config::render_mlook_turn);
+		rend_mlook_turn->value(mlook_buf);
+		snprintf(mlook_buf, sizeof(mlook_buf), "%d", config::render_mlook_move);
+		rend_mlook_move->value(mlook_buf);
+	}
+
 	if (config::render_far_clip > 500000)
 		rend_far_clip->value(0);
 	else if (config::render_far_clip > 130000)
@@ -2116,6 +2137,9 @@ void UI_Preferences::SaveValues()
 	config::render_high_detail  = rend_high_detail->value() ? true : false;
 	config::render_lock_gravity = rend_lock_grav->value() ? true : false;
 	config::render_far_clip     = atoi(rend_far_clip->mvalue()->text);
+
+	config::render_mlook_turn = clamp(10, atoi(rend_mlook_turn->value()), 400);
+	config::render_mlook_move = clamp(10, atoi(rend_mlook_move->value()), 400);
 }
 
 

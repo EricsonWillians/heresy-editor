@@ -184,6 +184,25 @@ void Instance::FreshLevel()
 	level.clear();
 	level = makeFreshDocument(*this, conf, loaded.levelFormat);
 
+	Subdiv_InvalidateAll();
+
+	// reset various editor state, so nothing from the previous
+	// map is still rendered or shown in the panels
+	Editor_ClearAction();
+	Selection_InvalidateLast();
+	edit.Selected->clear_all();
+	edit.highlight.clear();
+
+	if (main_win)
+	{
+		main_win->UpdateTotals(level);
+		main_win->InvalidatePanelObj();
+	}
+
+	// place the 3D camera at the new map's player start,
+	// so entering 3D view does not leave it in the void
+	Render3D_Setup();
+
 	ZoomWholeMap();
 
 	edit.defaultState();
