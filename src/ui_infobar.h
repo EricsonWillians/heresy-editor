@@ -59,7 +59,7 @@ public:
 
 private:
 	static const char  *scale_options_str;
-	static const double scale_amounts[9];
+	static const double scale_amounts[14];
 
 	void UpdateModeColor();
 	void UpdateSnapText();
@@ -103,6 +103,9 @@ private:
 	void IB_ShowTransform(int cx, int cy);
 	void IB_ShowOffsets(int cx, int cy);
 	void IB_ShowDrawLine(int cx, int cy);
+	void IB_ShowSelboxSize(int cx, int cy);
+	void IB_ShowSelectionSize(int cx, int cy);
+	void IB_ShowMapSize(int cy);
 
 	void IB_String(int& cx, int& cy, const char *str);
 	void IB_Number(int& cx, int& cy, const char *label, int value, int size);

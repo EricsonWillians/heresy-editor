@@ -34,6 +34,7 @@
 #include "e_things.h"
 #include "LineDef.h"
 #include "m_game.h"
+#include "m_units.h"
 #include "Sector.h"
 #include "SideDef.h"
 #include "w_rawdef.h"
@@ -879,6 +880,10 @@ void UI_LineBox::CalcLength()
 	snprintf(buffer, sizeof(buffer), "%1.0f", len_f);
 
 	mFixUp.setInputValue(length, buffer);
+
+	// keep the tooltip text alive in the member (FLTK does not copy it)
+	lengthTooltip = units::FormatLength(len_f);
+	length->tooltip(lengthTooltip.good() ? lengthTooltip.c_str() : nullptr);
 }
 
 

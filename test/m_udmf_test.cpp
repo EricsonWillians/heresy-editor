@@ -20,6 +20,7 @@
 #include "Instance.h"
 #include "m_game.h"
 #include "m_loadsave.h"
+#include "main.h"
 #include "w_rawdef.h"
 #include "w_texture.h"
 #include "w_wad.h"
@@ -348,4 +349,143 @@ TEST_F(UdmfTest, ClassicSerializersIgnoreUdmfProperties)
 			serialize(extended, getSubPath("extended-doom.wad"), false));
 	EXPECT_EQ(serialize(plain, getSubPath("plain-hexen.wad"), true),
 			serialize(extended, getSubPath("extended-hexen.wad"), true));
+}
+
+TEST_F(UdmfTest, ExtremeSectorHeightsRoundTrip)
+{
+	static const char source[] = R"UDMF(namespace = "zdoom";
+
+vertex { x = 0.0; y = 0.0; }
+vertex { x = 128.0; y = 0.0; }
+
+sector
+{
+	heightfloor = -200000;
+	heightceiling = 262144;
+	texturefloor = "FLOOR0_1";
+	textureceiling = "F_SKY1";
+	lightlevel = 160;
+}
+
+sidedef
+{
+	sector = 0;
+	texturemiddle = "STARTAN3";
+}
+
+linedef
+{
+	v1 = 0;
+	v2 = 1;
+	sidefront = 0;
+	blocking = true;
+}
+)UDMF";
+
+	auto input = wadWithTextMap(getSubPath("extreme-input.wad"), source);
+	ASSERT_TRUE(input);
+	Document document(instance);
+	LoadingData loading;
+	loading.levelFormat = MapFormat::udmf;
+	BadCount bad{};
+	instance.UDMF_LoadLevel(0, input.get(), document, loading, bad);
+
+	ASSERT_EQ(document.numSectors(), 1);
+	EXPECT_EQ(document.sectors[0]->floorh, -200000);
+	EXPECT_EQ(document.sectors[0]->ceilh, 262144);
+
+	auto output = Wad_file::Open(getSubPath("extreme-output.wad"), WadOpenMode::write);
+	ASSERT_TRUE(output);
+	output->AddLevel("MAP01");
+	instance.UDMF_SaveLevel(loading, *output, document);
+	const Lump_c *savedTextmap = output->FindLump("TEXTMAP");
+	ASSERT_NE(savedTextmap, nullptr);
+	const std::string saved = lumpText(*savedTextmap);
+	EXPECT_NE(saved.find("heightfloor = -200000;"), std::string::npos);
+	EXPECT_NE(saved.find("heightceiling = 262144;"), std::string::npos);
+
+	Document reloaded(instance);
+	LoadingData reloadedLoading;
+	reloadedLoading.levelFormat = MapFormat::udmf;
+	BadCount reloadedBad{};
+	instance.UDMF_LoadLevel(0, output.get(), reloaded, reloadedLoading,
+			reloadedBad);
+	ASSERT_EQ(reloaded.numSectors(), 1);
+	EXPECT_EQ(reloaded.sectors[0]->floorh, -200000);
+	EXPECT_EQ(reloaded.sectors[0]->ceilh, 262144);
+}
+
+TEST_F(UdmfTest, BinarySaveWarnsOnOutOfRangeSectorHeights)
+{
+	Document document(instance);
+	auto sector = std::make_shared<Sector>();
+	sector->floorh = -200000;
+	sector->ceilh = 262144;
+	sector->floor_tex = BA_InternaliseString("FLOOR0_1");
+	sector->ceil_tex = BA_InternaliseString("CEIL1_1");
+	sector->light = 160;
+	document.sectors.push_back(std::move(sector));
+
+	auto wad = Wad_file::Open(getSubPath("overflow.wad"), WadOpenMode::write);
+	ASSERT_TRUE(wad);
+
+	int notifications = 0;
+	std::string message;
+	auto previousOverride = DLG_Notify_Override;
+	DLG_Notify_Override = [&notifications, &message](const char *msg, va_list ap)
+	{
+		notifications++;
+		message = SString::vprintf(msg, ap).c_str();
+	};
+	document.SaveSectors(*wad);
+	DLG_Notify_Override = previousOverride;
+
+	EXPECT_EQ(notifications, 1);
+	EXPECT_NE(message.find("UDMF"), std::string::npos);
+
+	// The written heights must be the truncated int16 values (documenting the
+	// data loss the warning is about), not silently dropped sectors.
+	const Lump_c *lump = wad->FindLump("SECTORS");
+	ASSERT_NE(lump, nullptr);
+	const std::vector<byte> &data = lump->getData();
+	ASSERT_EQ(data.size(), sizeof(raw_sector_t));
+	raw_sector_t raw;
+	memcpy(&raw, data.data(), sizeof(raw));
+	EXPECT_EQ(LE_S16(raw.floorh), static_cast<int16_t>(-200000));
+	EXPECT_EQ(LE_S16(raw.ceilh), static_cast<int16_t>(262144));
+}
+
+TEST_F(UdmfTest, BinarySaveStaysSilentForInRangeSectorHeights)
+{
+	Document document(instance);
+	auto sector = std::make_shared<Sector>();
+	sector->floorh = -32767;
+	sector->ceilh = 32767;
+	sector->floor_tex = BA_InternaliseString("FLOOR0_1");
+	sector->ceil_tex = BA_InternaliseString("CEIL1_1");
+	sector->light = 160;
+	document.sectors.push_back(std::move(sector));
+
+	auto wad = Wad_file::Open(getSubPath("inrange.wad"), WadOpenMode::write);
+	ASSERT_TRUE(wad);
+
+	int notifications = 0;
+	auto previousOverride = DLG_Notify_Override;
+	DLG_Notify_Override = [&notifications](const char *, va_list)
+	{
+		notifications++;
+	};
+	document.SaveSectors(*wad);
+	DLG_Notify_Override = previousOverride;
+
+	EXPECT_EQ(notifications, 0);
+
+	const Lump_c *lump = wad->FindLump("SECTORS");
+	ASSERT_NE(lump, nullptr);
+	const std::vector<byte> &data = lump->getData();
+	ASSERT_EQ(data.size(), sizeof(raw_sector_t));
+	raw_sector_t raw;
+	memcpy(&raw, data.data(), sizeof(raw));
+	EXPECT_EQ(LE_S16(raw.floorh), -32767);
+	EXPECT_EQ(LE_S16(raw.ceilh), 32767);
 }

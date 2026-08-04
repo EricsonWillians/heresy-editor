@@ -27,6 +27,8 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_grid_theme.h"
+#include "m_units.h"
 #include "m_vector.h"
 #include "r_grid.h"
 #include "r_render.h"
@@ -37,17 +39,17 @@
 #include <cstdint>
 
 
-#define SNAP_COLOR  (config::gui_scheme == 2 ? fl_rgb_color(255,96,0) : fl_rgb_color(255, 96, 0))
 #define FREE_COLOR  (config::gui_scheme == 2 ? fl_rgb_color(0,192,0) : fl_rgb_color(128, 255, 128))
 
 #define RATIO_COLOR  FL_YELLOW
 
 
 const char *UI_InfoBar::scale_options_str =
-	"  6%| 12%| 25%| 33%| 50%|100%|200%|400%|800%";
+	"0.2%|0.4%|0.8%|1.6%|  3%|  6%| 12%| 25%| 33%| 50%|100%|200%|400%|800%";
 
-const double UI_InfoBar::scale_amounts[9] =
+const double UI_InfoBar::scale_amounts[14] =
 {
+	1.0 / 512.0, 1.0 / 256.0, 1.0 / 128.0, 1.0 / 64.0, 1.0 / 32.0,
 	0.0625, 0.125, 0.25, 0.33333, 0.5, 1.0, 2.0, 4.0, 8.0
 };
 
@@ -131,13 +133,32 @@ UI_InfoBar::UI_InfoBar(Instance &inst, int X, int Y, int W, int H, const char *l
 	grid_size->tooltip(
 			"Choose grouped grid sequences or open Mathematical Grid (Alt+G)");
 
+	// Size the button for its longest "step  (real)" label (see SetGrid),
+	// otherwise the real-world unit suffix spills over the SNAP toggle.
+	{
+		fl_font(FL_HELVETICA, 16);
+
+		int best_w = 72;
+		for (const grid::StepPreset &preset : grid::StepPresets())
+		{
+			const SString realSize = units::FormatLength(preset.step);
+			const SString text = realSize.good()
+				? SString::printf("%d  (%s)", preset.step, realSize.c_str())
+				: SString::printf("%d", preset.step);
+
+			best_w = std::max(best_w, static_cast<int>(fl_width(text.c_str())) + 34);
+		}
+		grid_size->size(best_w, H);
+	}
+
 	X = grid_size->x() + grid_size->w() + 12;
 
 
 	grid_snap = new Fl_Toggle_Button(X+4, Y, 72, H);
 	grid_snap->value(inst.grid.snaps() ? 1 : 0);
 	grid_snap->color(FREE_COLOR);
-	grid_snap->selection_color(SNAP_COLOR);
+	grid_snap->selection_color(
+			grid::ActiveVisualPalette().snapTarget);
 	grid_snap->callback(snap_callback, this);
 	grid_snap->labelsize(16);
 
@@ -354,7 +375,11 @@ void UI_InfoBar::SetGrid(int new_step)
 	else
 	{
 		char buffer[64];
-		snprintf(buffer, sizeof(buffer), "%d", new_step);
+		const SString realSize = units::FormatLength(new_step);
+		if (realSize.good())
+			snprintf(buffer, sizeof(buffer), "%d  (%s)", new_step, realSize.c_str());
+		else
+			snprintf(buffer, sizeof(buffer), "%d", new_step);
 		grid_size->copy_label(buffer);
 	}
 }
@@ -428,13 +453,21 @@ void UI_InfoBar::UpdateModeColor()
 
 void UI_InfoBar::UpdateSnapText()
 {
+	grid_snap->selection_color(
+			grid::ActiveVisualPalette().snapTarget);
 	if (grid_snap->value())
 	{
-		grid_snap->label("SNAP");
+		grid_snap->label("SNAP ON");
+		grid_snap->tooltip(
+				"Snapping is ON — edits use the visible reticle target "
+				"(click to switch to free positioning)");
 	}
 	else
 	{
-		grid_snap->label("Free");
+		grid_snap->label("FREE");
+		grid_snap->tooltip(
+				"Snapping is OFF — edits use free positioning "
+				"(click to snap to grid intersections)");
 	}
 
 	grid_snap->redraw();
@@ -539,10 +572,21 @@ void UI_StatusBar::draw()
 		IB_ShowDrawLine(cx, cy);
 		break;
 
+	case EditorAction::selbox:
+		IB_ShowSelboxSize(cx, cy);
+		break;
+
 	default:
 		fl_draw(status.c_str(), cx, cy);
+		cx += static_cast<int>(fl_width(status.c_str())) + 12;
+		IB_ShowSelectionSize(cx, cy);
 		break;
 	}
+
+	// the map's real-world dimensions stay visible at the right edge of the
+	// status bar, so the scale of the level is always known without any
+	// on-canvas label getting in the way of the drawing itself
+	IB_ShowMapSize(cy);
 
 	fl_pop_clip();
 }
@@ -576,6 +620,10 @@ void UI_StatusBar::IB_ShowDrag(int cx, int cy)
 
 	IB_Coord(cx, cy, "dragging delta x", static_cast<float>(delta.x));
 	IB_Coord(cx, cy,                "y", static_cast<float>(delta.y));
+
+	const SString dist = units::FormatLength(delta.hypot());
+	if (dist.good())
+		IB_String(cx, cy, SString::printf("dist %s", dist.c_str()).c_str());
 }
 
 
@@ -684,6 +732,83 @@ void UI_StatusBar::IB_ShowDrawLine(int cx, int cy)
 
 	IB_Coord(cx, cy, "delta x", static_cast<float>(dv.x));
 	IB_Coord(cx, cy,       "y", static_cast<float>(dv.y));
+
+	const SString dist = units::FormatLength(dv.hypot());
+	if (dist.good())
+		IB_String(cx, cy, SString::printf("dist %s", dist.c_str()).c_str());
+}
+
+
+//  While a selection box is being outlined, show its live dimensions in map
+//  units plus real-world measurements, so the mapper can size selections
+//  precisely without any label overlapping the canvas.
+void UI_StatusBar::IB_ShowSelboxSize(int cx, int cy)
+{
+	const double w = fabs(inst.edit.selbox2.x - inst.edit.selbox1.x);
+	const double h = fabs(inst.edit.selbox2.y - inst.edit.selbox1.y);
+
+	IB_Coord(cx, cy, "sel w", w);
+	IB_Coord(cx, cy,       "h", h);
+
+	if (! units::Enabled())
+		return;
+
+	const SString realW = units::FormatLength(w);
+	const SString realH = units::FormatLength(h);
+	if (realW.good() && realH.good())
+		IB_String(cx, cy, SString::printf("size %s x %s",
+				realW.c_str(), realH.c_str()).c_str());
+}
+
+
+//  Shows the overall dimensions of the map's bounding box in real-world
+//  measurements (e.g. "map 512.0 m x 512.0 m"), right-aligned so it never
+//  collides with the left-to-right status fields.
+void UI_StatusBar::IB_ShowMapSize(int cy)
+{
+	if (! units::Enabled() || inst.edit.render3d)
+		return;
+
+	if (inst.level.numVertices() == 0)
+		return;
+
+	const double w = inst.level.Map_bound2.x - inst.level.Map_bound1.x;
+	const double h = inst.level.Map_bound2.y - inst.level.Map_bound1.y;
+
+	const SString realW = units::FormatLength(w);
+	const SString realH = units::FormatLength(h);
+	if (! realW.good() || ! realH.good())
+		return;
+
+	const SString msg = SString::printf("map %s x %s", realW.c_str(), realH.c_str());
+
+	fl_color(INFO_TEXT_COL);
+	fl_draw(msg.c_str(), x() + UI_StatusBar::w() - static_cast<int>(fl_width(msg.c_str())) - 10, cy);
+}
+
+
+//  When a selection exists, show its bounding-box dimensions as real-world
+//  measurements (e.g. "size 16.0 m x 4.0 m") so the mapper can reason about
+//  the true scale of what is selected.  Appended after the status message.
+void UI_StatusBar::IB_ShowSelectionSize(int cx, int cy)
+{
+	if (! units::Enabled() || inst.edit.render3d)
+		return;
+
+	if (! inst.edit.Selected || inst.edit.Selected->empty())
+		return;
+
+	v2double_t pos1, pos2;
+	inst.level.objects.calcBBox(*inst.edit.Selected, pos1, pos2);
+
+	const double w = pos2.x - pos1.x;
+	const double h = pos2.y - pos1.y;
+
+	const SString realW = units::FormatLength(w);
+	const SString realH = units::FormatLength(h);
+	if (realW.good() && realH.good())
+		IB_String(cx, cy, SString::printf("size %s x %s",
+				realW.c_str(), realH.c_str()).c_str());
 }
 
 

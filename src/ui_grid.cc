@@ -6,6 +6,7 @@
 
 #include "Instance.h"
 #include "m_config.h"
+#include "m_grid_theme.h"
 #include "r_grid.h"
 #include "ui_window.h"
 
@@ -16,6 +17,7 @@
 #include "FL/Fl_Float_Input.H"
 #include "FL/Fl_Int_Input.H"
 #include "FL/Fl_Return_Button.H"
+#include "FL/Fl_Value_Slider.H"
 
 #include <algorithm>
 #include <cctype>
@@ -49,13 +51,15 @@ class UI_MathematicalGridDialog : public UI_Escapable_Window
 {
 public:
 	explicit UI_MathematicalGridDialog(Instance &instance) :
-		UI_Escapable_Window(720, 640, "Mathematical Grid & Snapping"),
+		UI_Escapable_Window(720, 676, "Mathematical Grid & Snapping"),
 		instance_(instance),
 		originalStep_(instance.grid.getStep()),
 		originalSettings_(instance.grid.getMathSettings()),
 		originalShown_(instance.grid.isShown()),
 		originalSnap_(instance.grid.snaps()),
-		originalDefaultSnap_(config::grid_default_snap)
+		originalDefaultSnap_(config::grid_default_snap),
+		originalVisualTheme_(config::grid_visual_theme),
+		originalOpacity_(config::grid_opacity)
 	{
 		title_ = new Fl_Box(24, 14, 672, 30,
 				"Mathematical grid and snapping");
@@ -157,22 +161,42 @@ public:
 				"Snap to intersections");
 		showGrid_->callback(changeCallback, this);
 		snap_->callback(changeCallback, this);
+		themeLabel_ = makeLabel(386, 429, "Visibility");
+		theme_ = new Fl_Choice(516, 427, 180, 30);
+		for (const grid::VisualThemeDescriptor &theme :
+				grid::VisualThemes())
+			theme_->add(theme.label);
+		theme_->value(grid::ConfiguredVisualTheme());
+		theme_->callback(themeCallback, this);
+		theme_->tooltip(
+				"Live grid, axis, and snap-reticle contrast theme");
 
-		description_ = new Fl_Box(24, 465, 672, 44);
+		opacityLabel_ = makeLabel(24, 467, "Grid opacity");
+		opacity_ = new Fl_Value_Slider(154, 465, 300, 30);
+		opacity_->type(FL_HOR_NICE_SLIDER);
+		opacity_->range(20.0, 100.0);
+		opacity_->step(5.0);
+		opacity_->value(config::grid_opacity);
+		opacity_->callback(opacityCallback, this);
+		opacity_->tooltip(
+				"Fade grid lines toward the canvas "
+				"(lower percent = more transparent)");
+
+		description_ = new Fl_Box(24, 501, 672, 44);
 		description_->box(FL_THIN_DOWN_BOX);
 		description_->color(fl_rgb_color(245, 245, 245));
 		description_->align(
 				FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
 		description_->labelsize(13);
 
-		status_ = new Fl_Box(24, 515, 672, 42);
+		status_ = new Fl_Box(24, 551, 672, 42);
 		status_->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
 		status_->labelsize(13);
 		status_->labelfont(FL_HELVETICA_BOLD);
 
-		reset_ = new Fl_Button(24, 584, 118, 34, "Reset square");
-		cancel_ = new Fl_Button(438, 584, 112, 34, "Cancel");
-		apply_ = new Fl_Return_Button(560, 584, 136, 34, "Use Grid");
+		reset_ = new Fl_Button(24, 620, 118, 34, "Reset square");
+		cancel_ = new Fl_Button(438, 620, 112, 34, "Cancel");
+		apply_ = new Fl_Return_Button(560, 620, 136, 34, "Use Grid");
 		reset_->callback(resetCallback, this);
 		cancel_->callback(cancelCallback, this);
 		apply_->callback(applyCallback, this);
@@ -180,7 +204,7 @@ public:
 		end();
 		callback(cancelCallback, this);
 		set_non_modal();
-		size_range(720, 640, 720, 640);
+		size_range(720, 676, 720, 676);
 
 		loadSettings(originalSettings_);
 		showGrid_->value(originalShown_);
@@ -247,6 +271,7 @@ public:
 				 static_cast<const Fl_Widget *>(cameraOrigin_),
 				 static_cast<const Fl_Widget *>(showGrid_),
 				 static_cast<const Fl_Widget *>(snap_),
+				 static_cast<const Fl_Widget *>(theme_),
 				 static_cast<const Fl_Widget *>(description_),
 				 static_cast<const Fl_Widget *>(status_),
 				 static_cast<const Fl_Widget *>(reset_),
@@ -369,6 +394,8 @@ private:
 		instance_.grid.SetMathSettings(settings);
 		instance_.grid.SetShown(showGrid_->value());
 		instance_.grid.SetSnap(snap_->value());
+		config::grid_visual_theme =
+				grid::NormalizeVisualTheme(theme_->value());
 		apply_->activate();
 
 		const char *patternName =
@@ -378,12 +405,15 @@ private:
 						"oblique" : "polar";
 		status_->copy_label(SString::printf(
 				"● LIVE — %s grid, primary %d, secondary %.4g, "
-				"origin %.4g, %.4g; snapping %s.",
+				"origin %.4g, %.4g; snapping %s; %s visibility.",
 				patternName, step, step * settings.secondaryRatio,
 				settings.origin.x, settings.origin.y,
-				snap_->value() ? "enabled" : "disabled").c_str());
+				snap_->value() ? "enabled" : "disabled",
+				grid::VisualThemeInfo(
+						config::grid_visual_theme).label).c_str());
 		status_->labelcolor(fl_rgb_color(24, 122, 65));
 		updateControlAvailability();
+		instance_.gridUpdateSnap();
 		instance_.RedrawMap();
 	}
 
@@ -456,6 +486,9 @@ private:
 		instance_.grid.SetShown(originalShown_);
 		instance_.grid.SetSnap(originalSnap_);
 		config::grid_default_snap = originalDefaultSnap_;
+		config::grid_visual_theme = originalVisualTheme_;
+		config::grid_opacity = originalOpacity_;
+		instance_.gridUpdateSnap();
 		instance_.RedrawMap();
 	}
 
@@ -487,6 +520,24 @@ private:
 		dialog->loadSettings(settings);
 		dialog->description_->copy_label(
 				grid::GeometryPresets()[selected - 1].description);
+		dialog->replan();
+	}
+
+	static void themeCallback(Fl_Widget *, void *data)
+	{
+		auto *dialog =
+				static_cast<UI_MathematicalGridDialog *>(data);
+		config::grid_visual_theme =
+				grid::NormalizeVisualTheme(dialog->theme_->value());
+		dialog->replan();
+	}
+
+	static void opacityCallback(Fl_Widget *, void *data)
+	{
+		auto *dialog =
+				static_cast<UI_MathematicalGridDialog *>(data);
+		config::grid_opacity =
+				static_cast<int>(dialog->opacity_->value());
 		dialog->replan();
 	}
 
@@ -545,6 +596,9 @@ private:
 	bool originalShown_ = true;
 	bool originalSnap_ = true;
 	bool originalDefaultSnap_ = true;
+	int originalVisualTheme_ =
+			static_cast<int>(grid::VisualTheme::highContrastDark);
+	int originalOpacity_ = 75;
 	bool committed_ = false;
 	bool closed_ = false;
 
@@ -579,6 +633,10 @@ private:
 	Fl_Button *cameraOrigin_ = nullptr;
 	Fl_Check_Button *showGrid_ = nullptr;
 	Fl_Check_Button *snap_ = nullptr;
+	Fl_Box *themeLabel_ = nullptr;
+	Fl_Choice *theme_ = nullptr;
+	Fl_Box *opacityLabel_ = nullptr;
+	Fl_Value_Slider *opacity_ = nullptr;
 	Fl_Box *description_ = nullptr;
 	Fl_Box *status_ = nullptr;
 	Fl_Button *reset_ = nullptr;

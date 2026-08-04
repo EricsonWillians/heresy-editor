@@ -601,6 +601,10 @@ spacing presets plus arbitrary 1-65536 input. Ordinary editing, paste/move,
 Quantize, and Smart Sector gestures share vector snapping; drawing and apply
 consume the same format-quantized coordinates. UDMF large positive coordinates
 now retain correct document/subdivision bounds and untruncated status display.
+High-Contrast Dark, Vintage Phosphor, Blueprint Light, and Custom visibility
+themes give fine/major/axis/origin roles an explicit hierarchy. The outlined
+snap-target reticle is rendered over map geometry with a pointer guide instead
+of being hidden beneath linedefs or bright sector surfaces.
 See `docs/MathematicalGrid.txt`.
 
 Stages 1 through 26, surface transforms, and the mathematical construction

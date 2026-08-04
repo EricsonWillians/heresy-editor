@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <limits>
 
 #ifndef NO_OPENGL
@@ -44,7 +45,9 @@
 #include "LineDef.h"
 #include "m_config.h"
 #include "m_game.h"
+#include "m_grid_theme.h"
 #include "m_surface_transform.h"
+#include "m_units.h"
 #include "m_vector.h"
 #include "r_grid.h"
 #include "r_subdiv.h"
@@ -59,9 +62,6 @@
 #include <assert.h>
 
 
-#define CAMERA_COLOR  fl_rgb_color(255, 192, 255)
-
-
 typedef enum
 {
 	LINFO_Nothing = 0,
@@ -73,21 +73,20 @@ typedef enum
 
 } line_info_mode_e;
 
-// config items
-rgb_color_t config::dotty_axis_col  = rgbMake(0, 128, 255);
-rgb_color_t config::dotty_major_col = rgbMake(0, 0, 238);
-rgb_color_t config::dotty_minor_col = rgbMake(0, 0, 187);
-rgb_color_t config::dotty_point_col = rgbMake(0, 0, 255);
-
-rgb_color_t config::normal_axis_col  = rgbMake(0, 128, 255);
-rgb_color_t config::normal_main_col  = rgbMake(0, 0, 238);
-rgb_color_t config::normal_flat_col  = rgbMake(60, 60, 120);
-rgb_color_t config::normal_small_col = rgbMake(60, 60, 120);
-
 int config::highlight_line_info = (int)LINFO_Length;
 
 
 int vertex_radius(double scale);
+
+static int VisibleGridStep(
+		int baseStep, double scale, double minimumPixels)
+{
+	long long result = std::max(1, baseStep);
+	while (result <= (std::numeric_limits<int>::max)() / 2 &&
+			result * scale < minimumPixels)
+		result *= 2;
+	return static_cast<int>(result);
+}
 
 
 UI_Canvas::UI_Canvas(Instance &inst, int X, int Y, int W, int H, const char *label) :
@@ -197,7 +196,7 @@ void UI_Canvas::draw()
 
 	PrepareToDraw();
 
-	RenderColor(FL_WHITE);
+	RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.wall));
 	RenderThickness(1);
 
 	// default font (for showing object numbers)
@@ -344,6 +343,8 @@ void UI_Canvas::DrawEverything()
 		seen_sectors.clear_all();
 	}
 
+	const grid::VisualPalette palette = grid::ActiveVisualPalette();
+
 	DrawMap();
 
 	DrawSelection(&*inst.edit.Selected);
@@ -359,9 +360,9 @@ void UI_Canvas::DrawEverything()
 		v2double_t delta = DragDelta();
 
 		if (inst.edit.mode == ObjType::vertices)
-			RenderColor(HI_AND_SEL_COL);
+			RenderColor(palette.ink.highlightSel);
 		else
-			RenderColor(HI_COL);
+			RenderColor(palette.ink.highlight);
 
 		if (inst.edit.mode == ObjType::linedefs || inst.edit.mode == ObjType::sectors)
 			RenderThickness(2);
@@ -370,7 +371,7 @@ void UI_Canvas::DrawEverything()
 
 		if (inst.edit.mode == ObjType::vertices && inst.edit.highlight.valid())
 		{
-			RenderColor(HI_COL);
+			RenderColor(palette.ink.highlight);
 			DrawHighlight(inst.edit.highlight.type, inst.edit.highlight.num);
 		}
 
@@ -382,7 +383,8 @@ void UI_Canvas::DrawEverything()
 			const auto v0 = inst.level.vertices[inst.edit.drag_other_vert];
 			const auto v1 = inst.level.vertices[inst.edit.dragged.num];
 
-			RenderColor(RED);
+			RenderColor(static_cast<Fl_Color>(
+					grid::ActiveVisualPalette().ink.error));
 			DrawKnobbyLine(v0->x(), v0->y(), v1->x() + delta.x, v1->y() + delta.y);
 
 			DrawLineInfo(v0->x(), v0->y(), v1->x() + delta.x, v1->y() + delta.y, true);
@@ -391,9 +393,9 @@ void UI_Canvas::DrawEverything()
 	else if (inst.edit.highlight.valid())
 	{
 		if (inst.edit.action != EditorAction::drawLine && inst.edit.Selected->get(inst.edit.highlight.num))
-			RenderColor(HI_AND_SEL_COL);
+			RenderColor(palette.ink.highlightSel);
 		else
-			RenderColor(HI_COL);
+			RenderColor(palette.ink.highlight);
 
 		bool thick;
 		if (inst.edit.highlight.type == ObjType::linedefs ||
@@ -409,7 +411,8 @@ void UI_Canvas::DrawEverything()
 
 		if (! inst.edit.error_mode)
 		{
-			RenderColor(LIGHTRED);
+			RenderColor(static_cast<Fl_Color>(
+					grid::ActiveVisualPalette().ink.taggedLight));
 			DrawTagged(inst.edit.highlight.type, inst.edit.highlight.num, thick);
 		}
 
@@ -435,7 +438,7 @@ void UI_Canvas::DrawEverything()
 //
 void UI_Canvas::DrawMap()
 {
-	RenderColor(FL_BLACK);
+	RenderColor(grid::ActiveVisualPalette().canvas);
 	RenderRect(xx, yy, w(), h());
 
 	if (inst.edit.sector_render_mode && ! inst.edit.error_mode)
@@ -463,9 +466,6 @@ void UI_Canvas::DrawMap()
 	if (inst.edit.mode != ObjType::things)
 		DrawThings();
 
-	if (inst.grid.snaps() && config::grid_snap_indicator)
-		DrawSnapPoint();
-
 	DrawLinedefs();
 
 	if (inst.edit.mode == ObjType::vertices)
@@ -484,6 +484,12 @@ void UI_Canvas::DrawMap()
 			DrawThings();
 		}
 	}
+
+	// The snap target is an interaction overlay, not map geometry.  Drawing it
+	// last prevents linedefs, vertices, sprites, and textured sectors from
+	// obscuring the exact point the next edit will use.
+	if (inst.grid.snaps() && config::grid_snap_indicator)
+		DrawSnapPoint();
 }
 
 
@@ -492,35 +498,24 @@ void UI_Canvas::DrawMap()
 //
 void UI_Canvas::DrawGrid_Normal()
 {
-	float pixels_1 = static_cast<float>(inst.grid.getStep() * inst.grid.getScale());
-
-	if (pixels_1 < 1.6)
-	{
-		RenderColor(DarkerColor(DarkerColor(config::normal_main_col)));
-		RenderRect(xx, yy, w(), h());
-
-		DrawAxes(config::normal_axis_col);
-		return;
-	}
-
-
+	const grid::VisualPalette palette =
+			grid::OpacityAdjustedPalette(grid::ActiveVisualPalette());
 	int flat_step = 64;
 
 	float pixels_2 = static_cast<float>(flat_step * inst.grid.getScale());
 
-	Fl_Color flat_col = (inst.grid.getStep() < 64) ? config::normal_main_col : config::normal_flat_col;
-
-	if (pixels_2 < 2.2)
-		flat_col = DarkerColor(flat_col);
+	Fl_Color flat_col = (inst.grid.getStep() < 64) ?
+			palette.normalMain : palette.normalFlat;
+	flat_col = grid::DensityFade(flat_col, palette.canvas, pixels_2);
 
 	RenderColor(flat_col);
 
-	if (pixels_2 < 1.6)
+	// Never turn a sub-pixel grid into a solid tint.  Dense grids now retain
+	// their useful 64-unit references and axes while omitting aliasing noise.
+	if (pixels_2 >= 2.5)
 	{
-		RenderRect(xx, yy, w(), h());
-	}
-	else
-	{
+		RenderThickness(
+				inst.grid.getStep() < 64 && pixels_2 >= 12.0 ? 2 : 1);
 		int gx = static_cast<int>(floor(map_lx / flat_step) * flat_step);
 
 		for (; gx <= map_hx; gx += flat_step)
@@ -530,38 +525,54 @@ void UI_Canvas::DrawGrid_Normal()
 
 		for (; gy <= map_hy; gy += flat_step)
 			DrawMapLine(map_lx, gy, map_hx, gy);
+		RenderThickness(1);
 	}
 
 
-	Fl_Color main_col = (inst.grid.getStep() < 64) ? config::normal_small_col : config::normal_main_col;
+	Fl_Color main_col = (inst.grid.getStep() < 64) ?
+			palette.normalSmall : palette.normalMain;
 
 	float pixels_3 = static_cast<float>(inst.grid.getStep() * inst.grid.getScale());
-
-	if (pixels_3 < 4.2)
-		main_col = DarkerColor(main_col);
+	int visible_step = inst.grid.getStep();
+	if (pixels_3 < 3.5 && pixels_2 < 2.5)
+	{
+		visible_step = VisibleGridStep(
+				inst.grid.getStep(), inst.grid.getScale(), 8.0);
+		pixels_3 = static_cast<float>(
+				visible_step * inst.grid.getScale());
+		main_col = palette.normalFlat;
+	}
+	main_col = grid::DensityFade(main_col, palette.canvas, pixels_3);
 
 	RenderColor(main_col);
 
+	if (pixels_3 >= 3.5)
 	{
-		int gx = static_cast<int>(floor(map_lx / inst.grid.getStep()) * inst.grid.getStep());
+		RenderThickness(
+				inst.grid.getStep() >= 64 && pixels_3 >= 12.0 ? 2 : 1);
+		int gx = static_cast<int>(
+				floor(map_lx / visible_step) * visible_step);
 
-		for (; gx <= map_hx; gx += inst.grid.getStep())
+		for (; gx <= map_hx; gx += visible_step)
 			if ((inst.grid.getStep() >= 64 || (gx & 63) != 0) && (gx != 0))
 				DrawMapLine(gx, map_ly, gx, map_hy);
 
-		int gy = static_cast<int>(floor(map_ly / inst.grid.getStep()) * inst.grid.getStep());
+		int gy = static_cast<int>(
+				floor(map_ly / visible_step) * visible_step);
 
-		for (; gy <= map_hy; gy += inst.grid.getStep())
+		for (; gy <= map_hy; gy += visible_step)
 			if ((inst.grid.getStep() >= 64 || (gy & 63) != 0) && (gy != 0))
 				DrawMapLine(map_lx, gy, map_hx, gy);
+		RenderThickness(1);
 	}
 
-
-	DrawAxes(config::normal_axis_col);
+	DrawAxes(palette.normalAxis);
 }
 
 void UI_Canvas::DrawGrid_Mathematical()
 {
+	const grid::VisualPalette palette =
+			grid::OpacityAdjustedPalette(grid::ActiveVisualPalette());
 	const grid::MathSettings &settings =
 			inst.grid.getMathSettings();
 	const v2double_t corners[] = {
@@ -589,7 +600,7 @@ void UI_Canvas::DrawGrid_Mathematical()
 		const long long lastVisibleRing = static_cast<long long>(
 				std::ceil(maximumRadius / inst.grid.getStep()));
 		long long radialStride = std::max(1LL,
-				static_cast<long long>(std::ceil(3.0 /
+				static_cast<long long>(std::ceil(5.0 /
 						std::max(0.01, inst.grid.getStep() *
 								inst.grid.getScale()))));
 		const long long radialSpan = std::max(
@@ -602,13 +613,19 @@ void UI_Canvas::DrawGrid_Mathematical()
 		const long long firstRing =
 				((firstVisibleRing + radialStride - 1) /
 						radialStride) * radialStride;
+		const double ringPixels = inst.grid.getStep() * radialStride *
+				inst.grid.getScale();
+		const rgb_color_t majorRingCol = grid::DensityFade(
+				palette.normalMain, palette.canvas, ringPixels);
+		const rgb_color_t minorRingCol = grid::DensityFade(
+				palette.normalSmall, palette.canvas, ringPixels);
 
 		for (long long ring = firstRing;
 				ring <= lastVisibleRing; ring += radialStride)
 		{
-			RenderColor(ring % majorEvery == 0 ?
-					config::normal_main_col :
-					config::normal_small_col);
+			const bool major = ring % majorEvery == 0;
+			RenderColor(major ? majorRingCol : minorRingCol);
+			RenderThickness(major ? 2 : 1);
 			const double radius = ring * inst.grid.getStep();
 			v2double_t previous{
 					settings.origin.x + radius, settings.origin.y};
@@ -622,6 +639,7 @@ void UI_Canvas::DrawGrid_Mathematical()
 				DrawMapLine(previous.x, previous.y, point.x, point.y);
 				previous = point;
 			}
+			RenderThickness(1);
 		}
 
 		const int rayStride = std::max(1,
@@ -630,14 +648,15 @@ void UI_Canvas::DrawGrid_Mathematical()
 		for (int ray = 0; ray < settings.angularDivisions;
 				ray += rayStride)
 		{
-			RenderColor(ray % majorEvery == 0 ?
-					config::normal_main_col :
-					config::normal_small_col);
+			const bool major = ray % majorEvery == 0;
+			RenderColor(major ? majorRingCol : minorRingCol);
+			RenderThickness(major ? 2 : 1);
 			const double radians = rotation +
 					2.0 * M_PI * ray / settings.angularDivisions;
 			DrawMapLine(settings.origin.x, settings.origin.y,
 					settings.origin.x + maximumRadius * std::cos(radians),
 					settings.origin.y + maximumRadius * std::sin(radians));
+			RenderThickness(1);
 		}
 	}
 	else
@@ -675,9 +694,9 @@ void UI_Canvas::DrawGrid_Mathematical()
 				basis.secondary.x, basis.secondary.y) *
 				inst.grid.getScale();
 		long long strideA = std::max(1LL, static_cast<long long>(
-				std::ceil(3.0 / std::max(0.01, primaryPixels))));
+				std::ceil(5.0 / std::max(0.01, primaryPixels))));
 		long long strideB = std::max(1LL, static_cast<long long>(
-				std::ceil(3.0 / std::max(0.01, secondaryPixels))));
+				std::ceil(5.0 / std::max(0.01, secondaryPixels))));
 		const long long countA = static_cast<long long>(
 				std::ceil(maximumA) - std::floor(minimumA) + 1);
 		const long long countB = static_cast<long long>(
@@ -697,29 +716,48 @@ void UI_Canvas::DrawGrid_Mathematical()
 				std::floor(minimumB)) - 1;
 		const long long lastB = static_cast<long long>(
 				std::ceil(maximumB)) + 1;
+		const rgb_color_t majorColA = grid::DensityFade(
+				palette.normalMain, palette.canvas,
+				primaryPixels * strideA);
+		const rgb_color_t minorColA = grid::DensityFade(
+				palette.normalSmall, palette.canvas,
+				primaryPixels * strideA);
+		const rgb_color_t majorColB = grid::DensityFade(
+				palette.normalMain, palette.canvas,
+				secondaryPixels * strideB);
+		const rgb_color_t minorColB = grid::DensityFade(
+				palette.normalSmall, palette.canvas,
+				secondaryPixels * strideB);
 		for (long long a = firstA; a <= lastA; a += strideA)
 		{
-			RenderColor(a == 0 ? config::normal_axis_col :
-					a % majorEvery == 0 ? config::normal_main_col :
-					config::normal_small_col);
+			const bool axis = a == 0;
+			const bool major = a % majorEvery == 0;
+			RenderColor(axis ? palette.normalAxis :
+					major ? majorColA : minorColA);
+			RenderThickness(axis || major ? 2 : 1);
 			const v2double_t start = settings.origin +
 					basis.primary * a + basis.secondary * (minimumB - 2);
 			const v2double_t end = settings.origin +
 					basis.primary * a + basis.secondary * (maximumB + 2);
 			DrawMapLine(start.x, start.y, end.x, end.y);
+			RenderThickness(1);
 		}
 		for (long long b = firstB; b <= lastB; b += strideB)
 		{
-			RenderColor(b == 0 ? config::normal_axis_col :
-					b % majorEvery == 0 ? config::normal_main_col :
-					config::normal_small_col);
+			const bool axis = b == 0;
+			const bool major = b % majorEvery == 0;
+			RenderColor(axis ? palette.normalAxis :
+					major ? majorColB : minorColB);
+			RenderThickness(axis || major ? 2 : 1);
 			const v2double_t start = settings.origin +
 					basis.secondary * b + basis.primary * (minimumA - 2);
 			const v2double_t end = settings.origin +
 					basis.secondary * b + basis.primary * (maximumA + 2);
 			DrawMapLine(start.x, start.y, end.x, end.y);
+			RenderThickness(1);
 		}
-		RenderColor(config::normal_axis_col);
+		RenderColor(palette.normalAxis);
+		RenderThickness(2);
 		if (minimumA <= 0.0 && maximumA >= 0.0)
 		{
 			const v2double_t start =
@@ -736,49 +774,70 @@ void UI_Canvas::DrawGrid_Mathematical()
 					settings.origin + basis.primary * (maximumA + 2);
 			DrawMapLine(start.x, start.y, end.x, end.y);
 		}
+		RenderThickness(1);
 	}
 
-	DrawAxes(config::normal_axis_col);
+	DrawAxes(palette.normalAxis);
+
+	// Mark a custom mathematical origin independently of the world axes.
+	if (Vis(settings.origin.x, settings.origin.y, 12))
+	{
+		const int sx = SCREENX(settings.origin.x);
+		const int sy = SCREENY(settings.origin.y);
+		RenderColor(palette.gridHalo);
+		RenderRect(sx - 7, sy - 7, 15, 3);
+		RenderRect(sx - 7, sy + 5, 15, 3);
+		RenderRect(sx - 7, sy - 7, 3, 15);
+		RenderRect(sx + 5, sy - 7, 3, 15);
+		RenderColor(palette.normalAxis);
+		RenderRect(sx - 5, sy - 5, 11, 1);
+		RenderRect(sx - 5, sy + 5, 11, 1);
+		RenderRect(sx - 5, sy - 5, 1, 11);
+		RenderRect(sx + 5, sy - 5, 1, 11);
+	}
 }
 
 
 void UI_Canvas::DrawGrid_Dotty()
 {
+	const grid::VisualPalette palette =
+			grid::OpacityAdjustedPalette(grid::ActiveVisualPalette());
 	int grid_step_1 = 1 * inst.grid.getStep();    // Map units between dots
 	int grid_step_2 = 8 * grid_step_1;  // Map units between dim lines
 	int grid_step_3 = 8 * grid_step_2;  // Map units between bright lines
+	int visible_major_step = VisibleGridStep(
+			grid_step_3, inst.grid.getScale(), 8.0);
 
 	float pixels_1 = static_cast<float>(inst.grid.getStep() * inst.grid.getScale());
 
-
-	if (pixels_1 < 1.6)
+	RenderColor(grid::DensityFade(palette.dottyMajor, palette.canvas,
+			visible_major_step * inst.grid.getScale()));
+	RenderThickness(2);
 	{
-		RenderColor(DarkerColor(DarkerColor(config::dotty_point_col)));
-		RenderRect(xx, yy, w(), h());
+		int gx = static_cast<int>(
+				floor(map_lx / visible_major_step) *
+				visible_major_step);
 
-		DrawAxes(config::dotty_axis_col);
-		return;
-	}
-
-
-	RenderColor(config::dotty_major_col);
-	{
-		int gx = static_cast<int>(floor(map_lx / grid_step_3) * grid_step_3);
-
-		for (; gx <= map_hx; gx += grid_step_3)
+		for (; gx <= map_hx; gx += visible_major_step)
 			DrawMapLine(gx, map_ly-2, gx, map_hy+2);
 
-		int gy = static_cast<int>(floor(map_ly / grid_step_3) * grid_step_3);
+		int gy = static_cast<int>(
+				floor(map_ly / visible_major_step) *
+				visible_major_step);
 
-		for (; gy <= map_hy; gy += grid_step_3)
+		for (; gy <= map_hy; gy += visible_major_step)
 			DrawMapLine(map_lx, gy, map_hx, gy);
 	}
+	RenderThickness(1);
+
+	DrawAxes(palette.dottyAxis);
 
 
-	DrawAxes(config::dotty_axis_col);
-
-
-	RenderColor(config::dotty_minor_col);
+	const float minorPixels =
+			static_cast<float>(grid_step_2 * inst.grid.getScale());
+	RenderColor(grid::DensityFade(
+			palette.dottyMinor, palette.canvas, minorPixels));
+	if (minorPixels >= 3.0)
 	{
 		int gx = static_cast<int>(floor(map_lx / grid_step_2) * grid_step_2);
 
@@ -794,11 +853,10 @@ void UI_Canvas::DrawGrid_Dotty()
 	}
 
 
-	if (pixels_1 < 4.02)
-		RenderColor(DarkerColor(config::dotty_point_col));
-	else
-		RenderColor(config::dotty_point_col);
+	if (pixels_1 < 3.5)
+		return;
 
+	const bool haloPoints = pixels_1 >= 8.0;
 	{
 		int gx = static_cast<int>(floor(map_lx / grid_step_1) * grid_step_1);
 		int gy = static_cast<int>(floor(map_ly / grid_step_1) * grid_step_1);
@@ -809,10 +867,16 @@ void UI_Canvas::DrawGrid_Dotty()
 			int sx = SCREENX(nx);
 			int sy = SCREENY(ny);
 
+			if (haloPoints)
+			{
+				RenderColor(palette.gridHalo);
+				RenderRect(sx - 1, sy - 1, 3, 3);
+			}
+			RenderColor(palette.dottyPoint);
 			if (pixels_1 < 24.1)
 				RenderRect(sx, sy, 1, 1);
 			else
-				RenderRect(sx, sy, 2, 2);
+				RenderRect(sx - 1, sy - 1, 3, 3);
 		}
 	}
 }
@@ -820,8 +884,14 @@ void UI_Canvas::DrawGrid_Dotty()
 
 void UI_Canvas::DrawAxes(Fl_Color col)
 {
-	RenderColor(col);
+	const grid::VisualPalette palette = grid::ActiveVisualPalette();
+	RenderColor(palette.gridHalo);
+	RenderThickness(2);
+	DrawMapLine(0, map_ly, 0, map_hy);
+	DrawMapLine(map_lx, 0, map_hx, 0);
 
+	RenderColor(col);
+	RenderThickness(1);
 	DrawMapLine(0, map_ly, 0, map_hy);
 	DrawMapLine(map_lx, 0, map_hx, 0);
 }
@@ -829,7 +899,7 @@ void UI_Canvas::DrawAxes(Fl_Color col)
 
 void UI_Canvas::DrawMapBounds()
 {
-	RenderColor(FL_RED);
+	RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.error));
 
 	DrawMapLine(inst.level.Map_bound1.x, inst.level.Map_bound1.y, inst.level.Map_bound2.x, inst.level.Map_bound1.y);
 	DrawMapLine(inst.level.Map_bound1.x, inst.level.Map_bound2.y, inst.level.Map_bound2.x, inst.level.Map_bound2.y);
@@ -882,7 +952,7 @@ void UI_Canvas::DrawVertices()
 {
 	const int r = vertex_radius(inst.grid.getScale());
 
-	RenderColor(FL_GREEN);
+	RenderColor(grid::ActiveVisualPalette().ink.vertex);
 
 	for (const auto &vertex : inst.level.vertices)
 	{
@@ -919,6 +989,8 @@ void UI_Canvas::DrawVertices()
 //
 void UI_Canvas::DrawLinedefs()
 {
+	const grid::MapInk ink = grid::ActiveVisualPalette().ink;
+
 	for (int n = 0 ; n < inst.level.numLinedefs(); n++)
 	{
 		const auto L = inst.level.linedefs[n];
@@ -933,7 +1005,7 @@ void UI_Canvas::DrawLinedefs()
 
 		bool one_sided = (! inst.level.getLeft(*L));
 
-		Fl_Color col = LIGHTGREY;
+		Fl_Color col = ink.linedef;
 
 		// 'p' for plain, 'k' for knobbly, 's' for split
 		char line_kind = 'p';
@@ -943,13 +1015,13 @@ void UI_Canvas::DrawLinedefs()
 			case ObjType::vertices:
 			{
 				if (n == inst.edit.split_line.num)
-					col = HI_AND_SEL_COL;
+					col = ink.highlightSel;
 				else if (inst.edit.error_mode)
-					col = LIGHTGREY;
+					col = ink.linedef;
 				else if (L->right < 0)
-					col = RED;
+					col = static_cast<Fl_Color>(ink.error);
 				else if (one_sided)
-					col = WHITE;
+					col = ink.wall;
 
 				if (n == inst.edit.split_line.num)
 					line_kind = 's';
@@ -968,24 +1040,24 @@ void UI_Canvas::DrawLinedefs()
 			case ObjType::linedefs:
 			{
 				if (inst.edit.error_mode)
-					col = LIGHTGREY;
+					col = ink.linedef;
 				else if (! inst.level.getRight(*L)) // no first sidedef?
-					col = RED;
+					col = static_cast<Fl_Color>(ink.error);
 				else if (L->type != 0)
 				{
 					SpecialTagInfo tagInfo{};
 					if(getSpecialTagInfo(ObjType::linedefs, n, L->type, L.get(), inst.conf,
 										 tagInfo) && tagInfo.hasNonZeroTargets())
 					{
-						col = LIGHTMAGENTA;
+						col = ink.tagged;
 					}
 					else
-						col = LIGHTGREEN;
+						col = ink.special;
 				}
 				else if (one_sided)
-					col = WHITE;
+					col = ink.wall;
 				else if (L->flags & MLF_Blocking)
-					col = FL_CYAN;
+					col = ink.blocking;
 
 				line_kind = 'k';
 			}
@@ -1000,15 +1072,15 @@ void UI_Canvas::DrawLinedefs()
 				int s2  = (sd2 < 0) ? NIL_OBJ : inst.level.sidedefs[sd2]->sector;
 
 				if (inst.edit.error_mode)
-					col = LIGHTGREY;
+					col = ink.linedef;
 				else if (sd1 < 0)
-					col = RED;
+					col = static_cast<Fl_Color>(ink.error);
 				else if (inst.edit.sector_render_mode == SREND_SoundProp)
 				{
 					if (L->flags & MLF_SoundBlock)
-						col = FL_MAGENTA;
+						col = static_cast<Fl_Color>(ink.soundBlock);
 					else if (one_sided)
-						col = WHITE;
+						col = ink.wall;
 				}
 				else
 				{
@@ -1030,13 +1102,13 @@ void UI_Canvas::DrawLinedefs()
 					}
 
 					if (have_tag && have_type)
-						col = SECTOR_TAGTYPE;
+						col = ink.sectorTagType;
 					else if (have_tag)
-						col = SECTOR_TAG;
+						col = ink.sectorTag;
 					else if (have_type)
-						col = SECTOR_TYPE;
+						col = ink.sectorType;
 					else if (one_sided)
-						col = WHITE;
+						col = ink.wall;
 				}
 
 				if (inst.edit.show_object_numbers)
@@ -1128,9 +1200,9 @@ void UI_Canvas::DrawThing(double x, double y, int r, int angle, bool big_arrow)
 void UI_Canvas::DrawThings()
 {
 	if (inst.edit.mode != ObjType::things)
-		RenderColor(DARKGREY);
+		RenderColor(grid::ActiveVisualPalette().ink.thing);
 	else if (inst.edit.error_mode)
-		RenderColor(LIGHTGREY);
+		RenderColor(grid::ActiveVisualPalette().ink.linedef);
 
 	for (const auto &thing : inst.level.things)
 	{
@@ -1462,8 +1534,33 @@ void UI_Canvas::DrawLineInfo(double map_x1, double map_y1, double map_x2, double
 	// back of line is best place, no knob getting in the way
 	int want_len = static_cast<int>(-16 * clamp(0.25, inst.grid.getScale(), 1.0));
 
-	sx += NORMALX(want_len*2, x2 - x1, y2 - y1);
-	sy += NORMALY(want_len,   x2 - x1, y2 - y1);
+	int off_x = NORMALX(want_len*2, x2 - x1, y2 - y1);
+	int off_y = NORMALY(want_len,   x2 - x1, y2 - y1);
+
+	// keep the label on the opposite side of the line from the mouse
+	// cursor so it never overlaps the pointer or the grid-snap reticle
+	{
+		int mouse_sx = SCREENX(inst.edit.map.xy.x);
+		int mouse_sy = SCREENY(inst.edit.map.xy.y);
+
+		long da = (sx + off_x - mouse_sx) * (long)(sx + off_x - mouse_sx) +
+				  (sy + off_y - mouse_sy) * (long)(sy + off_y - mouse_sy);
+		long db = (sx - off_x - mouse_sx) * (long)(sx - off_x - mouse_sx) +
+				  (sy - off_y - mouse_sy) * (long)(sy - off_y - mouse_sy);
+
+		if (db > da)
+		{
+			off_x = -off_x;
+			off_y = -off_y;
+		}
+	}
+
+	sx += off_x;
+	sy += off_y;
+
+	// never let the label leave the canvas
+	sx = clamp(8, sx, w() - 8);
+	sy = clamp(8, sy, h() - 8);
 
 	/* length */
 
@@ -1931,9 +2028,10 @@ void UI_Canvas::DrawTagged(ObjType objtype, int objnum, bool thickLines)
                 {
                     DrawHighlight(ObjType::linedefs, m);
 					RenderThickness(1);
-					RenderColor(LIGHTMAGENTA);
+					RenderColor(grid::ActiveVisualPalette().ink.tagged);
 					DrawConnection(objtypeCause, objnumCause, ObjType::linedefs, m);
-					RenderColor(LIGHTRED);
+					RenderColor(static_cast<Fl_Color>(
+							grid::ActiveVisualPalette().ink.taggedLight));
 					if(thickLines)
 						RenderThickness(2);
 
@@ -1957,9 +2055,10 @@ void UI_Canvas::DrawTagged(ObjType objtype, int objnum, bool thickLines)
                 {
                     DrawHighlight(ObjType::things, m);
 					RenderThickness(1);
-					RenderColor(LIGHTMAGENTA);
+					RenderColor(grid::ActiveVisualPalette().ink.tagged);
 					DrawConnection(objtypeCause, objnumCause, ObjType::things, m);
-					RenderColor(LIGHTRED);
+					RenderColor(static_cast<Fl_Color>(
+							grid::ActiveVisualPalette().ink.taggedLight));
 					if(thickLines)
 						RenderThickness(2);
 
@@ -2063,8 +2162,18 @@ void UI_Canvas::DrawDesignAssistPreview()
 
 	DesignAssistPreview &preview = *inst.edit.designAssistPreview;
 
-	const Fl_Color sectorColor = preview.emphasizeSectors ?
-			fl_rgb_color(255, 136, 32) : fl_rgb_color(64, 176, 255);
+	//  The preview hues encode identity (one hue per role/path), so they
+	//  cannot come from the theme palette; instead adapt them to the
+	//  active canvas so the set stays readable on light AND dark themes.
+	const rgb_color_t canvas = grid::ActiveVisualPalette().canvas;
+	auto adapt = [canvas](Fl_Color color) -> Fl_Color
+	{
+		return static_cast<Fl_Color>(grid::EnsureContrast(
+				static_cast<rgb_color_t>(color), canvas, 3.0));
+	};
+
+	const Fl_Color sectorColor = adapt(preview.emphasizeSectors ?
+			fl_rgb_color(255, 136, 32) : fl_rgb_color(64, 176, 255));
 	if (preview.emphasizeSectors)
 	{
 		RenderColor(DarkerColor(sectorColor));
@@ -2108,8 +2217,8 @@ void UI_Canvas::DrawDesignAssistPreview()
 		}
 	};
 
-	drawLines(preview.activatingLines, fl_rgb_color(255, 144, 48), 5);
-	drawLines(preview.trackLines, fl_rgb_color(80, 224, 128), 4);
+	drawLines(preview.activatingLines, adapt(fl_rgb_color(255, 144, 48)), 5);
+	drawLines(preview.trackLines, adapt(fl_rgb_color(80, 224, 128)), 4);
 
 	auto roleColor = [](DesignPreviewRole role)
 	{
@@ -2159,11 +2268,11 @@ void UI_Canvas::DrawDesignAssistPreview()
 			continue;
 		if (path.filled && path.closed && path.points.size() >= 3)
 		{
-			RenderColor(DarkerColor(roleColor(path.role)));
+			RenderColor(DarkerColor(adapt(roleColor(path.role))));
 			RenderThickness(1);
 			DrawFilledPreviewPath(path);
 		}
-		RenderColor(roleColor(path.role));
+		RenderColor(adapt(roleColor(path.role)));
 		RenderThickness(path.role == DesignPreviewRole::conflict ? 5 :
 						path.role == DesignPreviewRole::warning ? 4 : 3);
 		for (size_t index = 1; index < path.points.size(); index++)
@@ -2176,7 +2285,7 @@ void UI_Canvas::DrawDesignAssistPreview()
 	}
 	for (const DesignPreviewPoint &point : preview.points)
 	{
-		RenderColor(roleColor(point.role));
+		RenderColor(adapt(roleColor(point.role)));
 		RenderThickness(point.role == DesignPreviewRole::conflict ? 4 : 2);
 		DrawVertex(point.position.x, point.position.y, 5);
 	}
@@ -2194,7 +2303,7 @@ void UI_Canvas::DrawDesignAssistPreview()
 				});
 		if (!supported)
 			continue;
-		RenderColor(roleColor(label.role));
+		RenderColor(adapt(roleColor(label.role)));
 		RenderNumString(SCREENX(label.position.x),
 						SCREENY(label.position.y), label.text.c_str());
 	}
@@ -2247,7 +2356,7 @@ void UI_Canvas::DrawSelection(selection_c * list)
 
 	if (inst.edit.action == EditorAction::transform)
 	{
-		RenderColor(SEL_COL);
+		RenderColor(grid::ActiveVisualPalette().ink.select);
 
 		if (list->what_type() == ObjType::linedefs || list->what_type() == ObjType::sectors)
 			RenderThickness(2);
@@ -2268,7 +2377,9 @@ void UI_Canvas::DrawSelection(selection_c * list)
 		delta = DragDelta();
 	}
 
-	RenderColor(inst.edit.error_mode ? FL_RED : SEL_COL);
+	RenderColor(inst.edit.error_mode ?
+			static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.error) :
+			static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.select));
 
 	bool thick;
 	if (list->what_type() == ObjType::linedefs || list->what_type() == ObjType::sectors)
@@ -2294,7 +2405,8 @@ void UI_Canvas::DrawSelection(selection_c * list)
 
 	if (! inst.edit.error_mode && delta.x == 0 && delta.y == 0)
 	{
-		RenderColor(LIGHTRED);
+		RenderColor(static_cast<Fl_Color>(
+				grid::ActiveVisualPalette().ink.taggedLight));
 
 		for (sel_iter_c it(list) ; !it.done() ; it.next())
 		{
@@ -2444,7 +2556,7 @@ void UI_Canvas::DrawSplitLine(double map_x1, double map_y1, double map_x2, doubl
 		DrawLineNumber(static_cast<int>(map_x2), static_cast<int>(map_y2), static_cast<int>(inst.edit.split.x), static_cast<int>(inst.edit.split.y), Side::neither, iround(len2));
 	}
 
-	RenderColor(HI_AND_SEL_COL);
+	RenderColor(grid::ActiveVisualPalette().ink.highlightSel);
 
 	DrawSplitPoint(inst.edit.split);
 }
@@ -2542,7 +2654,7 @@ void UI_Canvas::DrawCamera()
 	float x2 = mx + dx;
 	float y2 = my + dy;
 
-	RenderColor(CAMERA_COLOR);
+	RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.camera));
 	RenderThickness(1);
 
 	DrawMapLine(x1, y1, x2, y2);
@@ -2581,16 +2693,54 @@ void UI_Canvas::DrawSnapPoint()
 	if (inst.edit.split_line.valid())
 		return;
 
-	if (! Vis(snap_x, snap_y, 10))
+	if (! Vis(snap_x, snap_y, 14))
 		return;
 
-	RenderColor(FL_CYAN);
+	const grid::VisualPalette palette = grid::ActiveVisualPalette();
+	const v2double_t target{snap_x, snap_y};
+	const v2double_t pointer = inst.edit.map.xy;
+	const double pixelDistance =
+			std::hypot(pointer.x - target.x, pointer.y - target.y) *
+			inst.grid.getScale();
 
 	int sx = SCREENX(snap_x);
 	int sy = SCREENY(snap_y);
 
-	RenderRect(sx,   sy-2, 2, 6);
-	RenderRect(sx-2, sy,   6, 2);
+	// A short guide makes the quantization direction obvious without turning
+	// the target into a permanent crosshair across the canvas.
+	if (pixelDistance >= 4.0 && pixelDistance <= 160.0)
+	{
+		RenderColor(palette.snapHalo);
+		RenderThickness(2);
+		DrawMapLine(pointer.x, pointer.y, target.x, target.y);
+		RenderColor(palette.snapGuide);
+		RenderThickness(1);
+		DrawMapLine(pointer.x, pointer.y, target.x, target.y);
+	}
+
+	const double outer = 8.0 / std::max(0.01, inst.grid.getScale());
+	const double inner = 6.0 / std::max(0.01, inst.grid.getScale());
+	auto diamond = [this](const v2double_t &center, double radius)
+	{
+		DrawMapLine(center.x, center.y + radius,
+				center.x + radius, center.y);
+		DrawMapLine(center.x + radius, center.y,
+				center.x, center.y - radius);
+		DrawMapLine(center.x, center.y - radius,
+				center.x - radius, center.y);
+		DrawMapLine(center.x - radius, center.y,
+				center.x, center.y + radius);
+	};
+
+	RenderColor(palette.snapHalo);
+	RenderThickness(2);
+	diamond(target, outer);
+	RenderRect(sx - 3, sy - 3, 7, 7);
+
+	RenderColor(palette.snapTarget);
+	RenderThickness(1);
+	diamond(target, inner);
+	RenderRect(sx - 1, sy - 1, 3, 3);
 }
 
 
@@ -2606,11 +2756,11 @@ void UI_Canvas::DrawCurrentLine()
 	// should draw a vertex?
 	if (! (inst.edit.highlight.valid() || inst.edit.split_line.valid()))
 	{
-		RenderColor(FL_GREEN);
+		RenderColor(grid::ActiveVisualPalette().ink.vertex);
 		DrawVertex(newpos.x, newpos.y, vertex_radius(inst.grid.getScale()));
 	}
 
-	RenderColor(RED);
+	RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.error));
 	DrawKnobbyLine(V->x(), V->y(), newpos.x, newpos.y);
 
 	DrawLineInfo(V->x(), V->y(), newpos.x, newpos.y, inst.grid.getRatio() > 0);
@@ -2631,9 +2781,9 @@ void UI_Canvas::DrawCurrentLine()
 			continue;
 
 		if (point.vert >= 0)
-			RenderColor(FL_GREEN);
+			RenderColor(grid::ActiveVisualPalette().ink.vertex);
 		else
-			RenderColor(HI_AND_SEL_COL);
+			RenderColor(grid::ActiveVisualPalette().ink.highlightSel);
 
 		DrawSplitPoint(point.pos);
 	}
@@ -2665,7 +2815,7 @@ void UI_Canvas::SelboxDraw()
 	double y1 = std::min(inst.edit.selbox1.y, inst.edit.selbox2.y);
 	double y2 = std::max(inst.edit.selbox1.y, inst.edit.selbox2.y);
 
-	RenderColor(FL_CYAN);
+	RenderColor(grid::ActiveVisualPalette().ink.select);
 
 	DrawMapLine(x1, y1, x2, y1);
 	DrawMapLine(x2, y1, x2, y2);
@@ -2756,9 +2906,9 @@ void UI_Canvas::RenderSector(int num)
 		switch ((propagate_level_e) prop[num])
 		{
 			case PGL_Never:   return;
-			case PGL_Maybe:   RenderColor(fl_rgb_color(64,64,192)); break;
-			case PGL_Level_1: RenderColor(fl_rgb_color(192,32,32)); break;
-			case PGL_Level_2: RenderColor(fl_rgb_color(192,96,32)); break;
+			case PGL_Maybe:   RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.propMaybe)); break;
+			case PGL_Level_1: RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.propLevel1)); break;
+			case PGL_Level_2: RenderColor(static_cast<Fl_Color>(grid::ActiveVisualPalette().ink.propLevel2)); break;
 		}
 	}
 	else

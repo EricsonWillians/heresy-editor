@@ -54,20 +54,19 @@ FEATURES
 -  Temporary all-linedef 3D inspection with exact selection restoration
 
 
-RELEASE 2.4.0
+RELEASE 2.5.0
 
-Heresy Editor 2.4.0 adds professional surface-resource authoring and
-large-map construction.  Import one or many wall, floor/ceiling, or dual-use
-textures into WAD/PK3 projects with decoded review, explicit conflict policy,
-backed-up atomic writes, and immediate availability throughout the editor.
-Then pan, fit, scale, mirror, rotate, and align selected surfaces through an
-always-live transform review shared by OpenGL and software rendering.
+Heresy Editor 2.5.0 makes the construction grid legible at a glance:  semantic
+High-Contrast Dark, Vintage Phosphor, Blueprint Light, and Custom visibility
+themes give every grid role a distinct weight while the map ink always stays
+dominant, dense grids dissolve instead of veiling the map, and the snap
+reticle renders above geometry with a pointer guide.
 
-The release also provides 30 mathematical construction grids, 75 grouped
-spacings, custom pivots and directional rounding, fast whole-linedef 3D
-inspection, large-coordinate UDMF safety, and an expanded catalog of 58 Smart
-Sector architectural structures.  Complete release notes are in
-changelogs/2.4.0.md.
+The release also adds optional metric and imperial measurement readouts on
+the canvas, linedef overlay, and status bar, and removes the 16-bit ceiling
+on sector heights for UDMF maps, with an explicit warning when a
+binary-format save would truncate out-of-range heights.  Complete release
+notes are in changelogs/2.5.0.md.
 
 
 MATHEMATICAL GRID AND FAST 3D INSPECTION
@@ -85,6 +84,26 @@ center, or the 3D camera.  The information-bar Grid menu has 75 grouped size
 presets covering ordinary detail, Doom architecture, 2048-65536-unit large-map
 planning, decimal engineering, Fibonacci, and powers of three.  A custom
 whole-number primary spacing from 1 through 65536 is also valid.
+
+The Visibility selector previews High-Contrast Dark, Vintage Phosphor,
+and Blueprint Light palettes.  Each gives fine intersections, reference
+lines, major lines, axes, custom origins, snap targets, halos, and
+pointer guides a clear semantic hierarchy in square, Dotty, and
+mathematical grids.  Every theme also coordinates the map ink: the grid
+stays far weaker than geometry - dim on the dark canvases, pale on the
+light one - while walls, linedefs, things, vertices, selection, and
+snapping each own a separate high-contrast hue band.  Grid lines fade
+toward the canvas as they pack together, so a dense grid dissolves
+instead of veiling the map; sub-pixel grids are simplified instead of
+becoming a solid tint.  The snap reticle is drawn above map geometry,
+with a contrasting halo and a short guide from the raw pointer to the
+exact target.  A grid opacity slider (20-100%) fades grid lines toward the
+canvas on any theme.  Preferences / Grid offers the same presets and
+complete Custom swatches, which keep the classic map object colors.
+Camera, error, tagged-feedback, sound-blocking, and sound-propagation
+colors follow the active theme, design-assist preview hues adapt to the
+canvas, and the Preferences guidance box reports the measured worst-case
+grid and ink contrast for the selected theme.
 
 The same mathematical intersections drive ordinary drawing, insert, move,
 paste, Quantize, and Smart Sector gestures.  Doom and Hexen candidates are

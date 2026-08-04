@@ -38,6 +38,70 @@ temporarily disables the main editor while open, avoiding attached-dialog
 window resizing while keeping the construction preview live.
 
 
+Visibility themes and snap feedback
+-----------------------------------
+
+The Visibility selector previews three built-in palettes immediately.
+Every built-in theme coordinates the whole 2D view, not just the grid:
+the grid always stays far weaker than the map - dim on a dark canvas,
+pale on a light one - while walls and linedefs sit at maximum contrast,
+and snapping, selection, vertices, and hover feedback each own a
+distinct high-contrast hue band that cannot be mistaken for the grid.
+
+* High-Contrast Dark pairs a pitch-black canvas with a faint muted grey
+  grid, stark white walls, and neon cyan, magenta, amber, and lime
+  indicators;
+* Vintage Phosphor evokes a retro CRT: a subtle dark green scanline
+  grid, glowing phosphor-green walls, amber linedefs, white-hot
+  selection, and a highly saturated coral snap target; and
+* Blueprint Light uses a pale drafting-paper canvas with a soft
+  blueprint-blue grid, stark black walls, dark grey linedefs, and dark
+  saturated indicators that stay readable on the light background.
+
+A Grid opacity slider (20-100%, default 75%) sits beside the Visibility
+selector and in Preferences -> Grid. It fades every grid line color toward
+the canvas on any theme, including Custom, without touching the snap
+reticle or map colors, and composes with the density fade above.
+
+Preferences -> Grid exposes the same presets plus Custom. Editing any square,
+dot, target, halo, or guide swatch automatically selects Custom, which keeps
+the classic map object colors so only the grid and snap feedback change.
+Built-in themes are versioned presets, so contrast improvements apply to
+existing installations without destroying saved custom colors. On first
+upgrade, unchanged legacy colors migrate to High-Contrast Dark, while any
+genuinely edited legacy palette is recognized as Custom automatically.
+
+The theme also covers every remaining piece of 2D feedback: the 3D camera
+marker, error geometry, tagged-object feedback, sound-blocking linedefs,
+and the sound-propagation sector levels all come from the active palette,
+and the design-assist preview hues are adapted to the canvas so they stay
+readable on light and dark themes alike. The guidance box under the theme
+selector reports the measured worst-case contrast of the grid and of every
+map ink color against the canvas (naming the weakest element), and warns
+whenever any color drops below 3:1, or the snap target/halo pair below
+4.5:1.
+
+Square, Dotty, and mathematical grids all use a clear visual hierarchy:
+fine intersections, reference lines, major lines, and axes receive
+progressively stronger color or weight. The grid is deliberately far
+dimmer than map geometry, because a full-screen line pattern aggregates
+into a veil: major lines stay near 4.5:1 contrast while plain linedefs
+sit above 12:1, so walls, specials, and things always read first. As
+on-screen line spacing shrinks below 40 pixels, lines additionally fade
+toward the canvas, keeping the perceived ink per area constant; packed
+lines dissolve to a faint texture instead of drowning the map. When grid
+cells become sub-pixel, Heresy Editor suppresses aliasing noise instead
+of tinting the whole canvas. World axes retain a dark outline over
+textured sectors, and a custom mathematical origin receives its own
+outlined marker.
+
+With snapping enabled, a hollow target reticle is drawn after all map
+geometry so linedefs and vertices cannot cover it. A dark halo keeps it
+visible on bright flats, while a short colored guide shows how the raw pointer
+will move to the chosen intersection. The bottom-bar state reads SNAP ON or
+FREE and uses the active target color.
+
+
 Geometry models
 ---------------
 

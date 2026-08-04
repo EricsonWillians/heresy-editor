@@ -178,6 +178,10 @@ const std::vector<grid::StepPreset> &grid::StepPresets()
 		{"Essential", "64 units", 64}, {"Essential", "128 units", 128},
 		{"Essential", "256 units", 256}, {"Essential", "512 units", 512},
 		{"Essential", "1024 units", 1024},
+		{"Essential", "2048 units", 2048},
+		{"Essential", "4096 units", 4096},
+		{"Essential", "8192 units", 8192},
+		{"Essential", "16384 units", 16384},
 
 		{"Doom architecture", "3 units", 3},
 		{"Doom architecture", "6 units", 6},
@@ -911,11 +915,11 @@ const double grid::State::scale_values[] =
 
 	1.0 / 1.5, 1.0 / 2.0, 1.0 / 3.0,  1.0 / 4.0,
 	1.0 / 6.0, 1.0 / 8.0, 1.0 / 16.0, 1.0 / 32.0,
-	1.0 / 64.0
+	1.0 / 64.0, 1.0 / 128.0, 1.0 / 256.0, 1.0 / 512.0
 };
 
 
-#define NUM_SCALE_VALUES 18
+#define NUM_SCALE_VALUES 21
 constexpr int NUM_GRID_VALUES =
 		static_cast<int>(lengthof(grid::values));
 

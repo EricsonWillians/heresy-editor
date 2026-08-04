@@ -107,8 +107,16 @@ extern bool grid_default_snap;
 extern int  grid_default_size;
 extern bool grid_hide_in_free_mode;
 extern bool grid_snap_indicator;
+extern int grid_visual_theme;
+extern int grid_opacity;  // percent (20-100), fades grid toward the canvas
+extern rgb_color_t grid_snap_target_col;
+extern rgb_color_t grid_snap_halo_col;
+extern rgb_color_t grid_snap_guide_col;
 extern int  grid_ratio_high;
 extern int  grid_ratio_low;
+
+extern int  measure_system;  // 0 = off, 1 = metric, 2 = imperial
+extern int  measure_units_per_meter;  // map units per meter (32 = classic Doom)
 
 extern rgb_color_t dotty_axis_col;
 extern rgb_color_t dotty_major_col;

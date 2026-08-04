@@ -18,11 +18,378 @@
 
 #include "r_grid.h"
 #include "m_config.h"
+#include "m_grid_theme.h"
 #include "gtest/gtest.h"
 
 #include <cmath>
 #include <set>
 #include <sstream>
+
+TEST(GridVisualThemes, CatalogIsOrderedStableAndUnique)
+{
+	const auto &themes = grid::VisualThemes();
+	ASSERT_EQ(themes.size(), 4u);
+
+	const char *expectedIds[] = {
+		"high-contrast-dark", "vintage-phosphor",
+		"blueprint-light", "custom"};
+	std::set<std::string> ids;
+	for (size_t index = 0; index < themes.size(); ++index)
+	{
+		EXPECT_STREQ(themes[index].id, expectedIds[index]);
+		EXPECT_TRUE(themes[index].label && themes[index].label[0]);
+		EXPECT_TRUE(themes[index].description &&
+				themes[index].description[0]);
+		EXPECT_TRUE(ids.insert(themes[index].id).second);
+		EXPECT_EQ(themes[index].builtIn,
+				index < static_cast<size_t>(grid::kCustomVisualTheme));
+	}
+}
+
+//  Contrast requirements are polarity-aware: on a dark canvas the grid
+//  recedes by being DIM, on a light canvas by being PALE.  Either way,
+//  the hierarchy axis > major > minor holds in canvas-contrast terms.
+TEST(GridVisualThemes, BuiltInPalettesMaintainStrongSemanticContrast)
+{
+	for (int theme = grid::kFirstVisualTheme;
+			theme < grid::kCustomVisualTheme; ++theme)
+	{
+		const grid::VisualPalette palette =
+				grid::VisualPaletteFor(theme);
+		SCOPED_TRACE(grid::VisualThemeInfo(theme).id);
+		const bool darkCanvas =
+				grid::RelativeLuminance(palette.canvas) < 0.5;
+
+		// minimum canvas contrast per role, {dark canvas, light canvas}
+		const double axisFloor = darkCanvas ? 7.0 : 3.5;
+		const double mainFloor = darkCanvas ? 2.8 : 1.6;
+		const double flatFloor = darkCanvas ? 2.0 : 1.4;
+		const double smallFloor = darkCanvas ? 1.7 : 1.25;
+		const double pointFloor = darkCanvas ? 5.0 : 2.5;
+		const double targetFloor = darkCanvas ? 6.0 : 3.8;
+		const double guideFloor = darkCanvas ? 7.0 : 4.2;
+
+		EXPECT_GE(grid::ContrastRatio(
+				palette.normalAxis, palette.canvas), axisFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.normalMain, palette.canvas), mainFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.normalFlat, palette.canvas), flatFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.normalSmall, palette.canvas), smallFloor);
+
+		EXPECT_GE(grid::ContrastRatio(
+				palette.dottyAxis, palette.canvas), axisFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.dottyMajor, palette.canvas), mainFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.dottyMinor, palette.canvas),
+				darkCanvas ? 1.8 : 1.3);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.dottyPoint, palette.canvas), pointFloor);
+
+		EXPECT_GE(grid::ContrastRatio(
+				palette.snapTarget, palette.canvas), targetFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.snapGuide, palette.canvas), guideFloor);
+		EXPECT_GE(grid::ContrastRatio(
+				palette.snapTarget, palette.snapHalo), 6.0);
+
+		// hierarchy holds in canvas-contrast terms on both polarities
+		EXPECT_GT(grid::ContrastRatio(palette.normalAxis, palette.canvas),
+				grid::ContrastRatio(palette.normalMain, palette.canvas));
+		EXPECT_GT(grid::ContrastRatio(palette.normalMain, palette.canvas),
+				grid::ContrastRatio(palette.normalFlat, palette.canvas));
+		EXPECT_GT(grid::ContrastRatio(palette.normalFlat, palette.canvas),
+				grid::ContrastRatio(palette.normalSmall, palette.canvas));
+		EXPECT_GT(grid::ContrastRatio(palette.dottyMajor, palette.canvas),
+				grid::ContrastRatio(palette.dottyMinor, palette.canvas));
+		EXPECT_GT(grid::ContrastRatio(palette.dottyPoint, palette.canvas),
+				grid::ContrastRatio(palette.dottyMinor, palette.canvas));
+	}
+}
+
+TEST(GridVisualThemes, BuiltInInkSeparatesGeometryFromGridAndSnap)
+{
+	for (int theme = grid::kFirstVisualTheme;
+			theme < grid::kCustomVisualTheme; ++theme)
+	{
+		const grid::VisualPalette palette =
+				grid::VisualPaletteFor(theme);
+		SCOPED_TRACE(grid::VisualThemeInfo(theme).id);
+		const grid::MapInk &ink = palette.ink;
+		const bool darkCanvas =
+				grid::RelativeLuminance(palette.canvas) < 0.5;
+
+		// map geometry must stand clearly against the canvas...
+		EXPECT_GE(grid::ContrastRatio(ink.linedef, palette.canvas),
+				darkCanvas ? 11.0 : 9.0);
+		EXPECT_GE(grid::ContrastRatio(ink.wall, palette.canvas),
+				darkCanvas ? 15.0 : 14.0);
+		EXPECT_GE(grid::ContrastRatio(ink.special, palette.canvas),
+				darkCanvas ? 7.0 : 4.5);
+		EXPECT_GE(grid::ContrastRatio(ink.tagged, palette.canvas),
+				darkCanvas ? 7.0 : 4.5);
+		EXPECT_GE(grid::ContrastRatio(ink.vertex, palette.canvas),
+				darkCanvas ? 9.0 : 6.5);
+		EXPECT_GE(grid::ContrastRatio(ink.select, palette.canvas),
+				darkCanvas ? 9.0 : 6.5);
+		EXPECT_GE(grid::ContrastRatio(ink.thing, palette.canvas), 6.5);
+
+		// ...and far above the grid, which always stays the weakest
+		// layer.  A full-screen grid pattern aggregates visually, so
+		// geometry must outshine it by a wide margin in canvas-contrast
+		// terms, on either polarity.
+		EXPECT_GE(grid::ContrastRatio(ink.linedef, palette.canvas),
+				2.5 * grid::ContrastRatio(
+						palette.normalMain, palette.canvas));
+		EXPECT_GT(grid::ContrastRatio(ink.thing, palette.canvas),
+				grid::ContrastRatio(palette.normalSmall, palette.canvas));
+		EXPECT_LT(grid::ContrastRatio(ink.thing, palette.canvas),
+				grid::ContrastRatio(ink.linedef, palette.canvas));
+
+		// selection and snapping must not blend into grid or each other
+		EXPECT_GE(grid::ContrastRatio(ink.select, palette.normalMain),
+				1.5);
+		EXPECT_GE(grid::ContrastRatio(palette.snapTarget, ink.highlight),
+				1.2);
+		EXPECT_GE(grid::ContrastRatio(palette.snapTarget, ink.select),
+				1.3);
+	}
+}
+
+//  Every color drawn over the canvas - including the editing-feedback
+//  colors that were hardcoded before (camera, error, tagged feedback,
+//  sound propagation) - must stay readable on every built-in theme.
+TEST(GridVisualThemes, BuiltInFeedbackColorsPassCanvasContrast)
+{
+	for (int theme = grid::kFirstVisualTheme;
+			theme < grid::kCustomVisualTheme; ++theme)
+	{
+		const grid::VisualPalette palette =
+				grid::VisualPaletteFor(theme);
+		SCOPED_TRACE(grid::VisualThemeInfo(theme).id);
+		const grid::MapInk &ink = palette.ink;
+
+		const rgb_color_t feedback[] = {
+				ink.blocking, ink.sectorTag, ink.sectorTagType,
+				ink.sectorType, ink.highlight, ink.highlightSel,
+				ink.camera, ink.error, ink.taggedLight, ink.soundBlock,
+				ink.propMaybe, ink.propLevel1, ink.propLevel2};
+		for (const rgb_color_t color : feedback)
+			EXPECT_GE(grid::ContrastRatio(color, palette.canvas), 3.0);
+	}
+}
+
+//  The new feedback fields must default to the classic hardcoded Eureka
+//  colors so the Custom theme and legacy configs keep the familiar look.
+TEST(GridVisualThemes, FeedbackDefaultsReproduceClassicColors)
+{
+	const grid::MapInk ink;
+	EXPECT_EQ(ink.camera, rgbMake(255, 192, 255));
+	EXPECT_EQ(ink.error, rgbMake(255, 0, 0));
+	EXPECT_EQ(ink.taggedLight, rgbMake(255, 128, 128));
+	EXPECT_EQ(ink.soundBlock, rgbMake(255, 0, 255));
+	//  brightened from the classic (64,64,192), which failed 3:1 on black
+	EXPECT_EQ(ink.propMaybe, rgbMake(88, 88, 224));
+	EXPECT_EQ(ink.propLevel1, rgbMake(192, 32, 32));
+	EXPECT_EQ(ink.propLevel2, rgbMake(192, 96, 32));
+}
+
+TEST(GridVisualThemes, EnsureContrastKeepsPassingColorsUnchanged)
+{
+	const rgb_color_t color = rgbMake(64, 176, 255);
+	EXPECT_EQ(grid::EnsureContrast(color, rgbMake(0, 0, 0), 3.0), color);
+}
+
+TEST(GridVisualThemes, EnsureContrastConvergesOnBothPolarities)
+{
+	//  pale blue washes out on the light blueprint canvas...
+	const rgb_color_t pale = rgbMake(200, 220, 240);
+	const rgb_color_t lightCanvas = rgbMake(232, 236, 240);
+	ASSERT_LT(grid::ContrastRatio(pale, lightCanvas), 3.0);
+	const rgb_color_t darkFixed =
+			grid::EnsureContrast(pale, lightCanvas, 3.0);
+	EXPECT_GE(grid::ContrastRatio(darkFixed, lightCanvas), 3.0);
+
+	//  ...and a dim grey disappears on a dark canvas
+	const rgb_color_t dim = rgbMake(40, 40, 50);
+	const rgb_color_t darkCanvas = rgbMake(0, 0, 0);
+	ASSERT_LT(grid::ContrastRatio(dim, darkCanvas), 3.0);
+	const rgb_color_t lightFixed =
+			grid::EnsureContrast(dim, darkCanvas, 3.0);
+	EXPECT_GE(grid::ContrastRatio(lightFixed, darkCanvas), 3.0);
+}
+
+TEST(GridVisualThemes, EnsureContrastPreservesHueFamily)
+{
+	//  blue stays blue-dominant after being deepened for a light canvas
+	const rgb_color_t blue = rgbMake(120, 160, 255);
+	const rgb_color_t fixed =
+			grid::EnsureContrast(blue, rgbMake(232, 236, 240), 3.0);
+	EXPECT_GT(static_cast<int>(RGB_BLUE(fixed)),
+			static_cast<int>(RGB_RED(fixed)));
+	EXPECT_GT(static_cast<int>(RGB_BLUE(fixed)),
+			static_cast<int>(RGB_GREEN(fixed)));
+}
+
+TEST(GridVisualThemes, DensityFadeDissolvesPackedLinesIntoCanvas)
+{
+	const rgb_color_t canvas = rgbMake(0, 0, 0);
+	const rgb_color_t line = rgbMake(66, 118, 180);
+
+	// identity fades
+	EXPECT_EQ(grid::FadeColor(line, canvas, 0.0), line);
+	EXPECT_EQ(grid::FadeColor(line, canvas, 1.0), canvas);
+
+	// sparse lines keep full strength
+	EXPECT_EQ(grid::DensityFade(line, canvas, 64.0), line);
+	EXPECT_EQ(grid::DensityFade(line, canvas, 40.0), line);
+
+	// packed lines dissolve toward the canvas, never below 40% strength
+	const rgb_color_t faded = grid::DensityFade(line, canvas, 16.0);
+	EXPECT_LT(grid::RelativeLuminance(faded),
+			grid::RelativeLuminance(line));
+	EXPECT_EQ(faded, grid::FadeColor(line, canvas, 0.6));
+	EXPECT_EQ(grid::DensityFade(line, canvas, 1.0),
+			grid::FadeColor(line, canvas, 0.6));
+	// mid-density lines sit between full strength and the floor
+	EXPECT_EQ(grid::DensityFade(line, canvas, 20.0),
+			grid::FadeColor(line, canvas, 0.5));
+}
+
+TEST(GridVisualThemes, OpacityFadesOnlyGridColorsTowardCanvas)
+{
+	struct Restore
+	{
+		int opacity = config::grid_opacity;
+		~Restore() { config::grid_opacity = opacity; }
+	} restore;
+
+	for (int theme = grid::kFirstVisualTheme;
+			theme < grid::kCustomVisualTheme; ++theme)
+	{
+		const grid::VisualPalette base = grid::VisualPaletteFor(theme);
+		SCOPED_TRACE(grid::VisualThemeInfo(theme).id);
+
+		config::grid_opacity = 100;
+		EXPECT_EQ(grid::OpacityAdjustedPalette(base).normalMain,
+				base.normalMain);
+
+		config::grid_opacity = 50;
+		const grid::VisualPalette half =
+				grid::OpacityAdjustedPalette(base);
+		EXPECT_EQ(half.normalMain,
+				grid::FadeColor(base.normalMain, base.canvas, 0.5));
+		EXPECT_EQ(half.normalAxis,
+				grid::FadeColor(base.normalAxis, base.canvas, 0.5));
+		EXPECT_EQ(half.dottyPoint,
+				grid::FadeColor(base.dottyPoint, base.canvas, 0.5));
+
+		// snap reticle and map ink are never touched
+		EXPECT_EQ(half.snapTarget, base.snapTarget);
+		EXPECT_EQ(half.snapGuide, base.snapGuide);
+		EXPECT_EQ(half.snapHalo, base.snapHalo);
+		EXPECT_EQ(half.ink.linedef, base.ink.linedef);
+		EXPECT_EQ(half.ink.select, base.ink.select);
+
+		// grid contrast against the canvas strictly decreases
+		EXPECT_LT(grid::ContrastRatio(half.normalMain, base.canvas),
+				grid::ContrastRatio(base.normalMain, base.canvas));
+	}
+
+	config::grid_opacity = 0;
+	EXPECT_DOUBLE_EQ(grid::GridOpacity(), 0.2);
+	config::grid_opacity = 500;
+	EXPECT_DOUBLE_EQ(grid::GridOpacity(), 1.0);
+	config::grid_opacity = 75;
+	EXPECT_DOUBLE_EQ(grid::GridOpacity(), 0.75);
+}
+
+TEST(GridVisualThemes, InvalidThemeFallsBackAndCustomUsesUserColors)
+{
+	struct Restore
+	{
+		int theme = config::grid_visual_theme;
+		rgb_color_t axis = config::normal_axis_col;
+		rgb_color_t target = config::grid_snap_target_col;
+		rgb_color_t halo = config::grid_snap_halo_col;
+		rgb_color_t guide = config::grid_snap_guide_col;
+		~Restore()
+		{
+			config::grid_visual_theme = theme;
+			config::normal_axis_col = axis;
+			config::grid_snap_target_col = target;
+			config::grid_snap_halo_col = halo;
+			config::grid_snap_guide_col = guide;
+		}
+	} restore;
+
+	EXPECT_EQ(grid::NormalizeVisualTheme(-1),
+			static_cast<int>(grid::VisualTheme::highContrastDark));
+	EXPECT_EQ(grid::NormalizeVisualTheme(999),
+			static_cast<int>(grid::VisualTheme::highContrastDark));
+
+	config::grid_visual_theme = grid::kCustomVisualTheme;
+	config::normal_axis_col = rgbMake(12, 34, 56);
+	config::grid_snap_target_col = rgbMake(220, 30, 90);
+	config::grid_snap_halo_col = rgbMake(1, 2, 3);
+	config::grid_snap_guide_col = rgbMake(45, 210, 180);
+	const grid::VisualPalette palette = grid::ActiveVisualPalette();
+	EXPECT_EQ(palette.normalAxis, rgbMake(12, 34, 56));
+	EXPECT_EQ(palette.snapTarget, rgbMake(220, 30, 90));
+	EXPECT_EQ(palette.snapHalo, rgbMake(1, 2, 3));
+	EXPECT_EQ(palette.snapGuide, rgbMake(45, 210, 180));
+}
+
+TEST(GridVisualThemes, LegacyStockColorsMigrateWithoutLosingCustomization)
+{
+	struct Restore
+	{
+		int theme = config::grid_visual_theme;
+		grid::VisualPalette custom =
+				grid::VisualPaletteFor(grid::kCustomVisualTheme);
+		~Restore()
+		{
+			config::grid_visual_theme = theme;
+			config::normal_axis_col = custom.normalAxis;
+			config::normal_main_col = custom.normalMain;
+			config::normal_flat_col = custom.normalFlat;
+			config::normal_small_col = custom.normalSmall;
+			config::dotty_axis_col = custom.dottyAxis;
+			config::dotty_major_col = custom.dottyMajor;
+			config::dotty_minor_col = custom.dottyMinor;
+			config::dotty_point_col = custom.dottyPoint;
+		}
+	} restore;
+
+	config::grid_visual_theme = -1;
+	config::normal_axis_col = rgbMake(0, 128, 255);
+	config::normal_main_col = rgbMake(0, 0, 238);
+	config::normal_flat_col = rgbMake(60, 60, 120);
+	config::normal_small_col = rgbMake(60, 60, 120);
+	config::dotty_axis_col = rgbMake(0, 128, 255);
+	config::dotty_major_col = rgbMake(0, 0, 238);
+	config::dotty_minor_col = rgbMake(0, 0, 187);
+	config::dotty_point_col = rgbMake(0, 0, 255);
+	EXPECT_EQ(grid::ConfiguredVisualTheme(),
+			static_cast<int>(grid::VisualTheme::highContrastDark));
+	EXPECT_EQ(grid::ActiveVisualPalette().normalMain,
+			grid::VisualPaletteFor(
+					static_cast<int>(grid::VisualTheme::highContrastDark))
+					.normalMain);
+
+	// configurations written before the three-theme overhaul used
+	// value 4 for Custom; it must survive the renumbering
+	config::grid_visual_theme = 4;
+	EXPECT_EQ(grid::ConfiguredVisualTheme(), grid::kCustomVisualTheme);
+
+	config::grid_visual_theme = -1;
+	config::normal_main_col = rgbMake(123, 45, 210);
+	EXPECT_EQ(grid::ConfiguredVisualTheme(), grid::kCustomVisualTheme);
+	EXPECT_EQ(grid::ActiveVisualPalette().normalMain,
+			rgbMake(123, 45, 210));
+}
 
 class GridStateFixture : public ::testing::Test, public grid::Listener
 {
@@ -526,12 +893,12 @@ TEST_F(GridStateFixture, NearestScaleTiny)	// check we don't overflow
 	size_t scaleSettingsBefore = scaleSettings.size();
 	grid.NearestScale(0.0001);
 
-	ASSERT_EQ(grid.getScale(), 1.0 / 64.0);
+	ASSERT_EQ(grid.getScale(), 1.0 / 512.0);
 	ASSERT_EQ(positionUpdates, posAdjustBefore + 1);
 	ASSERT_EQ(pointerPositionUpdates, pointerPosBefore + 1);
 	ASSERT_EQ(redrawMapCounts, redrawMapBefore + 1);
 	ASSERT_EQ(scaleSettings.size(), scaleSettingsBefore + 1);
-	ASSERT_EQ(scaleSettings.back(), 1.0 / 64.0);
+	ASSERT_EQ(scaleSettings.back(), 1.0 / 512.0);
 }
 
 TEST_F(GridStateFixture, MathematicalCatalogIsBroadStableAndValid)

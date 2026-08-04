@@ -19,6 +19,19 @@
 #include "Sector.h"
 #include "e_basis.h"
 #include "m_game.h"
+#include "Thing.h"
+
+#include <limits>
+
+int MinSectorHeight(MapFormat format) noexcept
+{
+	return format == MapFormat::udmf ? std::numeric_limits<int>::min() : -32767;
+}
+
+int MaxSectorHeight(MapFormat format) noexcept
+{
+	return format == MapFormat::udmf ? std::numeric_limits<int>::max() : 32767;
+}
 
 SString Sector::FloorTex() const noexcept
 {
