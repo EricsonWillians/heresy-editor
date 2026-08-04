@@ -54,19 +54,19 @@ FEATURES
 -  Temporary all-linedef 3D inspection with exact selection restoration
 
 
-RELEASE 2.5.0
+RELEASE 2.6.0
 
-Heresy Editor 2.5.0 makes the construction grid legible at a glance:  semantic
-High-Contrast Dark, Vintage Phosphor, Blueprint Light, and Custom visibility
-themes give every grid role a distinct weight while the map ink always stays
-dominant, dense grids dissolve instead of veiling the map, and the snap
-reticle renders above geometry with a pointer guide.
-
-The release also adds optional metric and imperial measurement readouts on
-the canvas, linedef overlay, and status bar, and removes the 16-bit ceiling
-on sector heights for UDMF maps, with an explicit warning when a
-binary-format save would truncate out-of-range heights.  Complete release
-notes are in changelogs/2.5.0.md.
+Heresy Editor 2.6.0 overhauls the 3D view with first-person navigation:
+FPS-style mouse-look is on by default (M or ESC releases the pointer) with
+configurable sensitivity in Preferences / 3D View, WASD moves, SHIFT runs,
+SPACE jumps, and left CTRL crouches.  The camera starts at the player
+start on fresh maps, re-homes when it ends up outside the map bounds, H
+teleports it back to the player start, and while the camera is in the
+void the whole level is drawn as a theme-colored wireframe on black so it
+is easy to fly back inside.  UDMF can now be selected as the map format
+for new maps and projects, and creating a fresh map no longer leaves
+stale rendering behind.  Complete release notes are in
+changelogs/2.6.0.md.
 
 
 MATHEMATICAL GRID AND FAST 3D INSPECTION
@@ -117,6 +117,13 @@ enters 3D.  Tab or Shift+Tab returns and restores that exact state.
 Shift+F8 cycles forward through Plain, Floor, Ceiling, Lighting, Floor Bright,
 Ceiling Bright, Sound, and 3D; Ctrl/Cmd+F8 cycles backward.  F8 still opens the
 rendering menu, which also contains 3D and whole-linedef inspection entries.
+
+The 3D view is fully first-person.  Mouse-look engages on entry (M or ESC
+releases the pointer), WASD moves, SHIFT runs, SPACE jumps, and left CTRL
+crouches, with configurable mouse-look sensitivity in Preferences / 3D View.
+When the camera leaves the map the background turns black and the level is
+drawn as a theme-colored wireframe, and H teleports the camera to the
+player start.
 
 
 SURFACE TEXTURE IMPORT
