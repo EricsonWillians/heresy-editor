@@ -50,6 +50,14 @@
 #include "ui_window.h"
 #include "Vertex.h"
 
+#if defined(_WIN32)
+#include "WindowsInclude.h"
+#elif defined(__APPLE__)
+#include <ApplicationServices/ApplicationServices.h>
+#else
+#include <X11/Xlib.h>
+#endif
+
 // config items
 rgb_color_t config::transparent_col = rgbMake(0, 255, 255);
 
@@ -65,6 +73,14 @@ int  config::render_far_clip = 32768;
 int  config::render_pixel_aspect = 83;  //  100 * width / height
 
 bool global::use_npot_textures;
+
+// mouse-look sensitivities (percent; 100 = default speed)
+int config::render_mlook_turn = 100;
+int config::render_mlook_move = 100;
+
+// base mouse-look speeds at 100% (radians and map units per pixel)
+static constexpr double mouselook_base_yaw  = 0.30 * M_PI / 180.0;
+static constexpr double mouselook_base_move = 0.75;
 
 namespace thing_sec_cache
 {
@@ -723,6 +739,91 @@ void Instance::Render3D_Setup()
 }
 
 
+// center of the 3D view canvas in event coordinates
+// [ in software mode event coords are relative to the main window ]
+static void CanvasCenterEventCoords(const UI_Canvas *canvas, int &cx, int &cy)
+{
+	cx = canvas->w() / 2;
+	cy = canvas->h() / 2;
+#ifdef NO_OPENGL
+	cx += canvas->x();
+	cy += canvas->y();
+#endif
+}
+
+
+// warp the OS pointer to the center of the 3D view canvas.
+// [ FLTK has no portable pointer-warp API, so this is platform specific ]
+static void WarpPointerToCanvasCenter(UI_Canvas *canvas)
+{
+	int rx, ry;
+
+	Fl_Window *cw = canvas->as_window();
+	if (cw)
+	{
+		rx = cw->x_root() + cw->w() / 2;
+		ry = cw->y_root() + cw->h() / 2;
+	}
+	else
+	{
+		Fl_Window *tw = canvas->top_window();
+		if (! tw)
+			return;
+
+		rx = tw->x_root() + canvas->x() + canvas->w() / 2;
+		ry = tw->y_root() + canvas->y() + canvas->h() / 2;
+	}
+
+#if defined(_WIN32)
+	SetCursorPos(rx, ry);
+#elif defined(__APPLE__)
+	CGWarpMouseCursorPosition(CGPointMake(rx, ry));
+#else
+	// X11 (note: 'None' is #undef'd by our headers, it is just 0L)
+	XWarpPointer(fl_display, 0L, DefaultRootWindow(fl_display),
+				 0, 0, 0, 0, rx, ry);
+	XFlush(fl_display);
+#endif
+}
+
+
+void Render3D_MouseLook(Instance &inst, bool enable)
+{
+	if (enable == inst.r_view.mouselook)
+		return;
+
+	inst.r_view.mouselook = enable;
+
+	UI_Canvas *canvas = inst.main_win ? inst.main_win->canvas : nullptr;
+	if (! canvas)
+		return;
+
+	if (enable)
+	{
+		// no hover queries while looking around
+		inst.r_view.mouse_x = inst.r_view.mouse_y = -1;
+		inst.edit.highlight.clear();
+
+		canvas->cursor(FL_CURSOR_NONE);
+		WarpPointerToCanvasCenter(canvas);
+
+		// pointer is now at the canvas center
+		CanvasCenterEventCoords(canvas, inst.r_view.mlook_last_x,
+							  inst.r_view.mlook_last_y);
+
+		inst.Status_Set("mouse-look ON : move mouse to look around, ESC or m to exit");
+	}
+	else
+	{
+		canvas->cursor(FL_CURSOR_DEFAULT);
+
+		inst.r_view.mlook_last_x = inst.r_view.mlook_last_y = -1;
+
+		inst.Status_Set("mouse-look OFF");
+	}
+}
+
+
 void Render3D_Enable(Instance &inst, bool _enable)
 {
 	std::optional<LineInspectionState> inspection;
@@ -760,13 +861,33 @@ void Render3D_Enable(Instance &inst, bool _enable)
 
 	if (inst.edit.render3d)
 	{
+		// if the camera is outside the map (e.g. stale state from a
+		// previous map), reposition it at the player start
+		const Document &doc = inst.level;
+		if (inst.r_view.x < doc.Map_bound1.x - 64.0 ||
+			inst.r_view.x > doc.Map_bound2.x + 64.0 ||
+			inst.r_view.y < doc.Map_bound1.y - 64.0 ||
+			inst.r_view.y > doc.Map_bound2.y + 64.0)
+		{
+			inst.Render3D_Setup();
+		}
+
 		inst.main_win->info_bar->SetMouse();
 
 		// TODO: ideally query this, like code in PointerPos
 		inst.r_view.mouse_x = inst.r_view.mouse_y = -1;
+
+		// mouse-look is on by default (except when inspecting lines,
+		// which needs normal mouse interaction)
+		if (! inst.edit.lineInspection)
+			Render3D_MouseLook(inst, true);
+
+		inst.Status_Set("3D view | mouse to look, WASD move, SHIFT run, SPACE/Ctrl up/down, m/ESC release mouse, h home, g gravity, TAB exit");
 	}
 	else
 	{
+		Render3D_MouseLook(inst, false);
+
 		inst.main_win->canvas->PointerPos();
 		inst.main_win->info_bar->SetMouse();
 	}
@@ -1013,6 +1134,63 @@ void Instance::Render3D_MouseMotion(v2int_t pos, keycode_t mod, v2int_t dpos)
 {
 	edit.pointer_in_window = true;
 
+	if (r_view.mouselook)
+	{
+		// FPS-style mouse-look: track the pointer ourselves and only
+		// warp it back to the center when it nears the canvas edge.
+		// [ warping on every event floods the event queue, and our own
+		//   warp events get merged with real motion events by FLTK,
+		//   eating the actual deltas ]
+		int cx, cy;
+		CanvasCenterEventCoords(main_win->canvas, cx, cy);
+
+		if (r_view.mlook_last_x < 0)
+		{
+			r_view.mlook_last_x = cx;
+			r_view.mlook_last_y = cy;
+		}
+
+		int dx = pos.x - r_view.mlook_last_x;
+		int dy = pos.y - r_view.mlook_last_y;
+
+		r_view.mlook_last_x = pos.x;
+		r_view.mlook_last_y = pos.y;
+
+		if (dx || dy)
+		{
+			double turn_speed = mouselook_base_yaw *
+					clamp(10, config::render_mlook_turn, 400) / 100.0;
+			double move_speed = mouselook_base_move *
+					clamp(10, config::render_mlook_move, 400) / 100.0;
+
+			// horizontal motion turns the camera
+			r_view.SetAngle(static_cast<float>(r_view.angle - dx * turn_speed));
+
+			// vertical motion moves forward/backward (classic DOOM style)
+			r_view.x += r_view.Cos * -dy * move_speed;
+			r_view.y += r_view.Sin * -dy * move_speed;
+
+			main_win->info_bar->SetMouse();
+			RedrawMap();
+		}
+
+		// re-center the pointer when it gets close to the canvas edge
+		const int margin = 64;
+		int half_w = main_win->canvas->w() / 2;
+		int half_h = main_win->canvas->h() / 2;
+
+		if (pos.x < cx - half_w + margin || pos.x > cx + half_w - margin ||
+			pos.y < cy - half_h + margin || pos.y > cy + half_h - margin)
+		{
+			WarpPointerToCanvasCenter(main_win->canvas);
+
+			r_view.mlook_last_x = cx;
+			r_view.mlook_last_y = cy;
+		}
+
+		return;
+	}
+
 	// save position for Render3D_UpdateHighlight
 	r_view.mouse_x = pos.x;
 	r_view.mouse_y = pos.y;
@@ -1094,8 +1272,8 @@ void Instance::Render3D_Navigate()
 		mod = M_ReadLaxModifiers();
 
 	float mod_factor = 1.0;
-	if (mod & EMOD_SHIFT)   mod_factor = 0.5;
-	if (mod & EMOD_COMMAND) mod_factor = 2.0;
+	if (mod & EMOD_SHIFT)   mod_factor = 2.0;  // run (popular FPS semantics)
+	if (mod & EMOD_COMMAND) mod_factor = 0.5;  // slower while crouching (CTRL)
 
 	if (edit.nav.fwd || edit.nav.back || edit.nav.right || edit.nav.left)
 	{
@@ -1714,6 +1892,15 @@ void Instance::R3D_DropToFloor()
 }
 
 
+void Instance::R3D_Home()
+{
+	Render3D_Setup();
+
+	Status_Set("camera moved to player start");
+	RedrawMap();
+}
+
+
 void Instance::R3D_NAV_Forward_release()
 {
 	edit.nav.fwd = 0;
@@ -1938,6 +2125,11 @@ void Instance::R3D_Toggle()
 	{
 		r_view.gravity = ! r_view.gravity;
 	}
+	else if (var_name.noCaseEqual("mouselook"))
+	{
+		Render3D_MouseLook(*this, ! r_view.mouselook);
+		return;
+	}
 	else
 	{
 		Beep("3D_Toggle: unknown var: %s", var_name.c_str());
@@ -1988,7 +2180,7 @@ static editor_command_t  render_commands[] =
 	{	"3D_Toggle", NULL,
 		&Instance::R3D_Toggle,
 		/* flags */ NULL,
-		/* keywords */ "tex obj light grav"
+		/* keywords */ "tex obj light grav mouselook"
 	},
 
 	{	"3D_Forward", NULL,
@@ -2021,6 +2213,10 @@ static editor_command_t  render_commands[] =
 
 	{	"3D_DropToFloor", NULL,
 		&Instance::R3D_DropToFloor
+	},
+
+	{	"3D_Home", NULL,
+		&Instance::R3D_Home
 	},
 
 	{	"3D_ACT_AdjustOfs", NULL,

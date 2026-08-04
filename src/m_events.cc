@@ -647,6 +647,13 @@ int Instance::EV_RawKey(int event)
 			return 1;
 	}
 
+	// ESC exits 3D mouse-look mode
+	if (edit.render3d && r_view.mouselook && (key & FL_KEY_MASK) == FL_Escape)
+	{
+		Render3D_MouseLook(*this, false);
+		return 1;
+	}
+
 #if 0  // DEBUG
 	fprintf(stderr, "Key code: 0x%08x : %s\n", key, keys::toString(key).c_str());
 #endif

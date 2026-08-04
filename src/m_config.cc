@@ -664,6 +664,22 @@ const opt_desc_t options[] =
 		&config::render_lock_gravity
 	},
 
+	{	"render_mlook_turn",
+		0,
+		OptFlag_preference,
+		"Mouse-look turning speed in 3D view (percent)",
+		NULL,
+		&config::render_mlook_turn
+	},
+
+	{	"render_mlook_move",
+		0,
+		OptFlag_preference,
+		"Mouse-look forward/back speed in 3D view (percent)",
+		NULL,
+		&config::render_mlook_move
+	},
+
 	{	"render_missing_bright",
 		0,
 		OptFlag_preference,

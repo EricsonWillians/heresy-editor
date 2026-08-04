@@ -148,6 +148,9 @@ static const key_mapping_t s_key_map[] =
 	{ FL_Menu,		"MENU" },
 	{ FL_Help,		"HELP" },
 
+	{ FL_Control_L,	"LCTRL" },
+	{ FL_Control_R,	"RCTRL" },
+
 	{ FL_KP_Enter,	"KP_Enter"},
 
 	{ FL_Volume_Down,	"VOL_DOWN" },
@@ -985,14 +988,19 @@ void M_DeleteLocalBinding(int index)
 
 keycode_t M_TranslateKey(int key, int state)
 {
+	// left and right control can be bound as plain keys
+	// (e.g. "crouch" in the 3D view)
+	if (key == FL_Control_L || key == FL_Control_R)
+		return key;
+
 	// ignore modifier keys themselves
 	switch (key)
 	{
 		case FL_Num_Lock:
 		case FL_Caps_Lock:
 
-		case FL_Shift_L: case FL_Control_L:
-		case FL_Shift_R: case FL_Control_R:
+		case FL_Shift_L:
+		case FL_Shift_R:
 		case FL_Meta_L:  case FL_Alt_L:
 		case FL_Meta_R:  case FL_Alt_R:
 			return 0;
