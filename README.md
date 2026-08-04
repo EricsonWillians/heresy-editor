@@ -68,20 +68,16 @@ Tested packages and matching SHA-256 checksums are published on the
 
 macOS packages are ad-hoc signed for integrity but are not Apple-notarized.
 
-## What's new in 2.4.0
+## What's new in 2.5.0
 
-Version 2.4.0 adds an end-to-end surface workflow: import wall and plane
-resources safely into WAD/PK3 projects, then pan, fit, scale, mirror, rotate,
-and align them with live OpenGL/software preview. Imported images retain their
-intrinsic dimensions and are immediately usable by ordinary controls, Smart
-Doors, and Smart Sector Designer.
+Version 2.5.0 makes the construction grid legible at a glance with semantic
+High-Contrast Dark, Vintage Phosphor, Blueprint Light, and Custom visibility
+themes, adds optional metric/imperial measurement readouts across the canvas,
+linedef overlay, and status bar, and removes the 16-bit ceiling on sector
+heights for UDMF maps — with an explicit warning when a binary-format save
+would truncate out-of-range heights.
 
-Large-map construction now includes 30 mathematical grid geometries, 75
-grouped spacings, custom origins and rounding, and temporary whole-linedef 3D
-inspection. Smart Sector Architecture also grows from 28 to 58 purposeful
-structures across all six families.
-
-Read the complete [2.4.0 changelog](changelogs/2.4.0.md).
+Read the complete [2.5.0 changelog](changelogs/2.5.0.md).
 
 ## Quick start
 
@@ -170,6 +166,26 @@ paste/move/quantize, and Smart Sector gestures. Map-local mathematical state
 is restored with the project; Smart Room follows rotated/oblique construction
 axes, and UDMF large positive coordinates retain correct bounds and status-bar
 precision.
+
+Grid visibility is now semantic rather than a set of similarly dark lines.
+High-Contrast Dark, Vintage Phosphor, and Blueprint Light themes give fine,
+reference, major, axis, origin, snap-target, halo, and guide roles distinct
+weights and colors across square, Dotty, and mathematical grids. Each theme
+also coordinates the map itself: the grid always stays far weaker than
+geometry — dim on the dark canvases, pale on the light one — while walls,
+linedefs, things, vertices, selection, and snapping each own a separate
+high-contrast hue band, so grid, snapping, things, linedefs, and sector
+diagnostics can never be mistaken for one another. Because a full-screen
+grid aggregates into a veil, grid lines also fade toward the canvas as they
+pack together, dissolving to a faint texture instead of drowning the map.
+A grid opacity slider (20-100%) fades grid lines toward the canvas on any
+theme for an even quieter grid. The snap reticle renders above map geometry
+and points back to the raw cursor position, while Preferences → Grid
+retains complete Custom color control with the classic map object colors.
+Camera, error, tagged-feedback, sound-blocking, and sound-propagation
+colors follow the active theme as well, design-assist preview hues adapt
+to the canvas, and the Preferences guidance box reports the measured
+worst-case contrast (grid and ink) for the selected theme.
 
 Use <kbd>Shift</kbd>+<kbd>Tab</kbd> to inspect every linedef immediately in 3D.
 The editor temporarily selects every wall, then <kbd>Tab</kbd> or
