@@ -98,6 +98,11 @@ public:
 	// sector is on-screen.
 	bitvec_c seen_sectors;
 
+	// true when the camera is outside the map (in the void):
+	// the world is not rendered then, just a wireframe of the map
+	// on a black background so the user can find their way back.
+	bool void_mode = false;
+
 private:
 	Instance &inst;
 
@@ -1690,9 +1695,77 @@ public:
 				DrawThing(t);
 	}
 
+	// draw a wall outline for a linedef, used when the camera is in
+	// the void (outside the map) to make the map visible from outside
+	void VoidLine(int ld_index)
+	{
+		const auto L = inst.level.linedefs[ld_index];
+
+		const SideDef *sd_right = inst.level.getRight(*L);
+		const SideDef *sd_left  = inst.level.getLeft(*L);
+
+		if (! sd_right && ! sd_left)
+			return;
+
+		float x1 = static_cast<float>(inst.level.getStart(*L).x());
+		float y1 = static_cast<float>(inst.level.getStart(*L).y());
+		float x2 = static_cast<float>(inst.level.getEnd(*L).x());
+		float y2 = static_cast<float>(inst.level.getEnd(*L).y());
+
+		const Sector *front = sd_right ? &inst.level.getSector(*sd_right)
+									 : &inst.level.getSector(*sd_left);
+
+		float z1, z2;
+
+		if (sd_right && sd_left)  // two-sided line
+		{
+			const Sector *back = &inst.level.getSector(*sd_left);
+
+			z1 = static_cast<float>(std::min(front->floorh, back->floorh));
+			z2 = static_cast<float>(std::max(front->ceilh,  back->ceilh));
+
+			gl_color(config::normal_main_col);
+		}
+		else  // one-sided (solid) line
+		{
+			z1 = static_cast<float>(front->floorh);
+			z2 = static_cast<float>(front->ceilh);
+
+			gl_color(config::normal_axis_col);
+		}
+
+		glBegin(GL_LINE_LOOP);
+
+		glVertex3f(x1, y1, z1);
+		glVertex3f(x1, y1, z2);
+		glVertex3f(x2, y2, z2);
+		glVertex3f(x2, y2, z1);
+
+		glEnd();
+	}
+
+	// render the whole map as a wireframe in theme colors, so the
+	// user can see where the map is while the camera is in the void
+	void VoidWireframe()
+	{
+		glDisable(GL_TEXTURE_2D);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_ALPHA_TEST);
+
+		glLineWidth(2);
+
+		for (int i = 0 ; i < inst.level.numLinedefs() ; i++)
+			VoidLine(i);
+
+		glLineWidth(1);
+	}
+
 	void Begin(int pixel_w, int pixel_h)
 	{
-		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+		if (void_mode)
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		else
+			glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glEnable(GL_TEXTURE_2D);
@@ -1760,8 +1833,16 @@ void RGL_RenderWorld(Instance &inst, int ox, int oy, int pixel_w, int pixel_h)
 {
 	RendInfo3D rend(inst);
 
+	rend.void_mode = hover::isPointOutsideOfMap(inst.level,
+											{ inst.r_view.x, inst.r_view.y });
+
 	rend.Begin(pixel_w, pixel_h);
-	rend.Render();
+
+	if (rend.void_mode)
+		rend.VoidWireframe();
+	else
+		rend.Render();
+
 	rend.Highlight();
 	rend.Finish();
 }
