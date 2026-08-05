@@ -8,4 +8,4 @@ historical rather than current branding.
 New fork-specific changelogs should use the Heresy Editor name and describe the
 state of BiasedDoom compatibility when relevant.
 
-The current release notes are [Heresy Editor 2.6.0](2.6.0.md).
+The current release notes are [Heresy Editor 2.7.0](2.7.0.md).
