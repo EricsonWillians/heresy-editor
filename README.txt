@@ -54,19 +54,18 @@ FEATURES
 -  Temporary all-linedef 3D inspection with exact selection restoration
 
 
-RELEASE 2.6.0
+RELEASE 2.7.0
 
-Heresy Editor 2.6.0 overhauls the 3D view with first-person navigation:
-FPS-style mouse-look is on by default (M or ESC releases the pointer) with
-configurable sensitivity in Preferences / 3D View, WASD moves, SHIFT runs,
-SPACE jumps, and left CTRL crouches.  The camera starts at the player
-start on fresh maps, re-homes when it ends up outside the map bounds, H
-teleports it back to the player start, and while the camera is in the
-void the whole level is drawn as a theme-colored wireframe on black so it
-is easy to fly back inside.  UDMF can now be selected as the map format
-for new maps and projects, and creating a fresh map no longer leaves
-stale rendering behind.  Complete release notes are in
-changelogs/2.6.0.md.
+Heresy Editor 2.7.0 makes creating sectors with the mouse direct and
+intuitive: in Sector mode, dragging the left mouse button on empty space
+draws a rectangular sector (SHIFT-drag remains the selection box), and
+pressing F starts a freehand outline whose points snap to existing
+vertices and the grid - click the first point or press ENTER to close
+the shape.  Both gestures work in the void and attached to existing
+sectors, reuse and split walls as needed, and commit as a single Undo
+operation.  The grid-snap indication no longer draws a guide line from
+the pointer: the reticle is a compact haloed diamond on the exact
+target.  Complete release notes are in changelogs/2.7.0.md.
 
 
 MATHEMATICAL GRID AND FAST 3D INSPECTION
@@ -95,9 +94,9 @@ light one - while walls, linedefs, things, vertices, selection, and
 snapping each own a separate high-contrast hue band.  Grid lines fade
 toward the canvas as they pack together, so a dense grid dissolves
 instead of veiling the map; sub-pixel grids are simplified instead of
-becoming a solid tint.  The snap reticle is drawn above map geometry,
-with a contrasting halo and a short guide from the raw pointer to the
-exact target.  A grid opacity slider (20-100%) fades grid lines toward the
+becoming a solid tint.  The snap reticle is drawn above map geometry
+as a compact haloed diamond on the exact target, with no lines back
+to the raw pointer.  A grid opacity slider (20-100%) fades grid lines toward the
 canvas on any theme.  Preferences / Grid offers the same presets and
 complete Custom swatches, which keep the classic map object colors.
 Camera, error, tagged-feedback, sound-blocking, and sound-propagation
@@ -506,6 +505,8 @@ LMB
 * select an object, drag to move the object(s)
 * click in empty area to clear the selection
 * click + drag in empty area to select a group of objects
+* in Sector mode, drag in empty area draws a rectangular sector
+  instead (hold SHIFT for the selection box)
 
 RMB
 * begin/continue line drawing (in vertex mode)
@@ -640,6 +641,11 @@ Sector Mode
 SPACE
 * add a new sector to area around the mouse pointer
 * if a sector is selected, copy that sector instead of using defaults
+
+f : draw a sector freehand: click to place outline points (they snap
+    to existing vertices and the grid, SHIFT constrains to 45 degrees),
+    click the first point or press ENTER to finish, right-click removes
+    the last point, ESC cancels
 
 d : disconnect sector(s) from their neighbors
 m : merge all selected sectors into a single one

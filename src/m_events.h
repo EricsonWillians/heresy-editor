@@ -42,6 +42,8 @@ enum class EditorAction
 	adjustOfs,		// user is adjusting the offsets on a sidedef
 	drawLine,		// user is drawing a new line
 	designSector,	// Smart Sector Designer owns canvas gestures
+	drawSectorRect,	// user is dragging out a rectangular sector
+	drawSectorPoly,	// user is tracing a freeform sector outline
 };
 
 typedef void (Instance:: *nav_release_func_t)();

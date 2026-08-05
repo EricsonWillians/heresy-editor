@@ -29,6 +29,7 @@
 
 #include "e_main.h"
 #include "e_door.h"
+#include "e_draw_sector.h"
 #include "e_sector_design.h"
 #include "e_path.h"
 #include "LineDef.h"
@@ -152,6 +153,20 @@ void Instance::CMD_SEC_MakeDoor()
 	else
 		Status_Set("Made %d smart doors",
 				   static_cast<int>(applied.sectors.size()));
+}
+
+void Instance::CMD_SEC_DrawSector()
+{
+	if (edit.render3d || edit.mode != ObjType::sectors)
+	{
+		Beep("Freeform sector drawing is available in 2D sector mode");
+		return;
+	}
+
+	if (UI_SectorDesignerActive(*this))
+		return;
+
+	M_DrawSectorPolyBegin(*this);
 }
 
 void Instance::CMD_SEC_SmartSector()
@@ -891,6 +906,11 @@ void Instance::ACT_Click_release()
 		ACT_Drag_release();
 		return;
 	}
+	else if (edit.action == EditorAction::drawSectorRect)
+	{
+		M_DrawSectorRectCommit(*this);
+		return;
+	}
 
 	// check if cancelled or overridden
 	if (edit.action != EditorAction::click)
@@ -1001,6 +1021,15 @@ void Instance::CMD_ACT_Click()
 	// clicking on an empty space starts a new selection box
 	if (edit.click_check_select && edit.clicked.is_nil())
 	{
+		// ... except in sectors mode, where dragging on empty space draws
+		// a rectangular sector instead (SHIFT keeps the selection box)
+		if (edit.mode == ObjType::sectors && ! (EXEC_CurKey & EMOD_SHIFT) &&
+			! UI_SectorDesignerActive(*this))
+		{
+			M_DrawSectorRectBegin(*this, edit.map.xy);
+			return;
+		}
+
 		edit.selbox1 = edit.selbox2 = edit.map.xy;
 
 		Editor_SetAction(EditorAction::selbox);
@@ -2045,6 +2074,10 @@ static editor_command_t  command_table[] =
 
 	{	"SEC_MakeDoor", NULL,
 		&Instance::CMD_SEC_MakeDoor
+	},
+
+	{	"SEC_DrawSector", NULL,
+		&Instance::CMD_SEC_DrawSector
 	},
 
 	{	"SEC_SmartSector", NULL,

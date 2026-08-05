@@ -157,6 +157,7 @@ public:
 	void CMD_ScaleObjects_Dialog();
 	void CMD_Scroll();
 	void CMD_SEC_Ceil();
+	void CMD_SEC_DrawSector();
 	void CMD_SEC_Floor();
 	void CMD_SEC_Light();
 	void CMD_SEC_MakeDoor();

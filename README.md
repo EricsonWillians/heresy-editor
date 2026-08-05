@@ -68,17 +68,19 @@ Tested packages and matching SHA-256 checksums are published on the
 
 macOS packages are ad-hoc signed for integrity but are not Apple-notarized.
 
-## What's new in 2.6.0
+## What's new in 2.7.0
 
-Version 2.6.0 overhauls the 3D view with first-person navigation: FPS-style
-mouse-look (on by default, with configurable sensitivity), WASD movement
-with SHIFT to run, SPACE to jump, and CTRL to crouch, automatic camera
-recovery, and a theme-colored wireframe of the level whenever the camera
-strays into the void. UDMF can now be selected as the map format for new
-maps and projects, and creating a fresh map no longer leaves stale
-rendering behind.
+Version 2.7.0 makes creating sectors with the mouse direct and intuitive:
+in Sector mode, drag the left mouse button on empty space to draw a
+rectangular sector (Shift-drag remains the selection box), or press
+<kbd>F</kbd> and click out a freehand outline whose points snap to existing
+vertices and the grid. Both gestures work in the void and attached to
+existing sectors, reuse and split walls as needed, and commit as a single
+Undo operation. The grid-snap indication is simplified too: the reticle is
+now just a compact haloed diamond on the exact target, with no guide line
+growing out of the cursor.
 
-Read the complete [2.6.0 changelog](changelogs/2.6.0.md).
+Read the complete [2.7.0 changelog](changelogs/2.7.0.md).
 
 ## Quick start
 
@@ -98,6 +100,13 @@ compatible test engines. Linux executables do not need an `.exe` suffix.
 ## Smart authoring
 
 ### Sectors and architecture
+
+Drawing a sector takes a single gesture: in Sector mode, drag the left mouse
+button on empty space for a rectangle (<kbd>Shift</kbd>-drag remains the
+selection box), or press <kbd>F</kbd> and click out a freehand outline —
+points snap to existing vertices and the grid, clicking the first point or
+pressing <kbd>Enter</kbd> closes the shape. Both attach cleanly to existing
+sectors, reusing and splitting walls as needed, as one Undo operation.
 
 The nonmodal Smart Sector Designer stays open across repeated commits and
 offers:
@@ -181,7 +190,8 @@ grid aggregates into a veil, grid lines also fade toward the canvas as they
 pack together, dissolving to a faint texture instead of drowning the map.
 A grid opacity slider (20-100%) fades grid lines toward the canvas on any
 theme for an even quieter grid. The snap reticle renders above map geometry
-and points back to the raw cursor position, while Preferences → Grid
+as a compact haloed diamond on the exact target — no stray guide lines —
+while Preferences → Grid
 retains complete Custom color control with the classic map object colors.
 Camera, error, tagged-feedback, sound-blocking, and sound-propagation
 colors follow the active theme as well, design-assist preview hues adapt
