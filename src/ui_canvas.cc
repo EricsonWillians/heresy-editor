@@ -2698,26 +2698,12 @@ void UI_Canvas::DrawSnapPoint()
 
 	const grid::VisualPalette palette = grid::ActiveVisualPalette();
 	const v2double_t target{snap_x, snap_y};
-	const v2double_t pointer = inst.edit.map.xy;
-	const double pixelDistance =
-			std::hypot(pointer.x - target.x, pointer.y - target.y) *
-			inst.grid.getScale();
 
 	int sx = SCREENX(snap_x);
 	int sy = SCREENY(snap_y);
 
-	// A short guide makes the quantization direction obvious without turning
-	// the target into a permanent crosshair across the canvas.
-	if (pixelDistance >= 4.0 && pixelDistance <= 160.0)
-	{
-		RenderColor(palette.snapHalo);
-		RenderThickness(2);
-		DrawMapLine(pointer.x, pointer.y, target.x, target.y);
-		RenderColor(palette.snapGuide);
-		RenderThickness(1);
-		DrawMapLine(pointer.x, pointer.y, target.x, target.y);
-	}
-
+	// Just a compact reticle on the snap target: no guide line back to the
+	// pointer, which read as a stray line "growing" out of the cursor.
 	const double outer = 8.0 / std::max(0.01, inst.grid.getScale());
 	const double inner = 6.0 / std::max(0.01, inst.grid.getScale());
 	auto diamond = [this](const v2double_t &center, double radius)
