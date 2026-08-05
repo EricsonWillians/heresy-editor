@@ -26,6 +26,7 @@
 
 #include "m_events.h"
 
+#include "e_draw_sector.h"
 #include "e_main.h"
 #include "e_hover.h"
 #include "Errors.h"
@@ -63,6 +64,14 @@ void Instance::Editor_ClearAction() noexcept
 				main_win->SetCursor(FL_CURSOR_DEFAULT);
 			break;
 
+		case EditorAction::drawSectorRect:
+		case EditorAction::drawSectorPoly:
+			if (main_win)
+				main_win->SetCursor(FL_CURSOR_DEFAULT);
+			edit.designAssistPreview.reset();
+			edit.drawPolyAnchors.clear();
+			break;
+
 		default:
 			/* no special for the rest */
 			break;
@@ -91,6 +100,12 @@ void Instance::Editor_SetAction(EditorAction  new_action)
 			break;
 
 		case EditorAction::designSector:
+			if (main_win)
+				main_win->SetCursor(FL_CURSOR_CROSS);
+			break;
+
+		case EditorAction::drawSectorRect:
+		case EditorAction::drawSectorPoly:
 			if (main_win)
 				main_win->SetCursor(FL_CURSOR_CROSS);
 			break;
@@ -495,6 +510,22 @@ void Instance::EV_MouseMotion(v2int_t pos, keycode_t mod, v2int_t dpos)
 		return;
 	}
 
+	if (edit.action == EditorAction::drawSectorRect)
+	{
+		M_DrawSectorRectUpdate(*this);
+
+		main_win->canvas->redraw();
+		return;
+	}
+
+	if (edit.action == EditorAction::drawSectorPoly)
+	{
+		M_DrawSectorPolyUpdatePreview(*this);
+
+		main_win->canvas->redraw();
+		return;
+	}
+
 	if (edit.action == EditorAction::selbox)
 	{
 		edit.selbox2 = edit.map.xy;
@@ -645,6 +676,39 @@ int Instance::EV_RawKey(int event)
 			return 0;
 		if (UI_SectorDesignerCanvasKey(*this, key))
 			return 1;
+	}
+
+	// freeform sector drawing owns the canvas while active
+	if (edit.action == EditorAction::drawSectorPoly)
+	{
+		const keycode_t base = key & FL_KEY_MASK;
+		if (event == FL_PUSH && base == FL_Button + 1)
+		{
+			// claim focus so Enter applies the gesture (see the designer)
+			if (main_win && main_win->canvas)
+				main_win->canvas->take_focus();
+			M_DrawSectorPolyAddPoint(*this, edit.map.xy,
+									 key & EMOD_ALL_MASK);
+			return 1;
+		}
+		if (event == FL_PUSH && base == FL_Button + 3)
+		{
+			if (main_win && main_win->canvas)
+				main_win->canvas->take_focus();
+			M_DrawSectorPolyRemoveLast(*this);
+			return 1;
+		}
+		if (event == FL_KEYDOWN &&
+			(base == FL_Enter || base == FL_KP_Enter))
+		{
+			M_DrawSectorPolyCommit(*this);
+			return 1;
+		}
+		if (event == FL_KEYDOWN && base == FL_Escape)
+		{
+			M_DrawSectorPolyCancel(*this);
+			return 1;
+		}
 	}
 
 	// ESC exits 3D mouse-look mode

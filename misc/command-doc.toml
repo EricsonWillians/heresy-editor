@@ -609,6 +609,19 @@ negative or positive, and it should be a power of two such as: `1`, `2`, `4`, `8
 NOTE: vanilla DOOM, and some source ports, only use multiples of 16 for the lighting values. For
 example, there will be no visible difference between 160 and 170 (the next usable value is 176).
 """
+SEC_DrawSector = """
+Starts freeform sector drawing in 2D Sector mode (bound to F). Click on the
+canvas to place outline points; points snap to existing vertices (so shapes
+can attach exactly to existing sectors, even off-grid) and otherwise to the
+grid, and SHIFT constrains each segment to 45-degree steps. Click the first
+point again or press ENTER to close the shape and create the sector.
+Right-click removes the last point (or cancels when no points remain) and
+ESC cancels. Everything is created as a single undoable operation.
+
+Tip: in Sector mode you can also drag the left mouse button on empty space
+to draw a rectangular sector directly; hold SHIFT while dragging to get the
+classic selection box instead.
+"""
 SEC_MakeDoor = """
 Reviews and converts the selected sectors, or one highlighted sector, into local smart doors.
 The TARGET box names the exact sectors that will become the doors, while a heavy orange hatch

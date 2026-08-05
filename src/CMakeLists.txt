@@ -46,6 +46,8 @@ set(source_e
     e_door.cc
     e_door.h
     e_design.h
+    e_draw_sector.cc
+    e_draw_sector.h
     e_hover.cc
     e_hover.h
     e_linedef.cc

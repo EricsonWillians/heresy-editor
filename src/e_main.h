@@ -195,6 +195,13 @@ struct Editor_State_t
 	v2double_t selbox2;
 
 
+	/* quick sector-drawing state (EditorAction::drawSectorRect/Poly) */
+
+	v2double_t drawRectFrom;  // rectangle anchor (other corner is map.xy)
+
+	std::vector<v2double_t> drawPolyAnchors;  // freeform outline points
+
+
 	/* transforming state (EditorAction::transform) */
 
 	v2double_t trans_start;

@@ -67,6 +67,7 @@ add_executable(
     e_commands_test.cpp
     e_cutpaste_test.cpp
     e_door_test.cpp
+    e_draw_sector_test.cpp
     e_sector_design_test.cpp
     e_linedef_test.cpp
     e_objects_test.cpp
